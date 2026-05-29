@@ -19,5 +19,3 @@ VALUES
     ('user_3BUc8irbsRLEN45Gdo4jInGbnjW', 72, 'female', 'city',    153.00, 110.00, 35.00,  98.00, 47.00, 15.0, 7.0, 5.9,  28.20, 122.6,  68.25, 'medium', '["HbA1c", "RBS", "BMI"]', '2026-04-20');
 
 SELECT CONCAT('Seeded ', COUNT(*), ' patients') AS status FROM patients;
-
-SELECT CONCAT('Seeded ', COUNT(*), ' patients') AS status FROM patients;
