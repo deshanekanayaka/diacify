@@ -48,3 +48,7 @@ ENV/
 # Temporary files
 *.tmp
 *.temp
+
+# Lovable temporary clone (do not commit)
+frontend/tmp_lovable_ui/
+tmp_lovable_ui/

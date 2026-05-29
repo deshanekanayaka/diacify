@@ -1,6 +1,4 @@
 import React from 'react';
-import '../css/index.css';
-import '../css/StatCards.css';
 
 // counts is derived in Dashboard.jsx by iterating the patients array
 // and passed down as a prop

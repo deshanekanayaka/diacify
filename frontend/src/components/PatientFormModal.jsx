@@ -2,8 +2,6 @@ import React, { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { patientSchema, checkWarnings } from '../utils/schema.js';
-import '../css/index.css';
-import '../css/Modal.css';
 
 // eslint-disable-next-line react-refresh/only-export-components
 export const EMPTY_FORM = {

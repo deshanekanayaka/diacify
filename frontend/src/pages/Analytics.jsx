@@ -12,8 +12,6 @@ import {
 } from 'chart.js';
 import Header from '../components/Header.jsx';
 import useAnalytics from '../utils/useAnalytics.js';
-import '../css/index.css';
-import '../css/Analytics.css';
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, LineElement, PointElement, Tooltip, Legend);
 

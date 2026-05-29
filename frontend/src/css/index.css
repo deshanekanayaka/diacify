@@ -1,121 +1,92 @@
 @import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap");
+@import "tailwindcss";
 
-/* ── Reset ──────────────────────────────────────────────────────────────── */
-* {
-  margin: 0;
-  padding: 0;
-  box-sizing: border-box;
-}
-
-/* ── Design tokens ──────────────────────────────────────────────────────── */
+/* Global design tokens migrated to CSS variables (Tailwind v4 utilities used elsewhere) */
 :root {
-  --primary-blue: #2563eb;
-  --primary-blue-hover: #1d4ed8;
-  --primary-blue-light: #dbeafe;
+  /* Radii */
+  --radius: 0.625rem;
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
 
-  --success-green: #10b981;
-  --success-light: #d1fae5;
+  /* Surfaces */
+  --background: oklch(0.99 0.003 250);
+  --foreground: oklch(0.18 0.03 260);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.18 0.03 260);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.18 0.03 260);
 
-  --warning-orange: #f59e0b;
-  --warning-light: #fef3c7;
+  /* Brand — strong blue */
+  --primary: oklch(0.55 0.22 260);
+  --primary-foreground: oklch(0.99 0 0);
 
-  --danger-red: #ef4444;
-  --danger-light: #fee2e2;
+  --secondary: oklch(0.96 0.01 250);
+  --secondary-foreground: oklch(0.22 0.04 260);
 
-  --gray-50: #f9fafb;
-  --gray-100: #f3f4f6;
-  --gray-200: #e5e7eb;
-  --gray-300: #d1d5db;
-  --gray-400: #9ca3af;
-  --gray-500: #6b7280;
-  --gray-600: #4b5563;
-  --gray-700: #374151;
-  --gray-800: #1f2937;
-  --gray-900: #111827;
+  --muted: oklch(0.96 0.008 250);
+  --muted-foreground: oklch(0.5 0.02 260);
 
-  --dark-blue: #1e293b;
+  --accent: oklch(0.95 0.02 255);
+  --accent-foreground: oklch(0.22 0.04 260);
 
-  --font-base: "Inter", -apple-system, BlinkMacSystemFont, sans-serif;
+  --destructive: oklch(0.62 0.23 25);
+  --destructive-foreground: oklch(0.99 0 0);
+
+  --border: oklch(0.92 0.008 255);
+  --input: oklch(0.92 0.008 255);
+  --ring: oklch(0.55 0.22 260);
+
+  /* Sidebar */
+  --sidebar: oklch(0.16 0.04 265);
+  --sidebar-foreground: oklch(0.92 0.01 255);
+  --sidebar-primary: oklch(0.55 0.22 260);
+  --sidebar-primary-foreground: oklch(0.99 0 0);
+  --sidebar-accent: oklch(0.22 0.05 265);
+  --sidebar-accent-foreground: oklch(0.99 0 0);
+  --sidebar-border: oklch(0.25 0.04 265);
+  --sidebar-ring: oklch(0.55 0.22 260);
+
+  /* Risk traffic-light system */
+  --risk-high: oklch(0.62 0.23 25);
+  --risk-high-foreground: oklch(0.99 0 0);
+  --risk-high-soft: oklch(0.96 0.04 25);
+  --risk-medium: oklch(0.73 0.17 65);
+  --risk-medium-foreground: oklch(0.2 0.06 60);
+  --risk-medium-soft: oklch(0.97 0.05 80);
+  --risk-low: oklch(0.65 0.16 160);
+  --risk-low-foreground: oklch(0.99 0 0);
+  --risk-low-soft: oklch(0.96 0.05 160);
 }
 
-/* ── Base ───────────────────────────────────────────────────────────────── */
-body {
-  font-family: var(--font-base);
-  background: var(--gray-50);
-  color: var(--gray-900);
-  line-height: 1.5;
+/* Dark mode overrides (class-based: .dark on html or body) */
+.dark {
+  --background: oklch(0.13 0.03 265);
+  --foreground: oklch(0.97 0.005 250);
+  --card: oklch(0.18 0.04 265);
+  --card-foreground: oklch(0.97 0.005 250);
+  --popover: oklch(0.18 0.04 265);
+  --popover-foreground: oklch(0.97 0.005 250);
+  --primary: oklch(0.62 0.22 260);
+  --primary-foreground: oklch(0.99 0 0);
+  --secondary: oklch(0.22 0.04 265);
+  --secondary-foreground: oklch(0.97 0.005 250);
+  --muted: oklch(0.22 0.04 265);
+  --muted-foreground: oklch(0.7 0.02 260);
+  --accent: oklch(0.25 0.05 265);
+  --accent-foreground: oklch(0.97 0.005 250);
+  --border: oklch(1 0 0 / 10%);
+  --input: oklch(1 0 0 / 15%);
 }
 
-.main-content {
-  padding: 32px;
-  max-width: 1600px;
-  margin: 0 auto;
-}
-
-/* ── Shared buttons ─────────────────────────────────────────────────────── */
-.btn {
-  padding: 10px 20px;
-  border-radius: 8px;
-  font-size: 14px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  border: none;
-  font-family: var(--font-base);
-}
-
-.btn-primary {
-  background: var(--primary-blue);
-  color: white;
-}
-
-.btn-primary:hover {
-  background: var(--primary-blue-hover);
-  transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3);
-}
-
-.btn-secondary {
-  background: white;
-  color: var(--gray-700);
-  border: 1px solid var(--gray-300);
-}
-
-.btn-secondary:hover {
-  background: var(--gray-50);
-  border-color: var(--gray-400);
-}
-
-.btn-danger {
-  background: white;
-  color: var(--danger-red);
-  border: 1px solid var(--danger-red);
-}
-
-.btn-danger:hover {
-  background: var(--danger-red);
-  color: white;
-}
-
-/* ── Shared risk badges ─────────────────────────────────────────────────── */
-.risk-badge {
-  display: inline-block;
-  padding: 4px 10px;
-  border-radius: 6px;
-  font-size: 11px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-}
-
-.risk-badge.high   { background: var(--danger-light);  color: var(--danger-red); }
-.risk-badge.medium { background: var(--warning-light); color: var(--warning-orange); }
-.risk-badge.low    { background: var(--success-light); color: var(--success-green); }
-
-/* ── Shared checkbox ────────────────────────────────────────────────────── */
-input[type="checkbox"] {
-  width: 18px;
-  height: 18px;
-  cursor: pointer;
-  accent-color: var(--primary-blue);
+/* Base styles leveraging CSS variables */
+@layer base {
+  * { border-color: var(--border); }
+  html, body, #root { height: 100%; }
+  body {
+    background-color: var(--background);
+    color: var(--foreground);
+    font-family: "Inter", ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, "Helvetica Neue", Arial, "Noto Sans", "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol";
+  }
 }

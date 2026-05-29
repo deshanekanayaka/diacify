@@ -2,8 +2,6 @@ import React, { useState } from 'react';
 import axios from 'axios';
 import { useUser } from '@clerk/clerk-react';
 import PatientFormModal, { EMPTY_FORM } from './PatientFormModal';
-import '../css/index.css';
-import '../css/Modal.css';
 
 const BASE_URL = import.meta.env.VITE_API_URL;
 
