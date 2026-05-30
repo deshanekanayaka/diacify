@@ -1,4 +1,4 @@
-import { Routes, Route, Navigate, Link } from 'react-router-dom';
+import { Routes, Route, Navigate, Link, useLocation } from 'react-router-dom';
 import {
     SignIn,
     SignUp,
@@ -6,27 +6,13 @@ import {
     SignedOut,
     RedirectToSignIn,
     useUser,
-    UserButton,
     SignOutButton,
 } from '@clerk/clerk-react';
-import {
-    SidebarProvider,
-    Sidebar,
-    SidebarHeader,
-    SidebarContent,
-    SidebarFooter,
-    SidebarGroup,
-    SidebarGroupLabel,
-    SidebarMenu,
-    SidebarMenuItem,
-    SidebarMenuButton,
-    SidebarInset,
-} from '@/components/ui/sidebar';
-import { Separator } from '@/components/ui/separator';
-import { LayoutDashboard, BarChart3, CalendarDays } from 'lucide-react';
+import { LayoutDashboard, BarChart3, CalendarDays, LogOut } from 'lucide-react';
 import LandingPage from './pages/LandingPage';
 import Dashboard   from './pages/Dashboard';
 import Analytics   from './pages/Analytics';
+import Appointments from './pages/Appointments';
 import PatientDetailPage from './pages/PatientDetailPage';
 
 // Shown while Clerk is still resolving the user's auth state
@@ -45,82 +31,89 @@ const centredPage = {
     background: '#f9fafb',
 };
 
+const NAV_LINKS = [
+    { to: '/dashboard',    label: 'Dashboard',    Icon: LayoutDashboard },
+    { to: '/analytics',    label: 'Analytics',    Icon: BarChart3 },
+    { to: '/appointments', label: 'Appointments', Icon: CalendarDays },
+];
+
 function AppSidebar({ user }) {
-    const fullName = user?.fullName || `${user?.firstName || ''} ${user?.lastName || ''}`.trim() || 'Clinician';
+    const { pathname } = useLocation();
+    // Derive email and two-letter initials from the Clerk user object
+    const email = user?.primaryEmailAddress?.emailAddress
+        || user?.emailAddresses?.[0]?.emailAddress
+        || '';
+    const initials = email.slice(0, 2).toUpperCase();
+
     return (
-        <Sidebar className="bg-sidebar text-sidebar-foreground border-r border-sidebar-border">
-            <SidebarHeader className="px-4 py-4">
+        // item 2 — fixed positioning keeps sidebar in place while content scrolls
+        <aside className="fixed left-0 top-0 h-screen w-64 bg-gray-900 flex flex-col z-40 border-r border-gray-800">
+            {/* Logo — item 1: no subtitle */}
+            <div className="px-4 py-5">
+                <Link to="/dashboard" className="flex items-center gap-2 cursor-pointer">
+                    <div className="size-8 rounded-md bg-blue-600 flex items-center justify-center text-white font-bold text-sm">D</div>
+                    <div className="text-sm font-semibold text-gray-100">Diacify</div>
+                </Link>
+            </div>
+
+            <div className="border-t border-gray-800" />
+
+            {/* Nav links */}
+            <div className="flex-1 px-2 py-3">
+                <nav className="space-y-1">
+                    {NAV_LINKS.map(({ to, label, Icon }) => {
+                        const isActive = pathname === to;
+                        return (
+                            <Link
+                                key={to}
+                                to={to}
+                                className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors cursor-pointer ${
+                                    isActive
+                                        ? 'bg-gray-800 text-white'
+                                        : 'text-gray-400 hover:bg-gray-800 hover:text-white'
+                                }`}
+                            >
+                                <Icon className="size-4" />
+                                {label}
+                            </Link>
+                        );
+                    })}
+                </nav>
+            </div>
+
+            <div className="border-t border-gray-800" />
+
+            {/* User section — items 3 & 4 */}
+            <div className="px-3 py-4 mb-4">
                 <div className="flex items-center gap-2">
-                    <div className="size-8 rounded-md bg-primary flex items-center justify-center text-primary-foreground font-bold">D</div>
-                    <div>
-                        <div className="text-sm font-semibold">DiabetesPriority</div>
-                        <div className="text-xs text-muted-foreground">Care Console</div>
+                    {/* item 3 — initials avatar */}
+                    <div className="rounded-full bg-blue-600 w-8 h-8 flex items-center justify-center text-white text-xs font-semibold shrink-0">
+                        {initials}
                     </div>
-                </div>
-            </SidebarHeader>
-            <Separator />
-            <SidebarContent className="px-2 py-3">
-                <SidebarGroup>
-                    <SidebarGroupLabel className="px-2">Navigation</SidebarGroupLabel>
-                    <SidebarMenu>
-                        <SidebarMenuItem>
-                            <SidebarMenuButton asChild>
-                                <Link to="/dashboard" className="flex items-center gap-2">
-                                    <LayoutDashboard className="size-4" />
-                                    <span>Dashboard</span>
-                                </Link>
-                            </SidebarMenuButton>
-                        </SidebarMenuItem>
-                        <SidebarMenuItem>
-                            <SidebarMenuButton asChild>
-                                <Link to="/analytics" className="flex items-center gap-2">
-                                    <BarChart3 className="size-4" />
-                                    <span>Analytics</span>
-                                </Link>
-                            </SidebarMenuButton>
-                        </SidebarMenuItem>
-                        <SidebarMenuItem>
-                            <SidebarMenuButton asChild>
-                                <Link to="/appointments" className="flex items-center gap-2">
-                                    <CalendarDays className="size-4" />
-                                    <span>Appointments</span>
-                                </Link>
-                            </SidebarMenuButton>
-                        </SidebarMenuItem>
-                    </SidebarMenu>
-                </SidebarGroup>
-            </SidebarContent>
-            <Separator />
-            <SidebarFooter className="px-3 py-3">
-                <div className="flex items-center justify-between gap-2">
                     <div className="min-w-0">
-                        <div className="truncate text-sm font-medium">{fullName}</div>
-                        <div className="text-xs text-muted-foreground truncate">Signed in</div>
+                        <div className="text-xs text-gray-300 font-medium truncate max-w-35">{email}</div>
+                        <div className="text-xs text-gray-500">Clinician</div>
                     </div>
-                    <UserButton appearance={{ elements: { avatarBox: 'size-7' } }} />
                 </div>
-                <div className="mt-3">
-                    <SignOutButton>
-                        <button className="w-full text-left text-sm px-2 py-1.5 rounded-md hover:bg-sidebar-accent hover:text-sidebar-accent-foreground">
-                            Sign out
-                        </button>
-                    </SignOutButton>
-                </div>
-            </SidebarFooter>
-        </Sidebar>
+                {/* item 4 — sign out with LogOut icon */}
+                <SignOutButton>
+                    <button className="flex items-center gap-2 text-sm text-gray-400 hover:text-white transition-colors cursor-pointer mt-3">
+                        <LogOut size={15} />
+                        Sign out
+                    </button>
+                </SignOutButton>
+            </div>
+        </aside>
     );
 }
 
 function SidebarLayout({ user, children }) {
     return (
-        <SidebarProvider>
-            <div className="flex min-h-screen bg-background text-foreground">
-                <AppSidebar user={user} />
-                <SidebarInset className="flex-1">
-                    <div className="p-4 sm:p-6 lg:p-8">{children}</div>
-                </SidebarInset>
-            </div>
-        </SidebarProvider>
+        <div>
+            <AppSidebar user={user} />
+            {/* item 2 — ml-64 offsets fixed sidebar; h-screen + overflow-y-auto scrolls content independently */}
+            <main className="ml-64 h-screen overflow-y-auto">{children}</main>
+        </div>
     );
 }
 
@@ -194,6 +187,20 @@ export default function App() {
                         {(user, Layout) => (
                             <Layout user={user}>
                                 <Analytics clerkId={user.id} />
+                            </Layout>
+                        )}
+                    </ProtectedRoute>
+                }
+            />
+
+            {/* Appointments page */}
+            <Route
+                path="/appointments"
+                element={
+                    <ProtectedRoute>
+                        {(user, Layout) => (
+                            <Layout user={user}>
+                                <Appointments />
                             </Layout>
                         )}
                     </ProtectedRoute>

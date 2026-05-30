@@ -61,11 +61,12 @@ const AddPatientModal = ({ isOpen, onClose, onPatientAdded }) => {
         <PatientFormModal
             isOpen={isOpen}
             onClose={handleClose}
-            title="Add Patient Details"
+            title="Add Patient"
             initialValues={EMPTY_FORM}
             onSave={handleSave}
             saving={saving}
             savingError={savingError}
+            primaryLabel="Save Patient"
         />
     );
 };

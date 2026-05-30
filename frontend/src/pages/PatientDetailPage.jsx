@@ -4,9 +4,10 @@ import axios from 'axios';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { RiskPill, Sparkline, TrendArrow } from '@/components/risk-ui';
 import { riskColorClass } from '@/lib/risk';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter, DialogClose } from '@/components/ui/dialog';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ChevronLeft, ChevronDown } from 'lucide-react';
+import BookAppointmentModal from '../components/BookAppointmentModal';
+import AddVisitModal from '../components/AddVisitModal';
 import { ResponsiveContainer, LineChart, CartesianGrid, XAxis, YAxis, Line, ReferenceLine, ReferenceArea, Tooltip } from 'recharts';
 
 const BASE_URL = import.meta.env.VITE_API_URL;
@@ -57,6 +58,8 @@ export default function PatientDetailPage({ clerkId }) {
   const [patient, setPatient] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [bookOpen, setBookOpen] = useState(false);
+  const [visitOpen, setVisitOpen] = useState(false);
 
   const fetchPatient = useCallback(async () => {
     try {
@@ -94,6 +97,15 @@ export default function PatientDetailPage({ clerkId }) {
   };
 
   const topFactors = Array.isArray(patient?.top_factors) ? patient.top_factors : [];
+  
+  // Debug: log the patient object to see the full structure
+  useEffect(() => {
+    if (patient) {
+      console.log('Patient object:', patient);
+      console.log('Top factors:', patient?.top_factors);
+      console.log('Confidence values:', { low: patient?.confidence_low, medium: patient?.confidence_medium, high: patient?.confidence_high });
+    }
+  }, [patient]);
   const factorDesc = (name) => ({
     HbA1c: 'Primary glycaemic control indicator',
     RBS: 'Random blood sugar — acute glucose level',
@@ -158,68 +170,18 @@ export default function PatientDetailPage({ clerkId }) {
           </div>
         </div>
         <div className="flex items-center gap-2">
-          {/* Book Appointment Dialog */}
-          <Dialog>
-            <DialogTrigger asChild>
-              <button className="inline-flex items-center rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground hover:opacity-90">Book Appointment</button>
-            </DialogTrigger>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>Book Appointment</DialogTitle>
-              </DialogHeader>
-              <div className="space-y-3">
-                <div className="space-y-1">
-                  <label className="text-sm">Date</label>
-                  <input type="date" className="w-full rounded-md border bg-background px-3 py-2 text-sm" />
-                </div>
-                <div className="space-y-1">
-                  <label className="text-sm">Appointment type</label>
-                  <select className="w-full rounded-md border bg-background px-3 py-2 text-sm">
-                    <option>Routine Review</option>
-                    <option>Urgent Attention</option>
-                    <option>Follow-up Visit</option>
-                  </select>
-                </div>
-                <div className="space-y-1">
-                  <label className="text-sm">Notes</label>
-                  <textarea rows={3} className="w-full rounded-md border bg-background px-3 py-2 text-sm" />
-                </div>
-              </div>
-              <DialogFooter>
-                <DialogClose asChild>
-                  <button className="inline-flex items-center rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground hover:opacity-90">Confirm</button>
-                </DialogClose>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
-
-          {/* Add New Visit Dialog */}
-          <Dialog>
-            <DialogTrigger asChild>
-              <button className="inline-flex items-center rounded-md border px-3 py-2 text-sm font-medium hover:bg-accent">Add New Visit</button>
-            </DialogTrigger>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>Add New Visit</DialogTitle>
-              </DialogHeader>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-h-[60vh] overflow-auto pr-1">
-                {/* Clinical measurement fields (same as Add Patient without demographics) */}
-                {[
-                  'HbA1c','RBS','BMI','BP_Systolic','BP_Diastolic','Cholesterol','HDL','LDL','Triglycerides','TG_HDL_ratio','Physical_Activity','Diet_Quality','Smoking_Status','Alcohol_Intake'
-                ].map((field) => (
-                  <div key={field} className="space-y-1">
-                    <label className="text-sm">{field.replaceAll('_',' ')}</label>
-                    <input type="number" step="any" className="w-full rounded-md border bg-background px-3 py-2 text-sm" />
-                  </div>
-                ))}
-              </div>
-              <DialogFooter>
-                <DialogClose asChild>
-                  <button className="inline-flex items-center rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground hover:opacity-90">Confirm</button>
-                </DialogClose>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
+          <button
+            onClick={() => setBookOpen(true)}
+            className="inline-flex items-center rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground hover:opacity-90"
+          >
+            Book Appointment
+          </button>
+          <button
+            onClick={() => setVisitOpen(true)}
+            className="inline-flex items-center rounded-md border px-3 py-2 text-sm font-medium hover:bg-accent"
+          >
+            Add New Visit
+          </button>
         </div>
       </div>
 
@@ -233,9 +195,18 @@ export default function PatientDetailPage({ clerkId }) {
             <div className="text-5xl font-semibold tabular-nums mb-2">{Math.round(Number(patient.risk_score ?? 0))}</div>
             <Gauge value={Number(patient.risk_score ?? 0)} category={category} />
             <div className="mt-3 space-y-1 text-sm">
-              <div className="flex items-center justify-between"><span>Low confidence</span><strong>{Math.round(Number(patient.confidence_low ?? 0))}%</strong></div>
-              <div className="flex items-center justify-between"><span>Medium confidence</span><strong>{Math.round(Number(patient.confidence_medium ?? 0))}%</strong></div>
-              <div className="flex items-center justify-between"><span>High confidence</span><strong>{Math.round(Number(patient.confidence_high ?? 0))}%</strong></div>
+              <div className="flex items-center justify-between">
+                <span>Low confidence</span>
+                <strong>{patient.confidence_low ? Math.round(Number(patient.confidence_low)) + '%' : 'Not available'}</strong>
+              </div>
+              <div className="flex items-center justify-between">
+                <span>Medium confidence</span>
+                <strong>{patient.confidence_medium ? Math.round(Number(patient.confidence_medium)) + '%' : 'Not available'}</strong>
+              </div>
+              <div className="flex items-center justify-between">
+                <span>High confidence</span>
+                <strong>{patient.confidence_high ? Math.round(Number(patient.confidence_high)) + '%' : 'Not available'}</strong>
+              </div>
             </div>
             <p className="mt-4 text-xs text-muted-foreground">
               Risk scores are decision support tools only and do not constitute a clinical diagnosis. Clinician judgement must be applied.
@@ -253,12 +224,20 @@ export default function PatientDetailPage({ clerkId }) {
             )}
             <div className="space-y-3">
               {topFactors.map((f, idx) => {
-                const pct = Math.round(Number(f.weight ?? f.value ?? 0));
-                const desc = factorDesc(f.name);
+                // Handle both string factors (factor names) and object factors (with weight/value)
+                let factorName = typeof f === 'string' ? f : f?.name || f?.label || '';
+                // If it's a string, use proportional widths: 1st=100%, 2nd=75%, 3rd=50%
+                let pct;
+                if (typeof f === 'string') {
+                  pct = idx === 0 ? 100 : idx === 1 ? 75 : idx === 2 ? 50 : 25;
+                } else {
+                  pct = Math.round(Number(f?.weight ?? f?.value ?? 0));
+                }
+                const desc = factorDesc(factorName);
                 return (
                   <div key={idx} className="space-y-1">
                     <div className="flex items-center justify-between text-sm">
-                      <span className="font-medium">{f.name}</span>
+                      <span className="font-medium">{factorName}</span>
                       <span className="tabular-nums">{pct}%</span>
                     </div>
                     <div className="h-2 w-full rounded-full bg-muted overflow-hidden">
@@ -383,42 +362,28 @@ export default function PatientDetailPage({ clerkId }) {
       <Card>
         <CardHeader className="pb-2 flex items-center justify-between">
           <CardTitle className="text-sm">Appointments</CardTitle>
-          <Dialog>
-            <DialogTrigger asChild>
-              <button className="inline-flex items-center rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground hover:opacity-90">Book new appointment</button>
-            </DialogTrigger>
-            <DialogContent>
-              <DialogHeader><DialogTitle>Book Appointment</DialogTitle></DialogHeader>
-              <div className="space-y-3">
-                <div className="space-y-1">
-                  <label className="text-sm">Date</label>
-                  <input type="date" className="w-full rounded-md border bg-background px-3 py-2 text-sm" />
-                </div>
-                <div className="space-y-1">
-                  <label className="text-sm">Appointment type</label>
-                  <select className="w-full rounded-md border bg-background px-3 py-2 text-sm">
-                    <option>Routine Review</option>
-                    <option>Urgent Attention</option>
-                    <option>Follow-up Visit</option>
-                  </select>
-                </div>
-                <div className="space-y-1">
-                  <label className="text-sm">Notes</label>
-                  <textarea rows={3} className="w-full rounded-md border bg-background px-3 py-2 text-sm" />
-                </div>
-              </div>
-              <DialogFooter>
-                <DialogClose asChild>
-                  <button className="inline-flex items-center rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground hover:opacity-90">Confirm</button>
-                </DialogClose>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
+          <button
+            onClick={() => setBookOpen(true)}
+            className="inline-flex items-center rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground hover:opacity-90"
+          >
+            Book new appointment
+          </button>
         </CardHeader>
         <CardContent>
           <div className="text-sm text-muted-foreground">No appointments booked yet</div>
         </CardContent>
       </Card>
+
+      <BookAppointmentModal
+        isOpen={bookOpen}
+        onClose={() => setBookOpen(false)}
+        patientId={patient.patient_id}
+      />
+      <AddVisitModal
+        isOpen={visitOpen}
+        onClose={() => setVisitOpen(false)}
+        patientId={patient.patient_id}
+      />
     </div>
   );
 }

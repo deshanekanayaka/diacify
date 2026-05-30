@@ -1,11 +1,10 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import axios from 'axios';
 import { Link } from 'react-router-dom';
-import AddPatientModal from './AddPatientModal';
 import EditPatientModal from './EditPatientModal';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { RiskPill } from '@/components/risk-ui';
 import { riskColorClass } from '@/lib/risk';
 import { EllipsisVertical } from 'lucide-react';
@@ -20,7 +19,6 @@ const PriorityTable = ({ patients = [], loading, error, onRefresh }) => {
   const [riskFilter, setRiskFilter] = useState('all');
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
-  const [showAdd, setShowAdd] = useState(false);
   // Holds the patient object to be edited, or null when no edit is in progress
   const [editPatient, setEditPatient] = useState(null);
   // Holds the patient object pending deletion, or null when no delete is in progress
@@ -74,9 +72,6 @@ const PriorityTable = ({ patients = [], loading, error, onRefresh }) => {
     return filtered.slice((page - 1) * pageSize, page * pageSize);
   }, [filtered, page, pageSize]);
 
-  const beginning = page === 1 ? 1 : pageSize * (page - 1) + 1;
-  const end = page === totalPages ? filtered.length : beginning + pageSize - 1;
-
   useEffect(() => {
     if (page > totalPages) setPage(1);
   }, [page, totalPages]);
@@ -103,17 +98,6 @@ const PriorityTable = ({ patients = [], loading, error, onRefresh }) => {
 
   return (
     <>
-      <AddPatientModal
-        isOpen={showAdd}
-        onClose={() => setShowAdd(false)}
-        onPatientAdded={(patientId) => {
-          setShowAdd(false);
-          onRefresh();
-          setSavedId(patientId);
-          setShowSuccess(true);
-        }}
-      />
-
       <EditPatientModal
         isOpen={!!editPatient}
         onClose={() => setEditPatient(null)}
@@ -150,34 +134,37 @@ const PriorityTable = ({ patients = [], loading, error, onRefresh }) => {
 
       {/* Radix AlertDialog for Delete confirmation */}
       <AlertDialog open={!!deleteTarget} onOpenChange={(open) => !open && setDeleteTarget(null)}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Delete Patient</AlertDialogTitle>
-            <AlertDialogDescription>
-              Are you sure you want to delete <strong>p{deleteTarget?.patient_id}</strong>? This cannot be undone.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
+        <AlertDialogContent className="bg-white rounded-2xl shadow-2xl border border-gray-200 p-6 max-w-md w-full">
+          <AlertDialogTitle className="text-lg font-semibold text-gray-900 mb-2">
+            Delete Patient
+          </AlertDialogTitle>
+          <AlertDialogDescription className="text-sm text-gray-500 mb-6">
+            Are you sure you want to delete <strong>p{deleteTarget?.patient_id}</strong>? This cannot be undone.
+          </AlertDialogDescription>
           {deleteError && (
-            <div className="text-sm text-destructive border border-destructive/30 bg-destructive/10 rounded-md p-2">{deleteError}</div>
+            <div className="text-sm text-destructive border border-destructive/30 bg-destructive/10 rounded-md p-2 mb-4">{deleteError}</div>
           )}
-          <AlertDialogFooter>
-            <AlertDialogCancel disabled={deleting}>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={confirmDelete} disabled={deleting}>
+          <div className="flex justify-end gap-3">
+            <AlertDialogCancel
+              disabled={deleting}
+              className="px-4 py-2 text-sm font-medium text-gray-600 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors cursor-pointer"
+            >
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={confirmDelete}
+              disabled={deleting}
+              className="px-4 py-2 text-sm font-medium text-white bg-red-600 hover:bg-red-700 rounded-lg transition-colors cursor-pointer"
+            >
               {deleting ? 'Deleting…' : 'Delete'}
             </AlertDialogAction>
-          </AlertDialogFooter>
+          </div>
         </AlertDialogContent>
       </AlertDialog>
 
-      <div className="rounded-xl border bg-card text-card-foreground shadow">
-        <div className="flex items-center justify-between gap-2 p-4 border-b">
-          <h1 className="text-base font-semibold">Priority Patients List</h1>
-          <button className="inline-flex items-center rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground hover:opacity-90" onClick={() => setShowAdd(true)}>
-            + Add Patient
-          </button>
-        </div>
-
-        <div className="flex flex-col gap-2 p-4 sm:flex-row sm:items-center sm:justify-between">
+      <div className="bg-white rounded-xl border border-gray-200 shadow-sm">
+        {/* item 7 — flex-1 search grows, select stays w-40 */}
+        <div className="flex items-center gap-3 px-4 pt-4 mb-4">
           <input
             type="text"
             placeholder="Search by Patient ID (e.g. p8 or 8)"
@@ -186,24 +173,21 @@ const PriorityTable = ({ patients = [], loading, error, onRefresh }) => {
               setSearchId(e.target.value);
               setPage(1);
             }}
-            className="w-full sm:w-72 rounded-md border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+            className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 ring-offset-0 transition-all duration-150 placeholder-gray-400"
           />
-          <div className="flex items-center gap-2">
-            <select
-              className="rounded-md border bg-background px-2 py-2 text-sm"
-              value={riskFilter}
-              onChange={(e) => {
-                setRiskFilter(e.target.value);
-                setPage(1);
-              }}
-            >
-              <option value="all">All Risk Levels</option>
-              <option value="high">High Risk Only</option>
-              <option value="medium">Medium Risk Only</option>
-              <option value="low">Low Risk Only</option>
-            </select>
-            <div className="text-xs text-muted-foreground">Showing {filtered.length} results</div>
-          </div>
+          <select
+            className="w-40 border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white shadow-sm cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500"
+            value={riskFilter}
+            onChange={(e) => {
+              setRiskFilter(e.target.value);
+              setPage(1);
+            }}
+          >
+            <option value="all">All Risk Levels</option>
+            <option value="high">High Risk Only</option>
+            <option value="medium">Medium Risk Only</option>
+            <option value="low">Low Risk Only</option>
+          </select>
         </div>
 
         {loading && <p className="p-6 text-muted-foreground">Loading patients…</p>}
@@ -216,15 +200,16 @@ const PriorityTable = ({ patients = [], loading, error, onRefresh }) => {
         {!loading && !error && (
           <div className="p-2">
             <Table>
+              {/* item 6 */}
               <TableHeader>
                 <TableRow>
-                  <TableHead className="w-[140px] uppercase text-xs tracking-wide">PATIENT ID</TableHead>
-                  <TableHead className="w-[80px] uppercase text-xs tracking-wide">AGE</TableHead>
-                  <TableHead className="w-[100px] uppercase text-xs tracking-wide">SEX</TableHead>
-                  <TableHead className="w-[160px] uppercase text-xs tracking-wide">LAST VISIT</TableHead>
-                  <TableHead className="w-[200px] uppercase text-xs tracking-wide">RISK SCORE</TableHead>
-                  <TableHead className="w-[120px] uppercase text-xs tracking-wide">RISK</TableHead>
-                  <TableHead className="w-[80px] uppercase text-xs tracking-wide text-right pr-4">ACTIONS</TableHead>
+                  <TableHead className="w-35 bg-gray-50 text-xs font-bold text-gray-600 uppercase tracking-wider border-b border-gray-200 px-4 py-3">PATIENT ID</TableHead>
+                  <TableHead className="w-20 bg-gray-50 text-xs font-bold text-gray-600 uppercase tracking-wider border-b border-gray-200 px-4 py-3">AGE</TableHead>
+                  <TableHead className="w-25 bg-gray-50 text-xs font-bold text-gray-600 uppercase tracking-wider border-b border-gray-200 px-4 py-3">SEX</TableHead>
+                  <TableHead className="w-40 bg-gray-50 text-xs font-bold text-gray-600 uppercase tracking-wider border-b border-gray-200 px-4 py-3">LAST VISIT</TableHead>
+                  <TableHead className="w-50 bg-gray-50 text-xs font-bold text-gray-600 uppercase tracking-wider border-b border-gray-200 px-4 py-3">RISK SCORE</TableHead>
+                  <TableHead className="w-30 bg-gray-50 text-xs font-bold text-gray-600 uppercase tracking-wider border-b border-gray-200 px-4 py-3">RISK</TableHead>
+                  <TableHead className="w-20 bg-gray-50 text-xs font-bold text-gray-600 uppercase tracking-wider border-b border-gray-200 px-4 py-3 text-right pr-4">ACTIONS</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -239,7 +224,7 @@ const PriorityTable = ({ patients = [], loading, error, onRefresh }) => {
                     const cat = riskCategory(p.risk_category);
                     const lastVisit = p.created_at || p.last_visit || p.last_visit_date || p.last_seen || null;
                     return (
-                      <TableRow key={p.patient_id}>
+                      <TableRow key={p.patient_id} className="border-b border-gray-100 last:border-b-0 hover:bg-gray-50 transition-colors duration-100">
                         <TableCell>
                           <Link to={`/patients/${p.patient_id}`} className="text-blue-600 underline hover:text-blue-700">
                             p{p.patient_id}
@@ -261,9 +246,22 @@ const PriorityTable = ({ patients = [], loading, error, onRefresh }) => {
                                 <EllipsisVertical className="h-5 w-5" />
                               </button>
                             </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end" className="w-32">
-                              <DropdownMenuItem onClick={() => setEditPatient(p)}>Edit</DropdownMenuItem>
-                              <DropdownMenuItem onClick={() => setDeleteTarget(p)} className="text-destructive focus:text-destructive">
+                            {/* item 12 */}
+                            <DropdownMenuContent
+                              align="end"
+                              sideOffset={4}
+                              className="z-50 min-w-[140px] bg-white border border-gray-200 rounded-xl shadow-lg py-1 overflow-hidden"
+                            >
+                              <DropdownMenuItem
+                                onClick={() => setEditPatient(p)}
+                                className="px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 cursor-pointer w-full text-left"
+                              >
+                                Edit
+                              </DropdownMenuItem>
+                              <DropdownMenuItem
+                                onClick={() => setDeleteTarget(p)}
+                                className="px-4 py-2 text-sm text-red-600 hover:bg-red-50 cursor-pointer w-full text-left"
+                              >
                                 Delete
                               </DropdownMenuItem>
                             </DropdownMenuContent>
@@ -279,10 +277,7 @@ const PriorityTable = ({ patients = [], loading, error, onRefresh }) => {
         )}
 
         {!loading && !error && (
-          <div className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
-            <div className="text-sm text-muted-foreground">
-              Showing <strong>{filtered.length === 0 ? 0 : beginning}–{end}</strong> of <strong>{filtered.length}</strong> patients
-            </div>
+          <div className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-end">
             <div className="flex items-center gap-2">
               <div className="flex items-center gap-2 text-sm">
                 <span>Show</span>

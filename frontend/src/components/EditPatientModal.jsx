@@ -73,12 +73,14 @@ const EditPatientModal = ({ isOpen, onClose, onPatientUpdated, patient }) => {
         <PatientFormModal
             isOpen={isOpen && !!patient}
             onClose={handleClose}
-            title={`Edit Patient — p${patient?.patient_id}`}
+            title="Edit Patient"
+            subtitle={patient ? `p${patient.patient_id}` : undefined}
             // Converts the raw DB record to form-friendly values, or passes null if no patient
             initialValues={patient ? toFormValues(patient) : null}
             onSave={handleSave}
             saving={saving}
             savingError={savingError}
+            primaryLabel="Save Changes"
         />
     );
 };
