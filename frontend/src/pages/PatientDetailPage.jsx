@@ -1,11 +1,11 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
+import { useAuth } from '@clerk/clerk-react';
 import axios from 'axios';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { RiskPill, Sparkline, TrendArrow } from '@/components/risk-ui';
 import { riskColorClass } from '@/lib/risk';
 import { Skeleton } from '@/components/ui/skeleton';
-import { ChevronLeft, ChevronDown } from 'lucide-react';
+import { ChevronLeft, ChevronRight } from 'lucide-react';
 import BookAppointmentModal from '../components/BookAppointmentModal';
 import AddVisitModal from '../components/AddVisitModal';
 import { ResponsiveContainer, LineChart, CartesianGrid, XAxis, YAxis, Line, ReferenceLine, ReferenceArea, Tooltip } from 'recharts';
@@ -14,59 +14,65 @@ const BASE_URL = import.meta.env.VITE_API_URL;
 
 function Gauge({ value = 0, category }) {
   const clamped = Math.max(0, Math.min(100, Number(value) || 0));
-  // Semicircle gauge using SVG arc
-  const size = 140;
-  const stroke = 12;
-  const r = (size - stroke) / 2;
-  const cx = size / 2;
-  const cy = size / 2;
-  const start = { x: cx - r, y: cy };
-  const end = { x: cx + r, y: cy };
-  const largeArc = 0; // 180deg
-  const bgPath = `M ${start.x} ${start.y} A ${r} ${r} 0 1 1 ${end.x} ${end.y}`;
-  const angle = Math.PI * (clamped / 100);
-  const x = cx - r * Math.cos(angle);
-  const y = cy - r * Math.sin(angle);
-  const fgPath = `M ${start.x} ${start.y} A ${r} ${r} 0 ${clamped > 50 ? 1 : 0} 1 ${x} ${y}`;
-  const c = riskColorClass(category);
-  return (
-    <svg width={size} height={size / 2} viewBox={`0 0 ${size} ${size/2}`} className="block">
-      <path d={bgPath} fill="none" stroke="var(--muted)" strokeWidth={stroke} strokeLinecap="round" />
-      <path d={fgPath} fill="none" strokeWidth={stroke} strokeLinecap="round" className={c.bg} />
-      {/* needle dot */}
-      <circle cx={x} cy={y} r={4} className={c.bg} />
-    </svg>
-  );
-}
 
-function RowExpander({ label = 'Details', children }) {
-  const [open, setOpen] = useState(false);
+  const W = 160;
+  const H = 90;
+  const cx = W / 2;
+  const cy = H - 10;
+  const r = 70;
+
+  // Track arc: full 180 degrees from left to right
+  const trackD = `M ${cx - r} ${cy} A ${r} ${r} 0 0 1 ${cx + r} ${cy}`;
+
+  // Value arc: 0% = left point, 100% = right point
+  // Angle goes from 180deg to 0deg (left to right)
+  const angle = Math.PI - (clamped / 100) * Math.PI;
+  const ex = cx + r * Math.cos(angle);
+  const ey = cy - r * Math.sin(angle);
+
+  // large-arc-flag is 1 if clamped > 50
+  const largeArc = clamped > 50 ? 1 : 0;
+  const valueD = `M ${cx - r} ${cy} A ${r} ${r} 0 ${largeArc} 1 ${ex} ${ey}`;
+
+  const arcColor = category === 'high' ? '#ef4444' : category === 'medium' ? '#f59e0b' : '#10b981';
+
   return (
-    <div className="border rounded-md">
-      <button className="w-full flex items-center justify-between px-3 py-2 text-sm hover:bg-muted" onClick={() => setOpen(!open)}>
-        <span className="inline-flex items-center gap-2"><ChevronDown className={`h-4 w-4 transition-transform ${open ? 'rotate-180' : ''}`} /> {label}</span>
-        <span className="text-xs text-muted-foreground">{open ? 'Hide' : 'Show'}</span>
-      </button>
-      {open && <div className="p-3 text-sm">{children}</div>}
-    </div>
+    <svg width={W} height={H} viewBox={`0 0 ${W} ${H}`} className="block shrink-0">
+      <path d={trackD} fill="none" stroke="#e5e7eb" strokeWidth={12} strokeLinecap="round" />
+      <path d={valueD} fill="none" stroke={arcColor} strokeWidth={12} strokeLinecap="round" />
+      <circle cx={ex} cy={ey} r={5} fill={arcColor} />
+    </svg>
   );
 }
 
 export default function PatientDetailPage({ clerkId }) {
   const { id } = useParams();
   const navigate = useNavigate();
+  const { getToken } = useAuth();
   const [patient, setPatient] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [bookOpen, setBookOpen] = useState(false);
   const [visitOpen, setVisitOpen] = useState(false);
+  const [expandedVisits, setExpandedVisits] = useState(new Set());
+
+  const toggleVisit = (rowId) => {
+    setExpandedVisits(prev => {
+      const next = new Set(prev);
+      if (next.has(rowId)) next.delete(rowId);
+      else next.add(rowId);
+      return next;
+    });
+  };
 
   const fetchPatient = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
+      const token = await getToken();
       const res = await axios.get(`${BASE_URL}/api/patients/${id}`, {
         params: { clerk_id: clerkId },
+        headers: { Authorization: `Bearer ${token}` },
       });
       if (!res.data?.success) throw new Error(res.data?.message || 'Failed to fetch');
       setPatient(res.data.data);
@@ -75,7 +81,7 @@ export default function PatientDetailPage({ clerkId }) {
     } finally {
       setLoading(false);
     }
-  }, [id, clerkId]);
+  }, [id, clerkId, getToken]);
 
   useEffect(() => { fetchPatient(); }, [fetchPatient]);
 
@@ -84,7 +90,11 @@ export default function PatientDetailPage({ clerkId }) {
     return rc === 'high' || rc === 'medium' || rc === 'low' ? rc : 'low';
   }, [patient]);
 
-  const tintBg = category === 'high' ? 'bg-[color:var(--risk-high-soft)]' : category === 'medium' ? 'bg-[color:var(--risk-medium-soft)]' : 'bg-[color:var(--risk-low-soft)]';
+  const riskPanelClass = category === 'high'
+    ? 'bg-red-100 border-red-200'
+    : category === 'medium'
+    ? 'bg-amber-100 border-amber-200'
+    : 'bg-green-100 border-green-200';
 
   const formatDate = (iso) => {
     if (!iso) return '—';
@@ -97,7 +107,7 @@ export default function PatientDetailPage({ clerkId }) {
   };
 
   const topFactors = Array.isArray(patient?.top_factors) ? patient.top_factors : [];
-  
+
   // Debug: log the patient object to see the full structure
   useEffect(() => {
     if (patient) {
@@ -106,6 +116,7 @@ export default function PatientDetailPage({ clerkId }) {
       console.log('Confidence values:', { low: patient?.confidence_low, medium: patient?.confidence_medium, high: patient?.confidence_high });
     }
   }, [patient]);
+
   const factorDesc = (name) => ({
     HbA1c: 'Primary glycaemic control indicator',
     RBS: 'Random blood sugar — acute glucose level',
@@ -116,7 +127,7 @@ export default function PatientDetailPage({ clerkId }) {
 
   if (loading) {
     return (
-      <div className="space-y-4">
+      <div className="p-8 bg-gray-50 min-h-screen space-y-4">
         <Skeleton className="h-8 w-64" />
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           <Skeleton className="h-56 w-full" />
@@ -132,8 +143,11 @@ export default function PatientDetailPage({ clerkId }) {
 
   if (error) {
     return (
-      <div className="rounded-md border border-destructive/30 bg-destructive/10 p-4 text-destructive">
-        Failed to load patient: {error} <button className="underline ml-2" onClick={fetchPatient}>Retry</button>
+      <div className="p-8 bg-gray-50 min-h-screen">
+        <div className="rounded-md border border-red-200 bg-red-50 p-4 text-red-700">
+          Failed to load patient: {error}{' '}
+          <button className="underline ml-2" onClick={fetchPatient}>Retry</button>
+        </div>
       </div>
     );
   }
@@ -150,229 +164,299 @@ export default function PatientDetailPage({ clerkId }) {
   const visitDate = patient.created_at || patient.last_visit || patient.last_visit_date || null;
   const lineData = [{ date: visitDate ? formatDate(visitDate) : '—', HbA1c: Number(hba1c ?? 0), Risk: Number(patient.risk_score ?? 0) }];
 
+  const geneticsLabel = (val) => {
+    const map = {
+      0: 'None', 'None': 'None',
+      1: 'Father T2DM', 'Father': 'Father T2DM',
+      2: 'Mother T2DM', 'Mother': 'Mother T2DM',
+      3: 'Sibling T2DM', 'Sibling': 'Sibling T2DM',
+      4: 'Both Parents T2DM',
+    };
+    if (val === null || val === undefined || val === '' || val === '—') return 'Not recorded';
+    return map[val] ?? map[String(val)] ?? String(val);
+  };
+
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-start justify-between gap-4">
+    <div className="p-8 bg-gray-50 min-h-screen">
+      {/* HEADER SECTION */}
+      <div className="flex items-start justify-between mb-6">
         <div>
-          <button onClick={() => navigate('/dashboard')} className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:underline">
+          <button
+            onClick={() => navigate('/dashboard')}
+            className="flex items-center gap-2 text-sm text-gray-500 hover:text-gray-700 cursor-pointer mb-3"
+          >
             <ChevronLeft className="h-4 w-4" /> Back to dashboard
           </button>
-          <div className="mt-2 flex items-center gap-3">
-            <h1 className="text-2xl font-semibold tracking-tight">Patient p{patient.patient_id}</h1>
+          <div className="flex items-center gap-3">
+            <h1 className="text-2xl font-bold text-gray-900">Patient p{patient.patient_id}</h1>
             <RiskPill category={category} />
           </div>
-          <div className="mt-1 text-sm text-muted-foreground flex flex-wrap items-center gap-3">
-            <span>Age: <strong className="text-foreground font-medium">{patient.age ?? '—'}</strong></span>
-            <span>Sex: <strong className="text-foreground font-medium capitalize">{patient.sex ?? '—'}</strong></span>
-            <span>Social life: <strong className="text-foreground font-medium">{patient.social_life ?? '—'}</strong></span>
-            <span>Genetics: <strong className="text-foreground font-medium">{patient.genetics ?? '—'}</strong></span>
+          <div className="flex items-center gap-4 mt-2 flex-wrap">
+            {[
+              { label: null, value: `${patient.age ?? '—'} years` },
+              { label: null, value: patient.sex ? patient.sex.charAt(0).toUpperCase() + patient.sex.slice(1) : '—' },
+              { label: 'Social life', value: patient.social_life ?? '—' },
+              { label: 'Genetics', value: geneticsLabel(patient.genetics) },
+            ].map((item, i) => (
+              <span key={i} className="text-sm text-gray-500">
+                {item.label
+                  ? <><span className="text-gray-400">{item.label}:</span>{' '}<span className="font-medium text-gray-700">{item.value}</span></>
+                  : <span className="font-medium text-gray-700">{item.value}</span>
+                }
+              </span>
+            ))}
           </div>
         </div>
         <div className="flex items-center gap-2">
           <button
             onClick={() => setBookOpen(true)}
-            className="inline-flex items-center rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground hover:opacity-90"
+            className="border border-gray-300 text-gray-700 hover:bg-gray-50 rounded-lg px-4 py-2 text-sm font-medium cursor-pointer transition-colors"
           >
             Book Appointment
           </button>
           <button
             onClick={() => setVisitOpen(true)}
-            className="inline-flex items-center rounded-md border px-3 py-2 text-sm font-medium hover:bg-accent"
+            className="bg-blue-600 hover:bg-blue-700 text-white rounded-lg px-4 py-2 text-sm font-medium cursor-pointer transition-colors"
           >
             Add New Visit
           </button>
         </div>
       </div>
 
-      {/* Score + Factors */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <Card className={`${tintBg}`}>
-          <CardHeader className="pb-2">
-            <CardTitle className={`text-sm ${riskColorClass(category).text}`}>Risk score</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-5xl font-semibold tabular-nums mb-2">{Math.round(Number(patient.risk_score ?? 0))}</div>
+      {/* TOP ROW — Risk Score + Contributing Factors */}
+      <div className="grid grid-cols-3 gap-6 mb-4">
+        {/* Risk Score Panel */}
+        <div className={`border rounded-xl p-6 ${riskPanelClass}`}>
+          {/* Gauge left, label + score right */}
+          <div className="flex items-center gap-6">
             <Gauge value={Number(patient.risk_score ?? 0)} category={category} />
-            <div className="mt-3 space-y-1 text-sm">
-              <div className="flex items-center justify-between">
-                <span>Low confidence</span>
-                <strong>{patient.confidence_low ? Math.round(Number(patient.confidence_low)) + '%' : 'Not available'}</strong>
-              </div>
-              <div className="flex items-center justify-between">
-                <span>Medium confidence</span>
-                <strong>{patient.confidence_medium ? Math.round(Number(patient.confidence_medium)) + '%' : 'Not available'}</strong>
-              </div>
-              <div className="flex items-center justify-between">
-                <span>High confidence</span>
-                <strong>{patient.confidence_high ? Math.round(Number(patient.confidence_high)) + '%' : 'Not available'}</strong>
-              </div>
+            <div>
+              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">CURRENT RISK SCORE</p>
+              <div className="text-5xl font-bold text-gray-900">{Math.round(Number(patient.risk_score ?? 0))}</div>
+              <p className="text-xs text-gray-400 mt-1">out of 100</p>
             </div>
-            <p className="mt-4 text-xs text-muted-foreground">
-              Risk scores are decision support tools only and do not constitute a clinical diagnosis. Clinician judgement must be applied.
-            </p>
-          </CardContent>
-        </Card>
+          </div>
+          {/* Confidence bars */}
+          <div className="mt-3">
+            <div className="flex items-center justify-between py-1.5">
+              <span className="text-sm text-gray-600">Low</span>
+              {patient.confidence_low
+                ? <span className="font-medium">{Math.round(Number(patient.confidence_low))}%</span>
+                : <span className="text-gray-400">Not available</span>
+              }
+            </div>
+            <div className="flex items-center justify-between py-1.5">
+              <span className="text-sm text-gray-600">Medium</span>
+              {patient.confidence_medium
+                ? <span className="font-medium">{Math.round(Number(patient.confidence_medium))}%</span>
+                : <span className="text-gray-400">Not available</span>
+              }
+            </div>
+            <div className="flex items-center justify-between py-1.5">
+              <span className="text-sm text-gray-600">High</span>
+              {patient.confidence_high
+                ? <span className="font-medium">{Math.round(Number(patient.confidence_high))}%</span>
+                : <span className="text-gray-400">Not available</span>
+              }
+            </div>
+          </div>
+        </div>
 
-        <Card className="lg:col-span-2">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm">TOP CONTRIBUTING FACTORS</CardTitle>
-          </CardHeader>
-          <CardContent>
-            {topFactors.length === 0 && (
-              <div className="text-sm text-muted-foreground">No contributing factors provided.</div>
-            )}
-            <div className="space-y-3">
-              {topFactors.map((f, idx) => {
-                // Handle both string factors (factor names) and object factors (with weight/value)
-                let factorName = typeof f === 'string' ? f : f?.name || f?.label || '';
-                // If it's a string, use proportional widths: 1st=100%, 2nd=75%, 3rd=50%
-                let pct;
-                if (typeof f === 'string') {
-                  pct = idx === 0 ? 100 : idx === 1 ? 75 : idx === 2 ? 50 : 25;
-                } else {
-                  pct = Math.round(Number(f?.weight ?? f?.value ?? 0));
-                }
-                const desc = factorDesc(factorName);
-                return (
-                  <div key={idx} className="space-y-1">
-                    <div className="flex items-center justify-between text-sm">
-                      <span className="font-medium">{factorName}</span>
-                      <span className="tabular-nums">{pct}%</span>
-                    </div>
-                    <div className="h-2 w-full rounded-full bg-muted overflow-hidden">
-                      <div className={`h-full ${riskColorClass(category).bg}`} style={{ width: `${Math.min(100, Math.max(0, pct))}%` }} />
-                    </div>
-                    {desc && <div className="text-xs text-muted-foreground">{desc}</div>}
+        {/* Contributing Factors Panel */}
+        <div className="col-span-2 bg-white border border-gray-200 rounded-xl p-6">
+          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-4">TOP CONTRIBUTING FACTORS</p>
+          {topFactors.length === 0 && (
+            <div className="text-sm text-gray-500">No contributing factors provided.</div>
+          )}
+          <div>
+            {topFactors.map((f, idx) => {
+              let factorName = typeof f === 'string' ? f : f?.name || f?.label || '';
+              let pct;
+              if (typeof f === 'string') {
+                pct = idx === 0 ? 100 : idx === 1 ? 75 : idx === 2 ? 50 : 25;
+              } else {
+                pct = Math.round(Number(f?.weight ?? f?.value ?? 0));
+              }
+              const desc = factorDesc(factorName);
+              return (
+                <div key={idx} className="flex items-start justify-between gap-4 mb-4">
+                  <div className="flex-1">
+                    <span className="text-sm font-semibold text-gray-800">{factorName}</span>
+                    <div
+                      className="h-1.5 rounded-full bg-blue-500 mt-2"
+                      style={{ width: `${Math.min(100, Math.max(0, pct))}%` }}
+                    />
                   </div>
-                );
-              })}
-            </div>
-          </CardContent>
-        </Card>
+                  <div className="text-right">
+                    {desc && <p className="text-xs text-gray-400 leading-relaxed">{desc}</p>}
+                    <p className="text-xs font-medium text-gray-600 mt-1">{pct}%</p>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
       </div>
 
-      {/* Trend charts */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <Card>
-          <CardHeader className="pb-2"><CardTitle className="text-sm">HbA1c trajectory</CardTitle></CardHeader>
-          <CardContent>
-            <div className="h-64 w-full">
-              <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={lineData} margin={{ top: 10, right: 16, left: 0, bottom: 10 }}>
-                  <CartesianGrid strokeDasharray="3 3" opacity={0.2} />
-                  <XAxis dataKey="date" tick={{ fontSize: 12 }} />
-                  <YAxis domain={[0, 10]} tick={{ fontSize: 12 }} />
-                  <Tooltip />
-                  <ReferenceLine y={5.7} stroke="var(--risk-medium)" strokeDasharray="4 4" label={{ value: 'Prediabetes 5.7%', position: 'top', fontSize: 10 }} />
-                  <ReferenceLine y={6.5} stroke="var(--risk-high)" strokeDasharray="4 4" label={{ value: 'Diabetes 6.5%', position: 'top', fontSize: 10 }} />
-                  <Line type="monotone" dataKey="HbA1c" stroke="var(--primary)" dot />
-                </LineChart>
-              </ResponsiveContainer>
-            </div>
-          </CardContent>
-        </Card>
+      {/* DISCLAIMER — below both panels */}
+      <p className="text-xs text-gray-400 mb-6 text-center">
+        Risk scores are decision support tools only and do not constitute a clinical diagnosis. Clinician judgement must be applied.
+      </p>
 
-        <Card>
-          <CardHeader className="pb-2"><CardTitle className="text-sm">Risk score trajectory</CardTitle></CardHeader>
-          <CardContent>
-            <div className="h-64 w-full">
-              <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={lineData} margin={{ top: 0, right: 16, left: 0, bottom: 10 }}>
-                  <CartesianGrid strokeDasharray="3 3" opacity={0.2} />
-                  <XAxis dataKey="date" tick={{ fontSize: 12 }} />
-                  <YAxis domain={[0, 100]} tick={{ fontSize: 12 }} />
-                  <Tooltip />
-                  {/* Background bands */}
-                  <ReferenceArea y1={0} y2={39} fill="var(--risk-low-soft)" fillOpacity={1} ifOverflow="hidden" />
-                  <ReferenceArea y1={39} y2={69} fill="var(--risk-medium-soft)" fillOpacity={1} ifOverflow="hidden" />
-                  <ReferenceArea y1={69} y2={100} fill="var(--risk-high-soft)" fillOpacity={1} ifOverflow="hidden" />
-                  <Line type="monotone" dataKey="Risk" stroke="var(--primary)" dot />
-                </LineChart>
-              </ResponsiveContainer>
-            </div>
-          </CardContent>
-        </Card>
+      {/* CHARTS ROW */}
+      <div className="grid grid-cols-2 gap-6 mb-6">
+        <div className="bg-white border border-gray-200 rounded-xl p-6">
+          <p className="text-sm font-semibold text-gray-900 mb-4">HbA1c trajectory</p>
+          <div className="h-64 w-full">
+            <ResponsiveContainer width="100%" height="100%">
+              <LineChart data={lineData} margin={{ top: 10, right: 16, left: 0, bottom: 10 }}>
+                <CartesianGrid strokeDasharray="3 3" opacity={0.2} />
+                <XAxis dataKey="date" tick={{ fontSize: 12 }} />
+                <YAxis domain={[0, 10]} tick={{ fontSize: 12 }} />
+                <Tooltip />
+                <ReferenceLine y={5.7} stroke="var(--risk-medium)" strokeDasharray="4 4" label={{ value: 'Prediabetes 5.7%', position: 'top', fontSize: 10 }} />
+                <ReferenceLine y={6.5} stroke="var(--risk-high)" strokeDasharray="4 4" label={{ value: 'Diabetes 6.5%', position: 'top', fontSize: 10 }} />
+                <Line type="monotone" dataKey="HbA1c" stroke="var(--primary)" dot />
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+
+        <div className="bg-white border border-gray-200 rounded-xl p-6">
+          <p className="text-sm font-semibold text-gray-900 mb-4">Risk score trajectory</p>
+          <div className="h-64 w-full">
+            <ResponsiveContainer width="100%" height="100%">
+              <LineChart data={lineData} margin={{ top: 0, right: 16, left: 0, bottom: 10 }}>
+                <CartesianGrid strokeDasharray="3 3" opacity={0.2} />
+                <XAxis dataKey="date" tick={{ fontSize: 12 }} />
+                <YAxis domain={[0, 100]} tick={{ fontSize: 12 }} />
+                <Tooltip />
+                <ReferenceArea y1={0} y2={39} fill="var(--risk-low-soft)" fillOpacity={1} ifOverflow="hidden" />
+                <ReferenceArea y1={39} y2={69} fill="var(--risk-medium-soft)" fillOpacity={1} ifOverflow="hidden" />
+                <ReferenceArea y1={69} y2={100} fill="var(--risk-high-soft)" fillOpacity={1} ifOverflow="hidden" />
+                <Line type="monotone" dataKey="Risk" stroke="var(--primary)" dot />
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
       </div>
 
-      {/* Metrics sparklines */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        {[{label:'BMI', unit:'kg/m²', value:bmi}, {label:'Systolic BP', unit:'mmHg', value:sbp}, {label:'RBS', unit:'mg/dL', value:rbs}, {label:'Triglycerides', unit:'mg/dL', value:tg}].map((m, i) => (
-          <Card key={i}>
-            <CardHeader className="pb-2"><CardTitle className="text-sm">{m.label} <span className="text-muted-foreground">({m.unit})</span></CardTitle></CardHeader>
-            <CardContent>
+      {/* SPARKLINES ROW */}
+      <div className="grid grid-cols-4 gap-4 mb-6">
+        {[
+          { label: 'BMI', unit: 'kg/m²', value: bmi },
+          { label: 'Systolic BP', unit: 'mmHg', value: sbp },
+          { label: 'RBS', unit: 'mg/dL', value: rbs },
+          { label: 'Triglycerides', unit: 'mg/dL', value: tg },
+        ].map((m, i) => {
+          const values = m.value != null ? [Number(m.value)] : [];
+          return (
+            <div key={i} className="bg-white border border-gray-200 rounded-xl p-4">
               <div className="flex items-center justify-between">
-                <div className="text-3xl font-semibold tabular-nums">{m.value ?? '—'}</div>
+                <span className="text-xs text-gray-500 mb-1">{m.label}</span>
+                <span className="text-xs text-gray-400">{m.unit}</span>
+              </div>
+              <div className="text-2xl font-bold text-gray-900 mt-1">{m.value ?? '—'}</div>
+              <div className="text-gray-400">
                 <TrendArrow from={m.value} to={m.value} />
               </div>
-              <div className="mt-2"><Sparkline values={m.value != null ? [Number(m.value)] : []} /></div>
-            </CardContent>
-          </Card>
-        ))}
+              {values.length <= 1 ? (
+                <svg viewBox="0 0 100 30" className="w-full h-8 mt-2">
+                  <line x1="0" y1="15" x2="100" y2="15" stroke="#93c5fd" strokeWidth="2" strokeDasharray="4 2" />
+                </svg>
+              ) : (
+                <div className="mt-2">
+                  <Sparkline values={values} />
+                </div>
+              )}
+            </div>
+          );
+        })}
       </div>
 
-      {/* Visit history */}
-      <Card>
-        <CardHeader className="pb-2"><CardTitle className="text-sm">Visit history</CardTitle></CardHeader>
-        <CardContent>
-          <div className="w-full overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b text-muted-foreground">
-                  <th className="px-2 py-2 text-left">Date</th>
-                  <th className="px-2 py-2 text-left">HbA1c</th>
-                  <th className="px-2 py-2 text-left">BMI</th>
-                  <th className="px-2 py-2 text-left">BP</th>
-                  <th className="px-2 py-2 text-left">RBS</th>
-                  <th className="px-2 py-2 text-left">Score</th>
-                  <th className="px-2 py-2 text-left">Risk</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr className="border-b hover:bg-muted/50">
-                  <td className="px-2 py-2">{formatDate(visitDate)}</td>
-                  <td className="px-2 py-2">{hba1c ?? '—'}</td>
-                  <td className="px-2 py-2">{bmi ?? '—'}</td>
-                  <td className="px-2 py-2">{sbp ? `${sbp}` : '—'}</td>
-                  <td className="px-2 py-2">{rbs ?? '—'}</td>
-                  <td className="px-2 py-2">{Math.round(Number(patient.risk_score ?? 0))}</td>
-                  <td className="px-2 py-2"><RiskPill category={category} /></td>
-                </tr>
+      {/* VISIT HISTORY */}
+      <div className="bg-white border border-gray-200 rounded-xl p-6 mb-6">
+        <h2 className="text-lg font-semibold text-gray-900 mb-4">Visit history</h2>
+        <div className="w-full overflow-x-auto">
+          <table className="w-full">
+            <thead>
+              <tr className="border-b border-gray-200">
+                <th className="w-8 pb-2"></th>
+                {['Date', 'HbA1c', 'BMI', 'BP', 'RBS', 'Score', 'Risk'].map((h) => (
+                  <th key={h} className="text-xs font-bold text-gray-500 uppercase tracking-wider pb-2 text-left px-2">
+                    {h}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              <tr className="border-b border-gray-100">
+                <td className="px-2 py-3">
+                  <ChevronRight
+                    size={14}
+                    className={`text-gray-400 cursor-pointer transition-transform ${expandedVisits.has(0) ? 'rotate-90' : ''}`}
+                    onClick={() => toggleVisit(0)}
+                  />
+                </td>
+                <td className="px-2 py-3 text-sm">{formatDate(visitDate)}</td>
+                <td className="px-2 py-3 text-sm">{hba1c ?? '—'}</td>
+                <td className="px-2 py-3 text-sm">{bmi ?? '—'}</td>
+                <td className="px-2 py-3 text-sm">{sbp ? `${sbp}` : '—'}</td>
+                <td className="px-2 py-3 text-sm">{rbs ?? '—'}</td>
+                <td className="px-2 py-3 text-sm">{Math.round(Number(patient.risk_score ?? 0))}</td>
+                <td className="px-2 py-3 text-sm"><RiskPill category={category} /></td>
+              </tr>
+              {expandedVisits.has(0) && (
                 <tr>
-                  <td className="px-2 py-2" colSpan={7}>
-                    <RowExpander label="Show all clinical values">
-                      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
-                        {Object.entries(patient).filter(([k]) => !['id','patient_id','created_at','updated_at','risk_score','risk_category'].includes(k)).map(([k,v]) => (
-                          <div key={k} className="flex items-center justify-between gap-2 border rounded-md px-2 py-1.5">
-                            <span className="text-xs text-muted-foreground">{k}</span>
-                            <span className="text-sm font-medium">{String(v)}</span>
+                  <td colSpan={8}>
+                    <div className="grid grid-cols-4 gap-4 bg-gray-50 p-4 rounded-b-lg text-xs text-gray-600">
+                      {Object.entries(patient)
+                        .filter(([k]) => !['id', 'patient_id', 'created_at', 'updated_at', 'risk_score', 'risk_category'].includes(k))
+                        .map(([k, v]) => (
+                          <div key={k}>
+                            <div className="text-gray-400 uppercase text-xs">{k}</div>
+                            <div className="font-medium text-gray-800">{String(v)}</div>
                           </div>
                         ))}
-                      </div>
-                    </RowExpander>
+                    </div>
                   </td>
                 </tr>
-              </tbody>
-            </table>
-          </div>
-        </CardContent>
-      </Card>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
 
-      {/* Appointments section */}
-      <Card>
-        <CardHeader className="pb-2 flex items-center justify-between">
-          <CardTitle className="text-sm">Appointments</CardTitle>
+      {/* APPOINTMENTS SECTION */}
+      <div className="bg-white border border-gray-200 rounded-xl p-6">
+        <div className="flex justify-between items-center mb-4">
+          <h2 className="text-lg font-semibold text-gray-900">Appointments</h2>
           <button
             onClick={() => setBookOpen(true)}
-            className="inline-flex items-center rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground hover:opacity-90"
+            className="bg-blue-600 hover:bg-blue-700 text-white rounded-lg px-4 py-2 text-sm font-medium cursor-pointer transition-colors"
           >
             Book new appointment
           </button>
-        </CardHeader>
-        <CardContent>
-          <div className="text-sm text-muted-foreground">No appointments booked yet</div>
-        </CardContent>
-      </Card>
+        </div>
+        <table className="w-full">
+          <thead>
+            <tr className="bg-gray-50 border-b border-gray-200">
+              {['DATE', 'TYPE', 'STATUS', 'NOTES'].map((h) => (
+                <th key={h} className="px-4 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider text-left">
+                  {h}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td colSpan={4} className="text-center text-sm text-gray-400 py-8">
+                No appointments booked yet
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
 
       <BookAppointmentModal
         isOpen={bookOpen}

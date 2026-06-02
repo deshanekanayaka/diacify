@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import axios from 'axios';
-import { useUser } from '@clerk/clerk-react';
+import { useUser, useAuth } from '@clerk/clerk-react';
 import PatientFormModal, { EMPTY_FORM } from './PatientFormModal';
 
 const BASE_URL = import.meta.env.VITE_API_URL;
@@ -10,6 +10,7 @@ const BASE_URL = import.meta.env.VITE_API_URL;
 const AddPatientModal = ({ isOpen, onClose, onPatientAdded }) => {
     // Retrieves the signed-in clinician's Clerk user object to attach their ID to the request
     const { user } = useUser();
+    const { getToken } = useAuth();
 
     const [saving, setSaving] = useState(false);
     // Holds any error message returned by the server to display inside the form
@@ -26,11 +27,13 @@ const AddPatientModal = ({ isOpen, onClose, onPatientAdded }) => {
             setSaving(true);
             setSavingError(null);
 
+            const token = await getToken();
             // Zod on the backend coerces strings to numbers, so only clerk_id needs appending here
-            const res = await axios.post(`${BASE_URL}/api/patients`, {
-                ...payload,
-                clerk_id: user.id,
-            });
+            const res = await axios.post(
+                `${BASE_URL}/api/patients`,
+                { ...payload, clerk_id: user.id },
+                { headers: { Authorization: `Bearer ${token}` } }
+            );
 
             // Checks for application-level failures returned inside a 200 response
             if (!res.data.success) {

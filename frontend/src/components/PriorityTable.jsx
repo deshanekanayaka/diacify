@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import axios from 'axios';
+import { useAuth } from '@clerk/clerk-react';
 import { Link } from 'react-router-dom';
 import EditPatientModal from './EditPatientModal';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -15,6 +16,7 @@ const PAGE_SIZE_OPTIONS = [10, 25, 50, 100];
 // Receives patients/loading/error from Dashboard and calls onRefresh
 // after any mutation so Dashboard re-fetches and StatCards + table both update
 const PriorityTable = ({ patients = [], loading, error, onRefresh }) => {
+  const { getToken } = useAuth();
   const [searchId, setSearchId] = useState('');
   const [riskFilter, setRiskFilter] = useState('all');
   const [page, setPage] = useState(1);
@@ -35,7 +37,10 @@ const PriorityTable = ({ patients = [], loading, error, onRefresh }) => {
     try {
       setDeleting(true);
       setDeleteError(null);
-      const res = await axios.delete(`${BASE_URL}/api/patients/${deleteTarget.patient_id}`);
+      const token = await getToken();
+      const res = await axios.delete(`${BASE_URL}/api/patients/${deleteTarget.patient_id}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
       if (!res.data.success) throw new Error(res.data.message);
       setDeleteTarget(null);
       onRefresh();

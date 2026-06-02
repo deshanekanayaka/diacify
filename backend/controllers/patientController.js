@@ -1,6 +1,7 @@
-const axios = require('axios');
-const db = require('../config/database');
-const { patientSchema, patientCreateSchema, checkWarnings } = require('../utils/schema.js');
+import axios from 'axios';
+import * as db from '../config/database.js';
+import { patientSchema, patientCreateSchema, checkWarnings } from '../utils/schema.js';
+import logger from '../utils/logger.js';
 
 const ML_SERVICE_URL = process.env.ML_SERVICE_URL || 'http://localhost:8001';
 
@@ -12,9 +13,11 @@ const VALID_RISK_LEVELS = ['low', 'medium', 'high'];
 const formatZodErrors = (zodError) =>
     zodError.errors.map((e) => `${e.path.join('.')}: ${e.message}`);
 
-// Adding a field to patientSchema automatically updates both field lists.
-const REQUIRED_UPDATE_FIELDS = Object.keys(patientSchema.shape);
-const REQUIRED_CREATE_FIELDS = [...REQUIRED_UPDATE_FIELDS, 'clerk_id'];
+// Adding a required field to patientSchema automatically updates both field lists.
+// Optional fields (e.g. genetics) are excluded so they are not flagged as missing.
+const REQUIRED_UPDATE_FIELDS = Object.keys(patientSchema.shape).filter(
+  (key) => !patientSchema.shape[key].isOptional()
+);
 
 // Checks which required fields are missing or empty in the request body
 const getMissingFields = (body, fields) => {
@@ -41,8 +44,10 @@ const parseTopFactors = (patient) => {
 const createPatient = async (req, res) => {
   try {
 
+    const { userId } = req.auth;
+
     // Runs a manual presence check before Zod so missing fields get a clear error message
-    const missingFields = getMissingFields(req.body, REQUIRED_CREATE_FIELDS);
+    const missingFields = getMissingFields(req.body, REQUIRED_UPDATE_FIELDS);
     if (missingFields.length > 0) {
       return res.status(400).json({
         success: false,
@@ -63,33 +68,37 @@ const createPatient = async (req, res) => {
     }
 
     const {
-      clerk_id, age, sex, social_life,
+      age, sex, social_life,
       bp_systolic, bp_diastolic,
       cholesterol, triglycerides, hdl, ldl, vldl,
-      hba1c, bmi, rbs,
+      hba1c, bmi, rbs, genetics,
     } = result.data;
 
     // Checks validated data against clinical warning thresholds.
     // Warnings are informational — they do not block the record from being saved.
     const warnings = checkWarnings(result.data);
 
-    // Sends the seven key clinical indicators to the ML service to compute a risk score.
-    // Handled separately so a service failure returns a clear 503 instead of a generic 500.
-    let mlResponse;
+    // Attempts to score the patient via ML; saves with pending status on any failure
+    // so patient data is never lost due to ML unavailability.
+    let risk_score = null;
+    let risk_category = 'pending';
+    let top_factors = [];
+    let ml_pending = false;
     try {
-      mlResponse = await axios.post(`${ML_SERVICE_URL}/predict`, {
+      const mlResponse = await axios.post(`${ML_SERVICE_URL}/predict`, {
         age, sex, hba1c, bmi, bp_systolic, bp_diastolic, rbs,
+        triglycerides, hdl, ldl, genetics: genetics ?? 0,
+      }, {
+        headers: { 'X-Internal-Secret': process.env.ML_INTERNAL_SECRET },
+        timeout: 3000,
       });
+      ({ risk_score, risk_category, top_factors } = mlResponse.data);
     } catch (mlError) {
-      return res.status(503).json({
-        success: false,
-        message: 'Risk scoring service unavailable. Please try again later.',
-      });
+      logger.warn('ML service unavailable — saving patient with pending risk status:', mlError.message);
+      ml_pending = true;
     }
 
-    // top_factors is the ranked list of clinical features that drove this score,
-    // serialised to JSON string so MySQL can store it in the JSON column
-    const { risk_score, risk_category, top_factors } = mlResponse.data;
+    // top_factors serialised to JSON string so MySQL can store it in the JSON column
     const top_factors_json = JSON.stringify(top_factors);
 
     const sql = `
@@ -102,7 +111,7 @@ const createPatient = async (req, res) => {
         `;
 
     const values = [
-      clerk_id, age, sex, social_life,
+      userId, age, sex, social_life,
       cholesterol, triglycerides, hdl, ldl, vldl,
       bp_systolic, bp_diastolic, hba1c, bmi, rbs,
       risk_score, risk_category, top_factors_json,
@@ -116,11 +125,12 @@ const createPatient = async (req, res) => {
       success: true,
       message: 'Patient created successfully',
       warnings,
+      ...(ml_pending && { ml_pending: true }),
       data: { patient_id: dbResult.insertId, risk_score, risk_category, top_factors },
     });
 
   } catch (error) {
-    console.error('Error creating patient:', error.message);
+    logger.error('Error creating patient:', error.message);
     res.status(500).json({ success: false, message: 'Failed to create patient' });
   }
 };
@@ -128,15 +138,11 @@ const createPatient = async (req, res) => {
 // GET /api/patients
 const getAllPatients = async (req, res) => {
   try {
-    const { clerk_id, sortBy, riskLevel } = req.query;
-
-    // clerk_id is mandatory — without it the query would return all patients across all clinicians
-    if (!clerk_id) {
-      return res.status(400).json({ success: false, message: 'clerk_id query parameter is required' });
-    }
+    const { userId } = req.auth;
+    const { sortBy, riskLevel } = req.query;
 
     let sql = 'SELECT * FROM patients WHERE clerk_id = ?';
-    const values = [clerk_id];
+    const values = [userId];
 
     // Validates riskLevel against allowed values before appending to the query
     if (riskLevel && riskLevel !== 'all') {
@@ -161,7 +167,7 @@ const getAllPatients = async (req, res) => {
     res.status(200).json({ success: true, count: parsed.length, data: parsed });
 
   } catch (error) {
-    console.error('Error fetching patients:', error.message);
+    logger.error('Error fetching patients:', error.message);
     res.status(500).json({ success: false, message: 'Failed to fetch patients' });
   }
 };
@@ -169,9 +175,10 @@ const getAllPatients = async (req, res) => {
 // GET /api/patients/:id
 const getPatientById = async (req, res) => {
   try {
+    const { userId } = req.auth;
     const patient = await db.queryOne(
-        'SELECT * FROM patients WHERE patient_id = ?',
-        [req.params.id]
+        'SELECT * FROM patients WHERE patient_id = ? AND clerk_id = ?',
+        [req.params.id, userId]
     );
 
     // Returns 404 rather than an empty object so the frontend can handle it unambiguously
@@ -182,7 +189,7 @@ const getPatientById = async (req, res) => {
     res.status(200).json({ success: true, data: parseTopFactors(patient) });
 
   } catch (error) {
-    console.error('Error fetching patient:', error.message);
+    logger.error('Error fetching patient:', error.message);
     res.status(500).json({ success: false, message: 'Failed to fetch patient' });
   }
 };
@@ -191,11 +198,12 @@ const getPatientById = async (req, res) => {
 const updatePatient = async (req, res) => {
   try {
     const { id } = req.params;
+    const { userId } = req.auth;
 
-    // Confirms the patient exists before attempting any validation or ML calls
+    // Confirms the patient exists and belongs to this clinician before any validation or ML calls
     const existing = await db.queryOne(
-        'SELECT * FROM patients WHERE patient_id = ?',
-        [id]
+        'SELECT * FROM patients WHERE patient_id = ? AND clerk_id = ?',
+        [id, userId]
     );
 
     if (!existing) {
@@ -227,28 +235,32 @@ const updatePatient = async (req, res) => {
       age, sex, social_life,
       bp_systolic, bp_diastolic,
       cholesterol, triglycerides, hdl, ldl, vldl,
-      hba1c, bmi, rbs,
+      hba1c, bmi, rbs, genetics,
     } = result.data;
 
     // Checks validated data against clinical warning thresholds
     const warnings = checkWarnings(result.data);
 
-    // Re-scores the patient because any health data change may shift their risk category.
-    // Handled separately so a service failure returns a clear 503 instead of a generic 500.
-    let mlResponse;
+    // Re-scores the patient; saves with pending status on any failure so no data is lost.
+    let risk_score = null;
+    let risk_category = 'pending';
+    let top_factors = [];
+    let ml_pending = false;
     try {
-      mlResponse = await axios.post(`${ML_SERVICE_URL}/predict`, {
+      const mlResponse = await axios.post(`${ML_SERVICE_URL}/predict`, {
         age, sex, hba1c, bmi, bp_systolic, bp_diastolic, rbs,
+        triglycerides, hdl, ldl, genetics: genetics ?? 0,
+      }, {
+        headers: { 'X-Internal-Secret': process.env.ML_INTERNAL_SECRET },
+        timeout: 3000,
       });
+      ({ risk_score, risk_category, top_factors } = mlResponse.data);
     } catch (mlError) {
-      return res.status(503).json({
-        success: false,
-        message: 'Risk scoring service unavailable. Please try again later.',
-      });
+      logger.warn('ML service unavailable — saving patient with pending risk status:', mlError.message);
+      ml_pending = true;
     }
 
     // Extracts all three ML outputs including the refreshed top_factors for this patient
-    const { risk_score, risk_category, top_factors } = mlResponse.data;
     const top_factors_json = JSON.stringify(top_factors);
 
     const sql = `
@@ -258,7 +270,7 @@ const updatePatient = async (req, res) => {
                 bp_systolic=?, bp_diastolic=?,
                 hba1c=?, bmi=?, rbs=?,
                 risk_score=?, risk_category=?, top_factors=?
-            WHERE patient_id=?
+            WHERE patient_id=? AND clerk_id=?
         `;
 
     const values = [
@@ -267,7 +279,7 @@ const updatePatient = async (req, res) => {
       bp_systolic, bp_diastolic,
       hba1c, bmi, rbs,
       risk_score, risk_category, top_factors_json,
-      id,
+      id, userId,
     ];
 
     await db.execute(sql, values);
@@ -277,11 +289,12 @@ const updatePatient = async (req, res) => {
       success: true,
       message: 'Patient updated successfully',
       warnings,
+      ...(ml_pending && { ml_pending: true }),
       data: { patient_id: parseInt(id), risk_score, risk_category, top_factors },
     });
 
   } catch (error) {
-    console.error('Error updating patient:', error.message);
+    logger.error('Error updating patient:', error.message);
     res.status(500).json({ success: false, message: 'Failed to update patient' });
   }
 };
@@ -290,25 +303,26 @@ const updatePatient = async (req, res) => {
 const deletePatient = async (req, res) => {
   try {
     const { id } = req.params;
+    const { userId } = req.auth;
 
-    // Checks the patient exists before attempting deletion to return a meaningful 404
+    // Checks the patient exists and belongs to this clinician before deletion
     const existing = await db.queryOne(
-        'SELECT * FROM patients WHERE patient_id = ?',
-        [id]
+        'SELECT * FROM patients WHERE patient_id = ? AND clerk_id = ?',
+        [id, userId]
     );
 
     if (!existing) {
       return res.status(404).json({ success: false, message: 'Patient not found' });
     }
 
-    await db.execute('DELETE FROM patients WHERE patient_id = ?', [id]);
+    await db.execute('DELETE FROM patients WHERE patient_id = ? AND clerk_id = ?', [id, userId]);
 
     res.status(200).json({ success: true, message: 'Patient deleted successfully' });
 
   } catch (error) {
-    console.error('Error deleting patient:', error.message);
+    logger.error('Error deleting patient:', error.message);
     res.status(500).json({ success: false, message: 'Failed to delete patient' });
   }
 };
 
-module.exports = { createPatient, getAllPatients, getPatientById, updatePatient, deletePatient };
+export { createPatient, getAllPatients, getPatientById, updatePatient, deletePatient };

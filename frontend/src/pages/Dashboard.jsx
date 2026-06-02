@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import axios from 'axios';
+import { useAuth } from '@clerk/clerk-react';
 import PriorityTable from '../components/PriorityTable';
 import AddPatientModal from '../components/AddPatientModal';
 import { Plus } from 'lucide-react';
@@ -15,6 +16,8 @@ const Dashboard = ({ clerkId }) => {
   const [showSuccess, setShowSuccess] = useState(false);
   const [savedId, setSavedId] = useState(null);
 
+  const { getToken } = useAuth();
+
   // useCallback ensures fetchPatients is only re-created when clerkId changes
   // otherwise a new function reference is created on every render, causing infinite re-fetches
   const fetchPatients = useCallback(async () => {
@@ -22,9 +25,11 @@ const Dashboard = ({ clerkId }) => {
       setLoading(true);
       setError(null);
 
+      const token = await getToken();
       // Fetches all patients for this clinician sorted by highest risk score first
       const res = await axios.get(`${BASE_URL}/api/patients`, {
         params: { clerk_id: clerkId, sortBy: 'risk' },
+        headers: { Authorization: `Bearer ${token}` },
       });
 
       // Manually check the success field and throws an error if it's false,
@@ -40,7 +45,7 @@ const Dashboard = ({ clerkId }) => {
       // Runs whether the request succeeds or fails — always clears the loading state
       setLoading(false);
     }
-  }, [clerkId]);
+  }, [clerkId, getToken]);
 
   // Runs fetchPatients on mount and whenever clerkId changes
   useEffect(() => {

@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { X } from 'lucide-react';
+import { useAuth } from '@clerk/clerk-react';
 
 const localDate = (d) => {
     const y = d.getFullYear();
@@ -21,6 +22,7 @@ const getDefaultDate = () => {
 };
 
 const BookAppointmentModal = ({ isOpen, onClose, patientId }) => {
+    const { getToken } = useAuth();
     const [date, setDate]   = useState(getDefaultDate);
     const [type, setType]   = useState('Routine Review');
     const [notes, setNotes] = useState('');

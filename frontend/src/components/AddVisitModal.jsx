@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { X } from 'lucide-react';
+import { useAuth } from '@clerk/clerk-react';
 
 const getToday = () => {
     const d = new Date();
@@ -45,6 +46,7 @@ const SectionLabel = ({ children }) => (
 );
 
 const AddVisitModal = ({ isOpen, onClose, patientId }) => {
+    const { getToken } = useAuth();
     const [form, setForm] = useState({ ...EMPTY_VISIT, visit_date: getToday() });
 
     useEffect(() => {

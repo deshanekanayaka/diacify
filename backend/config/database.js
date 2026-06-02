@@ -7,7 +7,7 @@
  * new ones each time
  */
 
-const mysql = require('mysql2');
+import mysql from 'mysql2';
 
 // Creates a pool of reusable MySQL connections instead of opening a new
 // connection on every request — improves performance under concurrent load
@@ -72,12 +72,4 @@ async function closePool() {
   }
 }
 
-module.exports = {
-  // Exports direct pool access in case a controller needs custom queries
-  pool: promisePool,
-  testConnection,
-  query,
-  execute,
-  queryOne,
-  closePool
-};
+export { promisePool as pool, testConnection, query, execute, queryOne, closePool };
