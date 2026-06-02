@@ -1,4 +1,5 @@
-const { query } = require('../config/database');
+import { query } from '../config/database.js';
+import logger from '../utils/logger.js';
 
 // Fetches aggregated analytics data for a given clinician's patient list
 const getAnalytics = async (req, res) => {
@@ -94,9 +95,9 @@ const getAnalytics = async (req, res) => {
 
     } catch (error) {
         // Logs the full error server-side and returns a safe message to the client
-        console.error('Analytics query error:', error);
+        logger.error('Analytics query error:', error);
         res.status(500).json({ error: 'Failed to fetch analytics data' });
     }
 };
 
-module.exports = { getAnalytics };
+export { getAnalytics };

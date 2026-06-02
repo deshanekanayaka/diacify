@@ -1,359 +1,327 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import axios from 'axios';
-import AddPatientModal from './AddPatientModal';
+import { useAuth } from '@clerk/clerk-react';
+import { Link } from 'react-router-dom';
 import EditPatientModal from './EditPatientModal';
-import '../css/index.css';
-import '../css/PriorityTable.css';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogTitle } from '@/components/ui/alert-dialog';
+import { RiskPill } from '@/components/risk-ui';
+import { riskColorClass } from '@/lib/risk';
+import { EllipsisVertical } from 'lucide-react';
 
 const BASE_URL = import.meta.env.VITE_API_URL;
 const PAGE_SIZE_OPTIONS = [10, 25, 50, 100];
 
-// Defined outside the component so it isn't recreated on every render
-const RiskBadge = ({ level = '' }) => (
-    <span className={`risk-badge ${level.toLowerCase()}`}>{level || '—'}</span>
-);
-
-// Renders each top factor as a small coloured tag.
-// Defined outside the component so it isn't recreated on every render.
-const FactorTags = ({ factors }) => {
-    if (!Array.isArray(factors) || factors.length === 0) return <span>—</span>;
-    return (
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
-            {factors.map((factor) => (
-                <span key={factor} className="factor-tag">{factor}</span>
-            ))}
-        </div>
-    );
-};
-
 // Receives patients/loading/error from Dashboard and calls onRefresh
 // after any mutation so Dashboard re-fetches and StatCards + table both update
 const PriorityTable = ({ patients = [], loading, error, onRefresh }) => {
+  const { getToken } = useAuth();
+  const [searchId, setSearchId] = useState('');
+  const [riskFilter, setRiskFilter] = useState('all');
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
+  // Holds the patient object to be edited, or null when no edit is in progress
+  const [editPatient, setEditPatient] = useState(null);
+  // Holds the patient object pending deletion, or null when no delete is in progress
+  const [deleteTarget, setDeleteTarget] = useState(null);
+  const [deleting, setDeleting] = useState(false);
+  // Holds an inline error message if the delete request fails
+  const [deleteError, setDeleteError] = useState(null);
+  const [showSuccess, setShowSuccess] = useState(false);
+  // Stores the ID of the most recently saved patient to display in the success modal
+  const [savedId, setSavedId] = useState(null);
 
-    const [searchId,     setSearchId]     = useState('');
-    const [riskFilter,   setRiskFilter]   = useState('all');
-    const [page,         setPage]         = useState(1);
-    const [pageSize,     setPageSize]     = useState(10);
-    const [showAdd,      setShowAdd]      = useState(false);
-    // Holds the patient object to be edited, or null when no edit is in progress
-    const [editPatient,  setEditPatient]  = useState(null);
-    // Holds the patient object pending deletion, or null when no delete is in progress
-    const [deleteTarget, setDeleteTarget] = useState(null);
-    const [deleting,     setDeleting]     = useState(false);
-    // Holds an inline error message if the delete request fails
-    const [deleteError,  setDeleteError]  = useState(null);
-    const [showSuccess,  setShowSuccess]  = useState(false);
-    // Stores the ID of the most recently saved patient to display in the success modal
-    const [savedId,      setSavedId]      = useState(null);
+  const confirmDelete = async () => {
+    if (!deleteTarget) return;
+    try {
+      setDeleting(true);
+      setDeleteError(null);
+      const token = await getToken();
+      const res = await axios.delete(`${BASE_URL}/api/patients/${deleteTarget.patient_id}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.data.success) throw new Error(res.data.message);
+      setDeleteTarget(null);
+      onRefresh();
+    } catch (err) {
+      setDeleteError('Delete failed: ' + err.message);
+    } finally {
+      setDeleting(false);
+    }
+  };
 
-    const confirmDelete = async () => {
-        // Exits early if somehow called without a target
-        if (!deleteTarget) return;
-        try {
-            setDeleting(true);
-            setDeleteError(null);
-            const res = await axios.delete(`${BASE_URL}/api/patients/${deleteTarget.patient_id}`);
-            // axios only throws on network errors — a failed response must be handled manually
-            if (!res.data.success) throw new Error(res.data.message);
-            setDeleteTarget(null);
-            // Refreshes the patient list in the parent after a successful delete
-            onRefresh();
-        } catch (err) {
-            // Shows the error inside the modal instead of a disruptive browser alert
-            setDeleteError('Delete failed: ' + err.message);
-        } finally {
-            setDeleting(false);
+  // Strips leading "p" from search input so "p8" and "8" both match patient 8
+  const searchTerm = searchId.trim().replace(/^p/i, '');
+
+  // Only recalculates when patients, searchTerm, or riskFilter changes — not on every render
+  const filtered = useMemo(() => {
+    return patients
+      .filter((patient) => {
+        if (searchTerm) {
+          const patientId = String(patient.patient_id);
+          if (patientId !== searchTerm) return false;
         }
+        if (riskFilter !== 'all') {
+          const patientRisk = (patient.risk_category || '').toLowerCase();
+          if (patientRisk !== riskFilter) return false;
+        }
+        return true;
+      })
+      .sort((a, b) => b.risk_score - a.risk_score);
+  }, [patients, searchTerm, riskFilter]);
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
+
+  const pageRows = useMemo(() => {
+    return filtered.slice((page - 1) * pageSize, page * pageSize);
+  }, [filtered, page, pageSize]);
+
+  useEffect(() => {
+    if (page > totalPages) setPage(1);
+  }, [page, totalPages]);
+
+  useEffect(() => {
+    if (!showSuccess) return;
+    const timer = setTimeout(() => setShowSuccess(false), 3000);
+    return () => clearTimeout(timer);
+  }, [showSuccess]);
+
+  const riskCategory = (rc) => (rc || '').toLowerCase();
+
+    const formatDate = (iso) => {
+      if (!iso) return '—';
+      const d = new Date(iso);
+      if (isNaN(d.getTime())) return '—';
+      const dd = String(d.getDate()).padStart(2, '0');
+      const mm = String(d.getMonth() + 1).padStart(2, '0');
+      const yyyy = d.getFullYear();
+      return `${dd}/${mm}/${yyyy}`;
     };
 
-    // Strips leading "p" from search input so "p8" and "8" both match patient 8
-    const searchTerm = searchId.trim().replace(/^p/i, '');
+    const riskTextClass = (cat) => riskColorClass(cat === 'high' || cat === 'medium' || cat === 'low' ? cat : 'low').text;
 
-    // Only recalculates when patients, searchTerm, or riskFilter changes — not on every render
-    const filtered = useMemo(() => {
-        return patients
-            .filter((patient) => {
-                // If there is a search term, only keep patients whose ID matches exactly
-                if (searchTerm) {
-                    const patientId = String(patient.patient_id);
-                    if (patientId !== searchTerm) return false;
-                }
-                // If a risk filter is selected, only keep patients that match that risk level
-                if (riskFilter !== 'all') {
-                    const patientRisk = (patient.risk_category || '').toLowerCase();
-                    if (patientRisk !== riskFilter) return false;
-                }
-                return true;
-            })
-            // Sorts patients so highest risk score appears first
-            .sort((a, b) => b.risk_score - a.risk_score);
-    }, [patients, searchTerm, riskFilter]);
+  return (
+    <>
+      <EditPatientModal
+        isOpen={!!editPatient}
+        onClose={() => setEditPatient(null)}
+        onPatientUpdated={(patientId) => {
+          setEditPatient(null);
+          onRefresh();
+          setSavedId(patientId);
+          setShowSuccess(true);
+        }}
+        patient={editPatient}
+      />
 
-    // Minimum of 1 to prevent page snapping to 0 while patients are still loading
-    const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
-
-    // Only recalculates when filtered list, page, or pageSize changes
-    const pageRows = useMemo(() => {
-        // Slice the filtered array to get only the rows for the current page
-        // e.g. page 2 with pageSize 10 → slice(10, 20)
-        return filtered.slice((page - 1) * pageSize, page * pageSize);
-    }, [filtered, page, pageSize]);
-
-    // Calculate the row range to display e.g. "Showing 1-10 of 43"
-    const beginning = page === 1 ? 1 : pageSize * (page - 1) + 1;
-    const end = page === totalPages ? filtered.length : beginning + pageSize - 1;
-
-    // Snaps back to page 1 when filters reduce the total page count
-    useEffect(() => {
-        if (page > totalPages) setPage(1);
-    }, [page, totalPages]);
-
-    // Automatically hides the success modal after 3 seconds; cleans up the timer on unmount
-    useEffect(() => {
-        if (!showSuccess) return;
-        const timer = setTimeout(() => setShowSuccess(false), 3000);
-        return () => clearTimeout(timer);
-    }, [showSuccess]);
-
-    return (
+      {/* Auto-dismiss success notice (kept from existing UX) */}
+      {showSuccess && (
         <>
-            <AddPatientModal
-                isOpen={showAdd}
-                onClose={() => setShowAdd(false)}
-                onPatientAdded={(patientId) => {
-                    setShowAdd(false);
-                    onRefresh();
-                    // Stores the new patient's ID so the success modal can display it
-                    setSavedId(patientId);
-                    setShowSuccess(true);
-                }}
-            />
-
-            <EditPatientModal
-                isOpen={!!editPatient}
-                onClose={() => setEditPatient(null)}
-                onPatientUpdated={(patientId) => {
-                    setEditPatient(null);
-                    onRefresh();
-                    setSavedId(patientId);
-                    setShowSuccess(true);
-                }}
-                patient={editPatient}
-            />
-
-            {/* Success modal — auto-dismisses after 3s or on button click */}
-            {showSuccess && (
-                <>
-                    <div className="modal-overlay" onClick={() => setShowSuccess(false)} />
-                    <div className="modal-panel-sm" style={{ textAlign: 'center' }}>
-                        <div style={{ fontSize: 48, marginBottom: 12 }}>✅</div>
-                        <h2 className="modal-title" style={{ justifyContent: 'center', marginBottom: 8 }}>
-                            <strong>p{savedId}</strong> Patient Saved Successfully
-                        </h2>
-                        <p style={{ fontSize: 14, color: 'var(--gray-500)', marginBottom: 24 }}>
-                            The patient record has been saved and risk score updated.
-                        </p>
-                        <button className="btn-modal-save" onClick={() => setShowSuccess(false)}>
-                            Done
-                        </button>
-                        {/* Animated bar that visually represents the 3s auto-dismiss countdown */}
-                        <div style={{ height: 3, background: 'var(--primary-blue-light)', borderRadius: 99, marginTop: 16, overflow: 'hidden' }}>
-                            <div style={{ height: '100%', background: 'var(--primary-blue)', borderRadius: 99, animation: 'shrink 3s linear forwards' }} />
-                        </div>
-                    </div>
-                </>
-            )}
-
-            {/* Delete confirmation modal — clicking the overlay cancels the delete */}
-            {deleteTarget && (
-                <>
-                    <div className="modal-overlay" onClick={() => setDeleteTarget(null)} />
-                    <div className="modal-panel-sm">
-                        <div className="modal-header">
-                            <h2 className="modal-title">Delete Patient</h2>
-                            <button className="modal-close-btn" onClick={() => setDeleteTarget(null)}>✕</button>
-                        </div>
-                        <p className="delete-confirm-text">
-                            Are you sure you want to delete <strong>p{deleteTarget.patient_id}</strong>?
-                        </p>
-                        <p className="delete-confirm-sub">This action cannot be undone.</p>
-
-                        {/* Inline error — shown inside the modal instead of a browser alert */}
-                        {deleteError && (
-                            <div className="modal-error-banner">{deleteError}</div>
-                        )}
-
-                        <div className="modal-footer">
-                            <button className="btn-modal-cancel" onClick={() => setDeleteTarget(null)}>Cancel</button>
-                            {/* Disables the button while the delete request is in flight */}
-                            <button className="btn-modal-delete" onClick={confirmDelete} disabled={deleting}>
-                                {deleting ? 'Deleting…' : 'Yes, Delete'}
-                            </button>
-                        </div>
-                    </div>
-                </>
-            )}
-
-            <div className="table-container">
-                <div className="table-header">
-                    <div className="table-header-top">
-                        <h1 className="table-title">Priority Patients List</h1>
-                        <button className="btn btn-primary" onClick={() => setShowAdd(true)}>
-                            + Add Patient
-                        </button>
-                    </div>
-
-                    <div className="table-controls-row">
-                        <div className="search-box">
-                            {/* Resets to page 1 whenever the search term changes */}
-                            <input
-                                type="text"
-                                placeholder="Search by Patient ID (e.g. p8 or 8)"
-                                value={searchId}
-                                onChange={(e) => { setSearchId(e.target.value); setPage(1); }}
-                            />
-                        </div>
-                        <div className="filter-controls">
-                            {/* Resets to page 1 when the risk filter changes to avoid empty pages */}
-                            <select
-                                className="filter-select"
-                                value={riskFilter}
-                                onChange={(e) => { setRiskFilter(e.target.value); setPage(1); }}
-                            >
-                                <option value="all">All Risk Levels</option>
-                                <option value="high">High Risk Only</option>
-                                <option value="medium">Medium Risk Only</option>
-                                <option value="low">Low Risk Only</option>
-                            </select>
-                        </div>
-                    </div>
-                </div>
-
-                {loading && <p style={{ padding: '1.5rem', color: '#555' }}>Loading patients…</p>}
-
-                {/* Shows the error alongside a retry button so the clinician can recover */}
-                {error && (
-                    <div className="modal-error-banner" style={{ margin: '1rem' }}>
-                        {error}{' '}
-                        <button onClick={onRefresh} className="btn btn-secondary" style={{ marginLeft: 8 }}>
-                            Retry
-                        </button>
-                    </div>
-                )}
-
-                {!loading && !error && (
-                    <div className="table-wrapper">
-                        <table>
-                            <thead>
-                            <tr className="column-headers">
-                                <th className="col-patient-id">Patient ID</th>
-                                <th className="col-age">Age</th>
-                                <th className="col-score">Score</th>
-                                <th className="col-risk">Risk</th>
-                                {/* Shows the clinical factors the model weighted most for each patient */}
-                                <th className="col-factors">Key Factors</th>
-                                <th className="col-sex">Sex</th>
-                                <th className="col-social">Social Life</th>
-                                <th className="col-systolic">Systolic</th>
-                                <th className="col-diastolic">Diastolic</th>
-                                <th className="col-chol">Chol</th>
-                                <th className="col-trig">Trig</th>
-                                <th className="col-hdl">HDL</th>
-                                <th className="col-ldl">LDL</th>
-                                <th className="col-vldl">VLDL</th>
-                                <th className="col-hba1c">HbA1c</th>
-                                <th className="col-bmi">BMI</th>
-                                <th className="col-rbs">RBS</th>
-                                <th className="col-actions">Actions</th>
-                            </tr>
-                            </thead>
-                            <tbody>
-                            {pageRows.length === 0 ? (
-                                // Spans all 18 columns so the empty message fills the full table width
-                                <tr>
-                                    <td colSpan={18} style={{ textAlign: 'center', padding: '2rem', color: '#888' }}>
-                                        No patients found.
-                                    </td>
-                                </tr>
-                            ) : pageRows.map((p) => (
-                                <tr key={p.patient_id}>
-                                    <td className="patient-id">p{p.patient_id}</td>
-                                    <td className="text-center">{p.age}</td>
-                                    {/* Shows one decimal place for the score, or a dash if not yet scored */}
-                                    <td className="text-center risk-score">
-                                        {p.risk_score != null ? Number(p.risk_score).toFixed(1) : '—'}
-                                    </td>
-                                    <td><RiskBadge level={p.risk_category} /></td>
-                                    {/* Renders the top contributing clinical factors as coloured tags */}
-                                    <td><FactorTags factors={p.top_factors} /></td>
-                                    <td style={{ textTransform: 'capitalize' }}>{p.sex}</td>
-                                    <td style={{ textTransform: 'capitalize' }}>{p.social_life}</td>
-                                    <td className="text-center">{p.bp_systolic}</td>
-                                    <td className="text-center">{p.bp_diastolic}</td>
-                                    <td className="text-center">{p.cholesterol}</td>
-                                    <td className="text-center">{p.triglycerides}</td>
-                                    <td className="text-center">{p.hdl}</td>
-                                    <td className="text-center">{p.ldl}</td>
-                                    <td className="text-center">{p.vldl}</td>
-                                    <td className="text-center">{p.hba1c}</td>
-                                    <td className="text-center">{p.bmi}</td>
-                                    <td className="text-center">{p.rbs}</td>
-                                    <td className="actions-cell">
-                                        {/* Opens the edit modal pre-populated with this patient's data */}
-                                        <button className="action-btn edit" onClick={() => setEditPatient(p)}>Edit</button>
-                                        {/* Stages the patient for deletion — a confirm modal appears before anything is deleted */}
-                                        <button className="action-btn delete" onClick={() => setDeleteTarget(p)}>Delete</button>
-                                    </td>
-                                </tr>
-                            ))}
-                            </tbody>
-                        </table>
-                    </div>
-                )}
-
-                {!loading && !error && (
-                    <div className="pagination">
-                        {/* Shows the current range e.g. "Showing 1-10 of 43 patients" */}
-                        <div className="pagination-info">
-                            Showing <strong>{filtered.length === 0 ? 0 : beginning}–{end}</strong> of <strong>{filtered.length}</strong> patients
-                        </div>
-                        <div className="pagination-controls">
-                            <div className="rows-per-page">
-                                Show
-                                {/* Resets to page 1 when the page size changes to avoid empty pages */}
-                                <select
-                                    className="filter-select"
-                                    style={{ padding: '4px 24px 4px 8px' }}
-                                    value={pageSize}
-                                    onChange={(e) => { setPageSize(Number(e.target.value)); setPage(1); }}
-                                >
-                                    {PAGE_SIZE_OPTIONS.map((n) => <option key={n} value={n}>{n}</option>)}
-                                </select>
-                                per page
-                            </div>
-                            {/* Disabled when already on the first page */}
-                            <button className="page-btn" disabled={page === 1} onClick={() => setPage(1)}>
-                                First
-                            </button>
-                            <button className="page-btn" disabled={page === 1} onClick={() => setPage(page - 1)}>
-                                Previous
-                            </button>
-                            <button className="page-btn" disabled={page === totalPages} onClick={() => setPage(page + 1)}>
-                                Next
-                            </button>
-                            {/* Disabled when already on the last page */}
-                            <button className="page-btn" disabled={page === totalPages} onClick={() => setPage(totalPages)}>
-                                Last
-                            </button>
-                        </div>
-                    </div>
-                )}
+          <div className="modal-overlay" onClick={() => setShowSuccess(false)} />
+          <div className="modal-panel-sm" style={{ textAlign: 'center' }}>
+            <div style={{ fontSize: 48, marginBottom: 12 }}>✅</div>
+            <h2 className="modal-title" style={{ justifyContent: 'center', marginBottom: 8 }}>
+              <strong>p{savedId}</strong> Patient Saved Successfully
+            </h2>
+            <p style={{ fontSize: 14, color: 'var(--gray-500)', marginBottom: 24 }}>
+              The patient record has been saved and risk score updated.
+            </p>
+            <button className="btn-modal-save" onClick={() => setShowSuccess(false)}>
+              Done
+            </button>
+            <div style={{ height: 3, background: 'var(--primary-blue-light)', borderRadius: 99, marginTop: 16, overflow: 'hidden' }}>
+              <div style={{ height: '100%', background: 'var(--primary-blue)', borderRadius: 99, animation: 'shrink 3s linear forwards' }} />
             </div>
+          </div>
         </>
-    );
+      )}
+
+      {/* Radix AlertDialog for Delete confirmation */}
+      <AlertDialog open={!!deleteTarget} onOpenChange={(open) => !open && setDeleteTarget(null)}>
+        <AlertDialogContent className="bg-white rounded-2xl shadow-2xl border border-gray-200 p-6 max-w-md w-full">
+          <AlertDialogTitle className="text-lg font-semibold text-gray-900 mb-2">
+            Delete Patient
+          </AlertDialogTitle>
+          <AlertDialogDescription className="text-sm text-gray-500 mb-6">
+            Are you sure you want to delete <strong>p{deleteTarget?.patient_id}</strong>? This cannot be undone.
+          </AlertDialogDescription>
+          {deleteError && (
+            <div className="text-sm text-destructive border border-destructive/30 bg-destructive/10 rounded-md p-2 mb-4">{deleteError}</div>
+          )}
+          <div className="flex justify-end gap-3">
+            <AlertDialogCancel
+              disabled={deleting}
+              className="px-4 py-2 text-sm font-medium text-gray-600 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors cursor-pointer"
+            >
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={confirmDelete}
+              disabled={deleting}
+              className="px-4 py-2 text-sm font-medium text-white bg-red-600 hover:bg-red-700 rounded-lg transition-colors cursor-pointer"
+            >
+              {deleting ? 'Deleting…' : 'Delete'}
+            </AlertDialogAction>
+          </div>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <div className="bg-white rounded-xl border border-gray-200 shadow-sm">
+        {/* item 7 — flex-1 search grows, select stays w-40 */}
+        <div className="flex items-center gap-3 px-4 pt-4 mb-4">
+          <input
+            type="text"
+            placeholder="Search by Patient ID (e.g. p8 or 8)"
+            value={searchId}
+            onChange={(e) => {
+              setSearchId(e.target.value);
+              setPage(1);
+            }}
+            className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 ring-offset-0 transition-all duration-150 placeholder-gray-400"
+          />
+          <select
+            className="w-40 border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white shadow-sm cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500"
+            value={riskFilter}
+            onChange={(e) => {
+              setRiskFilter(e.target.value);
+              setPage(1);
+            }}
+          >
+            <option value="all">All Risk Levels</option>
+            <option value="high">High Risk Only</option>
+            <option value="medium">Medium Risk Only</option>
+            <option value="low">Low Risk Only</option>
+          </select>
+        </div>
+
+        {loading && <p className="p-6 text-muted-foreground">Loading patients…</p>}
+        {error && (
+          <div className="mx-4 mb-4 rounded-md border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">
+            {error} <button onClick={onRefresh} className="ml-2 underline">Retry</button>
+          </div>
+        )}
+
+        {!loading && !error && (
+          <div className="p-2">
+            <Table>
+              {/* item 6 */}
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="w-35 bg-gray-50 text-xs font-bold text-gray-600 uppercase tracking-wider border-b border-gray-200 px-4 py-3">PATIENT ID</TableHead>
+                  <TableHead className="w-20 bg-gray-50 text-xs font-bold text-gray-600 uppercase tracking-wider border-b border-gray-200 px-4 py-3">AGE</TableHead>
+                  <TableHead className="w-25 bg-gray-50 text-xs font-bold text-gray-600 uppercase tracking-wider border-b border-gray-200 px-4 py-3">SEX</TableHead>
+                  <TableHead className="w-40 bg-gray-50 text-xs font-bold text-gray-600 uppercase tracking-wider border-b border-gray-200 px-4 py-3">LAST VISIT</TableHead>
+                  <TableHead className="w-50 bg-gray-50 text-xs font-bold text-gray-600 uppercase tracking-wider border-b border-gray-200 px-4 py-3">RISK SCORE</TableHead>
+                  <TableHead className="w-30 bg-gray-50 text-xs font-bold text-gray-600 uppercase tracking-wider border-b border-gray-200 px-4 py-3">RISK</TableHead>
+                  <TableHead className="w-20 bg-gray-50 text-xs font-bold text-gray-600 uppercase tracking-wider border-b border-gray-200 px-4 py-3 text-right pr-4">ACTIONS</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {pageRows.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={7} className="py-10 text-center text-muted-foreground">
+                      No patients found.
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  pageRows.map((p) => {
+                    const cat = riskCategory(p.risk_category);
+                    const lastVisit = p.created_at || p.last_visit || p.last_visit_date || p.last_seen || null;
+                    return (
+                      <TableRow key={p.patient_id} className="border-b border-gray-100 last:border-b-0 hover:bg-gray-50 transition-colors duration-100">
+                        <TableCell>
+                          <Link to={`/patients/${p.patient_id}`} className="text-blue-600 underline hover:text-blue-700">
+                            p{p.patient_id}
+                          </Link>
+                        </TableCell>
+                        <TableCell>{p.age ?? '—'}</TableCell>
+                        <TableCell className="capitalize">{p.sex ?? '—'}</TableCell>
+                        <TableCell>{formatDate(lastVisit)}</TableCell>
+                        <TableCell>
+                          <span className="font-medium tabular-nums text-gray-900">{Math.round(Number(p.risk_score ?? 0))}</span>
+                        </TableCell>
+                        <TableCell>
+                          <RiskPill category={(cat === 'high' || cat === 'medium' || cat === 'low') ? cat : 'low'} />
+                        </TableCell>
+                        <TableCell className="text-right pr-4">
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <button className="inline-flex h-8 w-8 items-center justify-center rounded-md hover:bg-muted">
+                                <EllipsisVertical className="h-5 w-5" />
+                              </button>
+                            </DropdownMenuTrigger>
+                            {/* item 12 */}
+                            <DropdownMenuContent
+                              align="end"
+                              sideOffset={4}
+                              className="z-50 min-w-[140px] bg-white border border-gray-200 rounded-xl shadow-lg py-1 overflow-hidden"
+                            >
+                              <DropdownMenuItem
+                                onClick={() => setEditPatient(p)}
+                                className="px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 cursor-pointer w-full text-left"
+                              >
+                                Edit
+                              </DropdownMenuItem>
+                              <DropdownMenuItem
+                                onClick={() => setDeleteTarget(p)}
+                                className="px-4 py-2 text-sm text-red-600 hover:bg-red-50 cursor-pointer w-full text-left"
+                              >
+                                Delete
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })
+                )}
+              </TableBody>
+            </Table>
+          </div>
+        )}
+
+        {!loading && !error && (
+          <div className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-end">
+            <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 text-sm">
+                <span>Show</span>
+                <select
+                  className="rounded-md border bg-background px-2 py-1 text-sm"
+                  value={pageSize}
+                  onChange={(e) => {
+                    setPageSize(Number(e.target.value));
+                    setPage(1);
+                  }}
+                >
+                  {PAGE_SIZE_OPTIONS.map((n) => (
+                    <option key={n} value={n}>
+                      {n}
+                    </option>
+                  ))}
+                </select>
+                <span>per page</span>
+              </div>
+              <div className="flex items-center gap-1">
+                <button className="rounded-md border px-2 py-1 text-sm disabled:opacity-50" disabled={page === 1} onClick={() => setPage(1)}>
+                  First
+                </button>
+                <button className="rounded-md border px-2 py-1 text-sm disabled:opacity-50" disabled={page === 1} onClick={() => setPage(page - 1)}>
+                  Previous
+                </button>
+                <button className="rounded-md border px-2 py-1 text-sm disabled:opacity-50" disabled={page === totalPages} onClick={() => setPage(page + 1)}>
+                  Next
+                </button>
+                <button className="rounded-md border px-2 py-1 text-sm disabled:opacity-50" disabled={page === totalPages} onClick={() => setPage(totalPages)}>
+                  Last
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    </>
+  );
 };
 
 export default PriorityTable;
-
-// References
-// https://www.taniarascia.com/front-end-tables-sort-filter-paginate/

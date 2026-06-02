@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react';
-import { useUser } from '@clerk/clerk-react';
+import { useAuth, useUser } from '@clerk/clerk-react';
 
 const API_BASE = import.meta.env.VITE_API_URL;
 
 // Custom hook that fetches aggregated analytics data for the signed-in clinician
 const useAnalytics = () => {
     const { user } = useUser();
+    const { getToken } = useAuth();
 
     // Initialised with empty arrays matching the API response shape —
     // charts render safely before data arrives without crashing on undefined
@@ -29,9 +30,13 @@ const useAnalytics = () => {
 
         const fetchAnalytics = async () => {
             try {
+                const token = await getToken();
                 const res = await fetch(
                     `${API_BASE}/api/analytics?clerk_id=${user.id}`,
-                    { signal: controller.signal }
+                    {
+                        signal: controller.signal,
+                        headers: { Authorization: `Bearer ${token}` },
+                    }
                 );
 
                 // fetch does not automatically fail on error responses like axios does,
@@ -57,7 +62,7 @@ const useAnalytics = () => {
         // Cancels the fetch if the component unmounts before the response arrives
         return () => controller.abort();
 
-    }, [user]);
+    }, [user, getToken]);
 
     return { data, loading, error };
 };

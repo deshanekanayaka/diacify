@@ -1,8 +1,6 @@
 import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { UserButton, useUser } from '@clerk/clerk-react';
-import '../css/index.css';
-import '../css/Header.css';
 
 const Header = () => {
     // Used to determine which nav link should be marked as active

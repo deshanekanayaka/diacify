@@ -231,3 +231,13 @@ Output will be in the `dist/` directory.
 This is a prototype system built for educational purposes. 
 For deployment in clinical settings, additional regulatory compliance,
 security audits, and clinical validation are required.
+## Running the project locally
+
+Terminal 1 — Frontend:
+cd frontend && npm run dev
+
+Terminal 2 — Backend:
+cd backend && npm run dev
+
+Terminal 3 — ML service:
+cd machine-learning && uvicorn app:app --reload --port 8001

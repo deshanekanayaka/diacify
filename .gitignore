@@ -14,7 +14,7 @@ yarn-error.log*
 # Build outputs
 dist/
 build/
-*.log
+logs/*.log
 
 # IDE files
 .vscode/
@@ -48,3 +48,10 @@ ENV/
 # Temporary files
 *.tmp
 *.temp
+
+# Lovable temporary clone (do not commit)
+frontend/tmp_lovable_ui/
+tmp_lovable_ui/
+machine-learning/.venv/
+machine-learning/models/*.pkl
+logs/*.log

@@ -1,0 +1,473 @@
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
+import { useAuth } from '@clerk/clerk-react';
+import axios from 'axios';
+import { RiskPill, Sparkline, TrendArrow } from '@/components/risk-ui';
+import { riskColorClass } from '@/lib/risk';
+import { Skeleton } from '@/components/ui/skeleton';
+import { ChevronLeft, ChevronRight } from 'lucide-react';
+import BookAppointmentModal from '../components/BookAppointmentModal';
+import AddVisitModal from '../components/AddVisitModal';
+import { ResponsiveContainer, LineChart, CartesianGrid, XAxis, YAxis, Line, ReferenceLine, ReferenceArea, Tooltip } from 'recharts';
+
+const BASE_URL = import.meta.env.VITE_API_URL;
+
+function Gauge({ value = 0, category }) {
+  const clamped = Math.max(0, Math.min(100, Number(value) || 0));
+
+  const W = 160;
+  const H = 90;
+  const cx = W / 2;
+  const cy = H - 10;
+  const r = 70;
+
+  // Track arc: full 180 degrees from left to right
+  const trackD = `M ${cx - r} ${cy} A ${r} ${r} 0 0 1 ${cx + r} ${cy}`;
+
+  // Value arc: 0% = left point, 100% = right point
+  // Angle goes from 180deg to 0deg (left to right)
+  const angle = Math.PI - (clamped / 100) * Math.PI;
+  const ex = cx + r * Math.cos(angle);
+  const ey = cy - r * Math.sin(angle);
+
+  // large-arc-flag is 1 if clamped > 50
+  const largeArc = clamped > 50 ? 1 : 0;
+  const valueD = `M ${cx - r} ${cy} A ${r} ${r} 0 ${largeArc} 1 ${ex} ${ey}`;
+
+  const arcColor = category === 'high' ? '#ef4444' : category === 'medium' ? '#f59e0b' : '#10b981';
+
+  return (
+    <svg width={W} height={H} viewBox={`0 0 ${W} ${H}`} className="block shrink-0">
+      <path d={trackD} fill="none" stroke="#e5e7eb" strokeWidth={12} strokeLinecap="round" />
+      <path d={valueD} fill="none" stroke={arcColor} strokeWidth={12} strokeLinecap="round" />
+      <circle cx={ex} cy={ey} r={5} fill={arcColor} />
+    </svg>
+  );
+}
+
+export default function PatientDetailPage({ clerkId }) {
+  const { id } = useParams();
+  const navigate = useNavigate();
+  const { getToken } = useAuth();
+  const [patient, setPatient] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [bookOpen, setBookOpen] = useState(false);
+  const [visitOpen, setVisitOpen] = useState(false);
+  const [expandedVisits, setExpandedVisits] = useState(new Set());
+
+  const toggleVisit = (rowId) => {
+    setExpandedVisits(prev => {
+      const next = new Set(prev);
+      if (next.has(rowId)) next.delete(rowId);
+      else next.add(rowId);
+      return next;
+    });
+  };
+
+  const fetchPatient = useCallback(async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      const token = await getToken();
+      const res = await axios.get(`${BASE_URL}/api/patients/${id}`, {
+        params: { clerk_id: clerkId },
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.data?.success) throw new Error(res.data?.message || 'Failed to fetch');
+      setPatient(res.data.data);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  }, [id, clerkId, getToken]);
+
+  useEffect(() => { fetchPatient(); }, [fetchPatient]);
+
+  const category = useMemo(() => {
+    const rc = (patient?.risk_category || '').toLowerCase();
+    return rc === 'high' || rc === 'medium' || rc === 'low' ? rc : 'low';
+  }, [patient]);
+
+  const riskPanelClass = category === 'high'
+    ? 'bg-red-100 border-red-200'
+    : category === 'medium'
+    ? 'bg-amber-100 border-amber-200'
+    : 'bg-green-100 border-green-200';
+
+  const formatDate = (iso) => {
+    if (!iso) return '—';
+    const d = new Date(iso);
+    if (isNaN(d.getTime())) return '—';
+    const dd = String(d.getDate()).padStart(2, '0');
+    const mm = String(d.getMonth() + 1).padStart(2, '0');
+    const yyyy = d.getFullYear();
+    return `${dd}/${mm}/${yyyy}`;
+  };
+
+  const topFactors = Array.isArray(patient?.top_factors) ? patient.top_factors : [];
+
+  // Debug: log the patient object to see the full structure
+  useEffect(() => {
+    if (patient) {
+      console.log('Patient object:', patient);
+      console.log('Top factors:', patient?.top_factors);
+      console.log('Confidence values:', { low: patient?.confidence_low, medium: patient?.confidence_medium, high: patient?.confidence_high });
+    }
+  }, [patient]);
+
+  const factorDesc = (name) => ({
+    HbA1c: 'Primary glycaemic control indicator',
+    RBS: 'Random blood sugar — acute glucose level',
+    BMI: 'Body mass index — obesity marker',
+    BP_Systolic: 'Systolic blood pressure',
+    TG_HDL_ratio: 'Atherogenic dyslipidaemia marker',
+  }[name]);
+
+  if (loading) {
+    return (
+      <div className="p-8 bg-gray-50 min-h-screen space-y-4">
+        <Skeleton className="h-8 w-64" />
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <Skeleton className="h-56 w-full" />
+          <Skeleton className="h-56 w-full lg:col-span-2" />
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <Skeleton className="h-64 w-full" />
+          <Skeleton className="h-64 w-full" />
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="p-8 bg-gray-50 min-h-screen">
+        <div className="rounded-md border border-red-200 bg-red-50 p-4 text-red-700">
+          Failed to load patient: {error}{' '}
+          <button className="underline ml-2" onClick={fetchPatient}>Retry</button>
+        </div>
+      </div>
+    );
+  }
+
+  if (!patient) return null;
+
+  const c = riskColorClass(category);
+  const hba1c = patient.HbA1c ?? patient.hba1c ?? null;
+  const bmi = patient.BMI ?? patient.bmi ?? null;
+  const rbs = patient.RBS ?? patient.rbs ?? null;
+  const sbp = patient.BP_Systolic ?? patient.bp_systolic ?? null;
+  const tg = patient.Triglycerides ?? patient.triglycerides ?? null;
+
+  const visitDate = patient.created_at || patient.last_visit || patient.last_visit_date || null;
+  const lineData = [{ date: visitDate ? formatDate(visitDate) : '—', HbA1c: Number(hba1c ?? 0), Risk: Number(patient.risk_score ?? 0) }];
+
+  const geneticsLabel = (val) => {
+    const map = {
+      0: 'None', 'None': 'None',
+      1: 'Father T2DM', 'Father': 'Father T2DM',
+      2: 'Mother T2DM', 'Mother': 'Mother T2DM',
+      3: 'Sibling T2DM', 'Sibling': 'Sibling T2DM',
+      4: 'Both Parents T2DM',
+    };
+    if (val === null || val === undefined || val === '' || val === '—') return 'Not recorded';
+    return map[val] ?? map[String(val)] ?? String(val);
+  };
+
+  return (
+    <div className="p-8 bg-gray-50 min-h-screen">
+      {/* HEADER SECTION */}
+      <div className="flex items-start justify-between mb-6">
+        <div>
+          <button
+            onClick={() => navigate('/dashboard')}
+            className="flex items-center gap-2 text-sm text-gray-500 hover:text-gray-700 cursor-pointer mb-3"
+          >
+            <ChevronLeft className="h-4 w-4" /> Back to dashboard
+          </button>
+          <div className="flex items-center gap-3">
+            <h1 className="text-2xl font-bold text-gray-900">Patient p{patient.patient_id}</h1>
+            <RiskPill category={category} />
+          </div>
+          <div className="flex items-center gap-4 mt-2 flex-wrap">
+            {[
+              { label: null, value: `${patient.age ?? '—'} years` },
+              { label: null, value: patient.sex ? patient.sex.charAt(0).toUpperCase() + patient.sex.slice(1) : '—' },
+              { label: 'Social life', value: patient.social_life ?? '—' },
+              { label: 'Genetics', value: geneticsLabel(patient.genetics) },
+            ].map((item, i) => (
+              <span key={i} className="text-sm text-gray-500">
+                {item.label
+                  ? <><span className="text-gray-400">{item.label}:</span>{' '}<span className="font-medium text-gray-700">{item.value}</span></>
+                  : <span className="font-medium text-gray-700">{item.value}</span>
+                }
+              </span>
+            ))}
+          </div>
+        </div>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setBookOpen(true)}
+            className="border border-gray-300 text-gray-700 hover:bg-gray-50 rounded-lg px-4 py-2 text-sm font-medium cursor-pointer transition-colors"
+          >
+            Book Appointment
+          </button>
+          <button
+            onClick={() => setVisitOpen(true)}
+            className="bg-blue-600 hover:bg-blue-700 text-white rounded-lg px-4 py-2 text-sm font-medium cursor-pointer transition-colors"
+          >
+            Add New Visit
+          </button>
+        </div>
+      </div>
+
+      {/* TOP ROW — Risk Score + Contributing Factors */}
+      <div className="grid grid-cols-3 gap-6 mb-4">
+        {/* Risk Score Panel */}
+        <div className={`border rounded-xl p-6 ${riskPanelClass}`}>
+          {/* Gauge left, label + score right */}
+          <div className="flex items-center gap-6">
+            <Gauge value={Number(patient.risk_score ?? 0)} category={category} />
+            <div>
+              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">CURRENT RISK SCORE</p>
+              <div className="text-5xl font-bold text-gray-900">{Math.round(Number(patient.risk_score ?? 0))}</div>
+              <p className="text-xs text-gray-400 mt-1">out of 100</p>
+            </div>
+          </div>
+          {/* Confidence bars */}
+          <div className="mt-3">
+            <div className="flex items-center justify-between py-1.5">
+              <span className="text-sm text-gray-600">Low</span>
+              {patient.confidence_low
+                ? <span className="font-medium">{Math.round(Number(patient.confidence_low))}%</span>
+                : <span className="text-gray-400">Not available</span>
+              }
+            </div>
+            <div className="flex items-center justify-between py-1.5">
+              <span className="text-sm text-gray-600">Medium</span>
+              {patient.confidence_medium
+                ? <span className="font-medium">{Math.round(Number(patient.confidence_medium))}%</span>
+                : <span className="text-gray-400">Not available</span>
+              }
+            </div>
+            <div className="flex items-center justify-between py-1.5">
+              <span className="text-sm text-gray-600">High</span>
+              {patient.confidence_high
+                ? <span className="font-medium">{Math.round(Number(patient.confidence_high))}%</span>
+                : <span className="text-gray-400">Not available</span>
+              }
+            </div>
+          </div>
+        </div>
+
+        {/* Contributing Factors Panel */}
+        <div className="col-span-2 bg-white border border-gray-200 rounded-xl p-6">
+          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-4">TOP CONTRIBUTING FACTORS</p>
+          {topFactors.length === 0 && (
+            <div className="text-sm text-gray-500">No contributing factors provided.</div>
+          )}
+          <div>
+            {topFactors.map((f, idx) => {
+              let factorName = typeof f === 'string' ? f : f?.name || f?.label || '';
+              let pct;
+              if (typeof f === 'string') {
+                pct = idx === 0 ? 100 : idx === 1 ? 75 : idx === 2 ? 50 : 25;
+              } else {
+                pct = Math.round(Number(f?.weight ?? f?.value ?? 0));
+              }
+              const desc = factorDesc(factorName);
+              return (
+                <div key={idx} className="flex items-start justify-between gap-4 mb-4">
+                  <div className="flex-1">
+                    <span className="text-sm font-semibold text-gray-800">{factorName}</span>
+                    <div
+                      className="h-1.5 rounded-full bg-blue-500 mt-2"
+                      style={{ width: `${Math.min(100, Math.max(0, pct))}%` }}
+                    />
+                  </div>
+                  <div className="text-right">
+                    {desc && <p className="text-xs text-gray-400 leading-relaxed">{desc}</p>}
+                    <p className="text-xs font-medium text-gray-600 mt-1">{pct}%</p>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+
+      {/* DISCLAIMER — below both panels */}
+      <p className="text-xs text-gray-400 mb-6 text-center">
+        Risk scores are decision support tools only and do not constitute a clinical diagnosis. Clinician judgement must be applied.
+      </p>
+
+      {/* CHARTS ROW */}
+      <div className="grid grid-cols-2 gap-6 mb-6">
+        <div className="bg-white border border-gray-200 rounded-xl p-6">
+          <p className="text-sm font-semibold text-gray-900 mb-4">HbA1c trajectory</p>
+          <div className="h-64 w-full">
+            <ResponsiveContainer width="100%" height="100%">
+              <LineChart data={lineData} margin={{ top: 10, right: 16, left: 0, bottom: 10 }}>
+                <CartesianGrid strokeDasharray="3 3" opacity={0.2} />
+                <XAxis dataKey="date" tick={{ fontSize: 12 }} />
+                <YAxis domain={[0, 10]} tick={{ fontSize: 12 }} />
+                <Tooltip />
+                <ReferenceLine y={5.7} stroke="var(--risk-medium)" strokeDasharray="4 4" label={{ value: 'Prediabetes 5.7%', position: 'top', fontSize: 10 }} />
+                <ReferenceLine y={6.5} stroke="var(--risk-high)" strokeDasharray="4 4" label={{ value: 'Diabetes 6.5%', position: 'top', fontSize: 10 }} />
+                <Line type="monotone" dataKey="HbA1c" stroke="var(--primary)" dot />
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+
+        <div className="bg-white border border-gray-200 rounded-xl p-6">
+          <p className="text-sm font-semibold text-gray-900 mb-4">Risk score trajectory</p>
+          <div className="h-64 w-full">
+            <ResponsiveContainer width="100%" height="100%">
+              <LineChart data={lineData} margin={{ top: 0, right: 16, left: 0, bottom: 10 }}>
+                <CartesianGrid strokeDasharray="3 3" opacity={0.2} />
+                <XAxis dataKey="date" tick={{ fontSize: 12 }} />
+                <YAxis domain={[0, 100]} tick={{ fontSize: 12 }} />
+                <Tooltip />
+                <ReferenceArea y1={0} y2={39} fill="var(--risk-low-soft)" fillOpacity={1} ifOverflow="hidden" />
+                <ReferenceArea y1={39} y2={69} fill="var(--risk-medium-soft)" fillOpacity={1} ifOverflow="hidden" />
+                <ReferenceArea y1={69} y2={100} fill="var(--risk-high-soft)" fillOpacity={1} ifOverflow="hidden" />
+                <Line type="monotone" dataKey="Risk" stroke="var(--primary)" dot />
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+      </div>
+
+      {/* SPARKLINES ROW */}
+      <div className="grid grid-cols-4 gap-4 mb-6">
+        {[
+          { label: 'BMI', unit: 'kg/m²', value: bmi },
+          { label: 'Systolic BP', unit: 'mmHg', value: sbp },
+          { label: 'RBS', unit: 'mg/dL', value: rbs },
+          { label: 'Triglycerides', unit: 'mg/dL', value: tg },
+        ].map((m, i) => {
+          const values = m.value != null ? [Number(m.value)] : [];
+          return (
+            <div key={i} className="bg-white border border-gray-200 rounded-xl p-4">
+              <div className="flex items-center justify-between">
+                <span className="text-xs text-gray-500 mb-1">{m.label}</span>
+                <span className="text-xs text-gray-400">{m.unit}</span>
+              </div>
+              <div className="text-2xl font-bold text-gray-900 mt-1">{m.value ?? '—'}</div>
+              <div className="text-gray-400">
+                <TrendArrow from={m.value} to={m.value} />
+              </div>
+              {values.length <= 1 ? (
+                <svg viewBox="0 0 100 30" className="w-full h-8 mt-2">
+                  <line x1="0" y1="15" x2="100" y2="15" stroke="#93c5fd" strokeWidth="2" strokeDasharray="4 2" />
+                </svg>
+              ) : (
+                <div className="mt-2">
+                  <Sparkline values={values} />
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+
+      {/* VISIT HISTORY */}
+      <div className="bg-white border border-gray-200 rounded-xl p-6 mb-6">
+        <h2 className="text-lg font-semibold text-gray-900 mb-4">Visit history</h2>
+        <div className="w-full overflow-x-auto">
+          <table className="w-full">
+            <thead>
+              <tr className="border-b border-gray-200">
+                <th className="w-8 pb-2"></th>
+                {['Date', 'HbA1c', 'BMI', 'BP', 'RBS', 'Score', 'Risk'].map((h) => (
+                  <th key={h} className="text-xs font-bold text-gray-500 uppercase tracking-wider pb-2 text-left px-2">
+                    {h}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              <tr className="border-b border-gray-100">
+                <td className="px-2 py-3">
+                  <ChevronRight
+                    size={14}
+                    className={`text-gray-400 cursor-pointer transition-transform ${expandedVisits.has(0) ? 'rotate-90' : ''}`}
+                    onClick={() => toggleVisit(0)}
+                  />
+                </td>
+                <td className="px-2 py-3 text-sm">{formatDate(visitDate)}</td>
+                <td className="px-2 py-3 text-sm">{hba1c ?? '—'}</td>
+                <td className="px-2 py-3 text-sm">{bmi ?? '—'}</td>
+                <td className="px-2 py-3 text-sm">{sbp ? `${sbp}` : '—'}</td>
+                <td className="px-2 py-3 text-sm">{rbs ?? '—'}</td>
+                <td className="px-2 py-3 text-sm">{Math.round(Number(patient.risk_score ?? 0))}</td>
+                <td className="px-2 py-3 text-sm"><RiskPill category={category} /></td>
+              </tr>
+              {expandedVisits.has(0) && (
+                <tr>
+                  <td colSpan={8}>
+                    <div className="grid grid-cols-4 gap-4 bg-gray-50 p-4 rounded-b-lg text-xs text-gray-600">
+                      {Object.entries(patient)
+                        .filter(([k]) => !['id', 'patient_id', 'created_at', 'updated_at', 'risk_score', 'risk_category'].includes(k))
+                        .map(([k, v]) => (
+                          <div key={k}>
+                            <div className="text-gray-400 uppercase text-xs">{k}</div>
+                            <div className="font-medium text-gray-800">{String(v)}</div>
+                          </div>
+                        ))}
+                    </div>
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* APPOINTMENTS SECTION */}
+      <div className="bg-white border border-gray-200 rounded-xl p-6">
+        <div className="flex justify-between items-center mb-4">
+          <h2 className="text-lg font-semibold text-gray-900">Appointments</h2>
+          <button
+            onClick={() => setBookOpen(true)}
+            className="bg-blue-600 hover:bg-blue-700 text-white rounded-lg px-4 py-2 text-sm font-medium cursor-pointer transition-colors"
+          >
+            Book new appointment
+          </button>
+        </div>
+        <table className="w-full">
+          <thead>
+            <tr className="bg-gray-50 border-b border-gray-200">
+              {['DATE', 'TYPE', 'STATUS', 'NOTES'].map((h) => (
+                <th key={h} className="px-4 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider text-left">
+                  {h}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td colSpan={4} className="text-center text-sm text-gray-400 py-8">
+                No appointments booked yet
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <BookAppointmentModal
+        isOpen={bookOpen}
+        onClose={() => setBookOpen(false)}
+        patientId={patient.patient_id}
+      />
+      <AddVisitModal
+        isOpen={visitOpen}
+        onClose={() => setVisitOpen(false)}
+        patientId={patient.patient_id}
+      />
+    </div>
+  );
+}

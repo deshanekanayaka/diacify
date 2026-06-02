@@ -19,14 +19,14 @@ export const patientSchema = z.object({
     age:           requiredNumber(0,    120,  'Min 0',   'Max 120'  ),
     sex:           z.enum(['male', 'female'],  { required_error: 'Required' }),
     social_life:   z.enum(['city', 'village'], { required_error: 'Required' }),
-    bp_systolic:   requiredNumber(5,    25,   'Min 5',   'Max 25'   ),
-    bp_diastolic:  requiredNumber(3,    15,   'Min 3',   'Max 15'   ),
-    bmi:           requiredNumber(0,    60,   'Min 0',   'Max 60'   ),
-    cholesterol:   requiredNumber(0,    500,  'Min 0',   'Max 500'  ),
+    bp_systolic:   requiredNumber(60,   250,  'Min 60',  'Max 250'  ),
+    bp_diastolic:  requiredNumber(40,   150,  'Min 40',  'Max 150'  ),
+    bmi:           requiredNumber(10,   70,   'Min 10',  'Max 70'   ),
+    cholesterol:   requiredNumber(0,    600,  'Min 0',   'Max 600'  ),
     triglycerides: requiredNumber(0,    1000, 'Min 0',   'Max 1000' ),
-    hdl:           requiredNumber(0,    100,  'Min 0',   'Max 100'  ),
+    hdl:           requiredNumber(0,    200,  'Min 0',   'Max 200'  ),
     ldl:           requiredNumber(0,    300,  'Min 0',   'Max 300'  ),
-    vldl:          requiredNumber(0,    100,  'Min 0',   'Max 100'  ),
+    vldl:          requiredNumber(0,    150,  'Min 0',   'Max 150'  ),
     hba1c:         requiredNumber(0,    20,   'Min 0',   'Max 20'   ),
     rbs:           requiredNumber(0,    600,  'Min 0',   'Max 600'  ),
 });
@@ -57,8 +57,9 @@ export const checkWarnings = (data) => {
     // ADA: RBS ≥200 mg/dL meets the threshold for diabetes diagnosis
     if (data.rbs >= 200) warnings.rbs = 'Diabetic threshold';
 
-    // NICE: Total cholesterol ≥240 mg/dL is considered high
-    if (data.cholesterol >= 240) warnings.cholesterol = 'High';
+    // NICE: Total cholesterol ≥240 mg/dL is high; ≥200 mg/dL is borderline high
+    if (data.cholesterol >= 240)       warnings.cholesterol = 'High';
+    else if (data.cholesterol >= 200)  warnings.cholesterol = 'Borderline high';
 
     // NICE: LDL ≥130 mg/dL is borderline high for diabetic patients
     if (data.ldl >= 130) warnings.ldl = 'Borderline high';

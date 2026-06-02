@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import axios from 'axios';
+import { useAuth } from '@clerk/clerk-react';
 import PatientFormModal from './PatientFormModal';
 
 const BASE_URL = import.meta.env.VITE_API_URL;
@@ -25,6 +26,7 @@ const toFormValues = (patient) => ({
 // Handles the PUT request when an existing patient is updated via PatientFormModal
 // API logic lives here so PatientFormModal stays a pure form component
 const EditPatientModal = ({ isOpen, onClose, onPatientUpdated, patient }) => {
+    const { getToken } = useAuth();
     // Tracks whether the save request is in progress to disable the submit button
     const [saving,      setSaving]      = useState(false);
     // Holds any error message returned by the server to display in the form
@@ -41,8 +43,13 @@ const EditPatientModal = ({ isOpen, onClose, onPatientUpdated, patient }) => {
             setSaving(true);
             setSavingError(null);
 
+            const token = await getToken();
             // Sends the updated patient data to the backend
-            const res = await axios.put(`${BASE_URL}/api/patients/${patient.patient_id}`, payload);
+            const res = await axios.put(
+                `${BASE_URL}/api/patients/${patient.patient_id}`,
+                payload,
+                { headers: { Authorization: `Bearer ${token}` } }
+            );
 
             // Checks for application-level errors returned inside a 200 response
             if (!res.data.success) {
@@ -73,12 +80,14 @@ const EditPatientModal = ({ isOpen, onClose, onPatientUpdated, patient }) => {
         <PatientFormModal
             isOpen={isOpen && !!patient}
             onClose={handleClose}
-            title={`Edit Patient — p${patient?.patient_id}`}
+            title="Edit Patient"
+            subtitle={patient ? `p${patient.patient_id}` : undefined}
             // Converts the raw DB record to form-friendly values, or passes null if no patient
             initialValues={patient ? toFormValues(patient) : null}
             onSave={handleSave}
             saving={saving}
             savingError={savingError}
+            primaryLabel="Save Changes"
         />
     );
 };

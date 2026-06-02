@@ -10,10 +10,7 @@ import {
   Tooltip,
   Legend,
 } from 'chart.js';
-import Header from '../components/Header.jsx';
 import useAnalytics from '../utils/useAnalytics.js';
-import '../css/index.css';
-import '../css/Analytics.css';
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, LineElement, PointElement, Tooltip, Legend);
 
@@ -215,68 +212,92 @@ const Analytics = () => {
   // Guard clauses after all hooks
   if (loading) {
     return (
-        <div className="analytics-page">
-          <Header />
-          <p style={{ color: '#94a3b8', padding: '2rem' }}>Loading analytics…</p>
+        <div className="p-8 bg-gray-50 min-h-screen">
+          <p className="text-gray-400">Loading analytics…</p>
         </div>
     );
   }
 
   if (error) {
     return (
-        <div className="analytics-page">
-          <Header />
-          <p style={{ color: '#EF4444', padding: '2rem' }}>Error: {error}</p>
+        <div className="p-8 bg-gray-50 min-h-screen">
+          <p className="text-red-600">Error: {error}</p>
         </div>
     );
   }
 
   if (!data || !data.ageDistribution || !data.riskScoreDistribution) {
     return (
-        <div className="analytics-page">
-          <Header />
-        </div>
+        <div className="p-8 bg-gray-50 min-h-screen"></div>
     );
   }
 
   return (
-      <div className="analytics-page">
-        <Header />
-        <main className="analytics-content">
-          <div className="charts-grid">
+      <div className="p-8 bg-gray-50 min-h-screen">
+        {/* Page header */}
+        <div className="mb-6">
+          <h1 className="text-2xl font-bold text-gray-900">Analytics</h1>
+          <p className="text-sm text-gray-500 mt-1">Cohort-level trends across your patient list.</p>
+        </div>
 
-            <div className="chart-card">
-              <div className="chart-card-header">
-                <h2 className="chart-title">Patient Demographics Analysis</h2>
-                <p className="chart-subtitle">Age distribution of patients by risk level</p>
-              </div>
-              <div className="chart-content" style={{ height: '300px' }}>
+        {/* Summary stats row */}
+        <div className="grid grid-cols-4 gap-4 mb-6">
+          <div className="bg-white border border-gray-200 rounded-xl p-5">
+            <div className="text-xs font-medium text-gray-500 uppercase tracking-wider">Average risk score</div>
+            <div className="text-3xl font-bold text-gray-900 mt-1">{data?.summaryStats?.avgRiskScore || '—'}</div>
+          </div>
+          <div className="bg-white border border-gray-200 rounded-xl p-5">
+            <div className="text-xs font-medium text-gray-500 uppercase tracking-wider">High risk %</div>
+            <div className="text-3xl font-bold text-gray-900 mt-1">{data?.summaryStats?.highRiskPercent || '—'}</div>
+          </div>
+          <div className="bg-white border border-gray-200 rounded-xl p-5">
+            <div className="text-xs font-medium text-gray-500 uppercase tracking-wider">Deteriorating %</div>
+            <div className="text-3xl font-bold text-gray-900 mt-1">{data?.summaryStats?.deterioratingPercent || '—'}</div>
+          </div>
+          <div className="bg-white border border-gray-200 rounded-xl p-5">
+            <div className="text-xs font-medium text-gray-500 uppercase tracking-wider">Total visits</div>
+            <div className="text-3xl font-bold text-gray-900 mt-1">{data?.summaryStats?.totalVisits || '—'}</div>
+          </div>
+        </div>
+
+        {/* Charts grid */}
+        <div className="space-y-6">
+          {/* Row 1: Full-width chart */}
+          <div className="bg-white rounded-xl border border-gray-200 p-6">
+            <h2 className="text-sm font-semibold text-gray-900 mb-1">Risk category migration over time</h2>
+            <p className="text-xs text-gray-400 mb-4">Tracking how patients move between risk categories</p>
+            <div style={{ height: '300px' }}>
+              <Line data={trendChartData} options={trendOptions} />
+            </div>
+          </div>
+
+          {/* Row 2: Two half-width charts side by side */}
+          <div className="grid grid-cols-2 gap-6">
+            <div className="bg-white rounded-xl border border-gray-200 p-6">
+              <h2 className="text-sm font-semibold text-gray-900 mb-1">Average HbA1c by risk group</h2>
+              <p className="text-xs text-gray-400 mb-4">HbA1c levels across patient risk categories</p>
+              <div style={{ height: '300px' }}>
                 <Bar data={ageChartData} options={ageOptions} />
               </div>
             </div>
-
-            <div className="chart-card">
-              <div className="chart-card-header">
-                <h2 className="chart-title">Risk Score Distribution</h2>
-                <p className="chart-subtitle">Number of patients per 10-point risk score band</p>
-              </div>
-              <div className="chart-content" style={{ height: '300px' }}>
+            <div className="bg-white rounded-xl border border-gray-200 p-6">
+              <h2 className="text-sm font-semibold text-gray-900 mb-1">Risk score distribution</h2>
+              <p className="text-xs text-gray-400 mb-4">Number of patients per 10-point risk score band</p>
+              <div style={{ height: '300px' }}>
                 <Bar data={histogramChartData} options={histogramOptions} />
               </div>
             </div>
-
-            <div className="chart-card">
-              <div className="chart-card-header">
-                <h2 className="chart-title">Average Risk Score Trend</h2>
-                <p className="chart-subtitle">Monthly average risk score across all patients</p>
-              </div>
-              <div className="chart-content" style={{ height: '300px' }}>
-                <Line data={trendChartData} options={trendOptions} />
-              </div>
-            </div>
-
           </div>
-        </main>
+
+          {/* Row 3: Full-width chart */}
+          <div className="bg-white rounded-xl border border-gray-200 p-6">
+            <h2 className="text-sm font-semibold text-gray-900 mb-1">Age distribution by risk</h2>
+            <p className="text-xs text-gray-400 mb-4">Patient age breakdown by risk category</p>
+            <div style={{ height: '300px' }}>
+              <Bar data={ageChartData} options={ageOptions} />
+            </div>
+          </div>
+        </div>
       </div>
   );
 };

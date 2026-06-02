@@ -1,193 +1,196 @@
 import { useNavigate } from 'react-router-dom';
-import '../css/index.css';
-import '../css/LandingPage.css';
+
 
 export default function LandingPage() {
-    const navigate = useNavigate();
+  const navigate = useNavigate();
 
-    return (
-        <div className="lp-root">
+  return (
+    <div className="bg-white min-h-screen">
+      {/* NAVBAR */}
+      {/* NAVBAR */}
+<nav className="bg-white border-b border-gray-100">
+  <div className="flex items-center justify-center px-8 py-4">
+    <div className="flex items-center gap-3">
+      <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center shrink-0">
+        <svg width="16" height="16" viewBox="0 0 18 18" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <rect x="6.5" y="1" width="5" height="16" rx="2" fill="white"/>
+          <rect x="1" y="6.5" width="16" height="5" rx="2" fill="white"/>
+        </svg>
+      </div>
+      <span className="text-base font-semibold text-gray-900">Diacify</span>
+    </div>
+  </div>
+</nav>
 
-            {/* Background layers */}
-            <div className="lp-bg" aria-hidden="true" />
-            <div className="lp-grid" aria-hidden="true" />
+      {/* HERO SECTION */}
+      <section
+        className="pt-24 pb-16 flex flex-col items-center justify-center text-center px-8"
+        style={{ background: 'radial-gradient(ellipse 80% 60% at 70% -10%, rgba(37,99,235,0.07) 0%, transparent 70%)' }}
+      >
+        
 
-            {/* Decorative SVGs */}
-            <svg className="lp-deco-right" width="180" height="180" viewBox="0 0 160 160" fill="none" aria-hidden="true">
-                <rect x="56" y="10" width="48" height="140" rx="12" fill="#2563eb" />
-                <rect x="10" y="56" width="140" height="48" rx="12" fill="#2563eb" />
-            </svg>
-            <svg className="lp-deco-left" width="120" height="120" viewBox="0 0 160 160" fill="none" aria-hidden="true">
-                <rect x="56" y="10" width="48" height="140" rx="12" fill="#2563eb" />
-                <rect x="10" y="56" width="140" height="48" rx="12" fill="#2563eb" />
-            </svg>
+        {/* Headline */}
+        <h1 className="text-5xl font-bold text-gray-900 max-w-2xl leading-tight mb-6">
+          Prioritize the patients who need care{' '}
+          <em className="text-blue-600 not-italic">first.</em>
+        </h1>
 
-            {/* ── Navbar ── */}
-            <nav className="lp-nav">
-                <div className="lp-logo">
-                    <div className="lp-logo-icon">
-                        <svg width="16" height="16" viewBox="0 0 18 18" fill="none">
-                            <rect x="6.5" y="1" width="5" height="16" rx="2" fill="white" />
-                            <rect x="1" y="6.5" width="16" height="5" rx="2" fill="white" />
-                        </svg>
-                    </div>
-                    <span className="lp-logo-wordmark">Diabetic Patient Priority System</span>
-                </div>
-            </nav>
+        {/* Subheading */}
+        <p className="text-gray-500 text-base max-w-lg leading-relaxed mb-8">
+          ML-powered risk scoring ranks your diabetic patients across 13 clinical indicators — so urgent cases always surface automatically.
+        </p>
 
-            {/* ── Hero ── */}
-            <section className="lp-hero">
-                <div className="lp-badge">
-                    <span className="lp-badge-dot" />
-                    Clinical Priority System
-                </div>
-
-                <h1 className="lp-headline">
-                    Prioritize the patients<br />
-                    who need care <em>first.</em>
-                </h1>
-
-                <p className="lp-sub">
-                    ML-powered risk scoring ranks your diabetic patients across
-                    13 clinical indicators — so urgent cases always surface automatically.
-                </p>
-
-                <div className="lp-ctas">
-                    <button className="lp-btn-primary" onClick={() => navigate('/sign-up')}>
-                        Create account
-                    </button>
-                    <button className="lp-btn-secondary" onClick={() => navigate('/sign-in')}>
-                        Sign in →
-                    </button>
-                </div>
-
-                <div className="lp-stats">
-                    <div className="lp-stat">
-                        <div className="lp-stat-num"><span>13</span></div>
-                        <div className="lp-stat-label">Clinical indicators</div>
-                    </div>
-                    <div className="lp-stat">
-                        <div className="lp-stat-num">0–<span>100</span></div>
-                        <div className="lp-stat-label">Risk score range</div>
-                    </div>
-                    <div className="lp-stat">
-                        <div className="lp-stat-num"><span>3</span></div>
-                        <div className="lp-stat-label">Risk categories</div>
-                    </div>
-                </div>
-            </section>
-
-            {/* ── Steps ── */}
-            <section className="lp-steps-section">
-                <div className="lp-steps-inner">
-                    <h2 className="lp-steps-heading">
-                        From entry to intervention, in three steps.
-                    </h2>
-                    <div className="lp-steps-grid">
-                        <div className="lp-step-card">
-                            <div className="lp-step-card-num">1</div>
-                            <h3 className="lp-step-card-title">Add patient data</h3>
-                            <p className="lp-step-card-desc">
-                                Enter HbA1c, blood pressure, lipid panel, glucose levels and
-                                demographics through a validated clinical form with range checking.
-                            </p>
-                        </div>
-                        <div className="lp-step-card">
-                            <div className="lp-step-card-num">2</div>
-                            <h3 className="lp-step-card-title">Auto risk score</h3>
-                            <p className="lp-step-card-desc">
-                                The Random Forest model weighs all 13 factors and returns a
-                                0–100 score classified as Low, Medium or High — instantly.
-                            </p>
-                        </div>
-                        <div className="lp-step-card">
-                            <div className="lp-step-card-num">3</div>
-                            <h3 className="lp-step-card-title">Act on priorities</h3>
-                            <p className="lp-step-card-desc">
-                                Your patient list is ranked by urgency. Focus your time where
-                                it makes the biggest clinical difference.
-                            </p>
-                        </div>
-                    </div>
-                </div>
-            </section>
-
-            {/* ── Principles ── */}
-            <section className="lp-principles-section">
-                <div className="lp-principles-inner">
-                    <h2 className="lp-principles-heading">Built the way clinicians think.</h2>
-                    <div className="lp-principles-grid">
-                        <div>
-                            <span className="lp-principle-item-dot lp-principle-item-dot--blue" />
-                            <h3 className="lp-principle-item-title">Ranked, not filtered</h3>
-                            <p className="lp-principle-item-desc">
-                                Every patient gets a score. The highest-risk cases rise to the
-                                top automatically — no one falls through the cracks.
-                            </p>
-                        </div>
-                        <div>
-                            <span className="lp-principle-item-dot lp-principle-item-dot--amber" />
-                            <h3 className="lp-principle-item-title">Transparent scoring</h3>
-                            <p className="lp-principle-item-desc">
-                                See exactly which indicators drove each patient's score.
-                                The model shows its work — no black-box predictions.
-                            </p>
-                        </div>
-                        <div>
-                            <span className="lp-principle-item-dot lp-principle-item-dot--green" />
-                            <h3 className="lp-principle-item-title">Updates as you do</h3>
-                            <p className="lp-principle-item-desc">
-                                Enter new lab results and watch the risk score recalculate
-                                in real time. No batch processing, no overnight runs.
-                            </p>
-                        </div>
-                    </div>
-                </div>
-            </section>
-
-            {/* ── Indicators ── */}
-            <section className="lp-indicators-section">
-                <div className="lp-indicators-inner">
-                    <h2 className="lp-indicators-heading">Every factor, accounted for.</h2>
-                    <div className="lp-indicators-grid">
-                        {[
-                            'HbA1c', 'BMI', 'Blood pressure (systolic)',
-                            'Blood pressure (diastolic)', 'Cholesterol', 'Triglycerides',
-                            'HDL', 'LDL', 'VLDL',
-                            'Random blood sugar', 'Age', 'Gender',
-                            'Social setting',
-                        ].map(ind => (
-                            <div className="lp-indicator-item" key={ind}>
-                                <svg width="15" height="15" viewBox="0 0 16 16" fill="none">
-                                    <rect width="16" height="16" rx="4" fill="#dbeafe" />
-                                    <path d="M4 8l3 3 5-5" stroke="#2563EB" strokeWidth="1.6"
-                                          strokeLinecap="round" strokeLinejoin="round" />
-                                </svg>
-                                <span>{ind}</span>
-                            </div>
-                        ))}
-                    </div>
-                </div>
-            </section>
-
-            {/* ── Closing CTA ── */}
-            <section className="lp-closing-section">
-                <h2 className="lp-closing-heading">
-                    Start with the patient who needs you first.
-                </h2>
-                <p className="lp-closing-sub">
-                    Your panel, ranked by clinical urgency. Ready in minutes.
-                </p>
-                <button className="lp-btn-primary" onClick={() => navigate('/sign-up')}>
-                    Create account
-                </button>
-            </section>
-
-            {/* ── Footer ── */}
-            <footer className="lp-footer">
-                © {new Date().getFullYear()} Diabetic Patient Priority System
-            </footer>
-
+        {/* Buttons */}
+        <div className="flex gap-3 mb-10">
+          <button
+            onClick={() => navigate('/sign-up')}
+            className="px-6 py-3 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition"
+          >
+            Create account
+          </button>
+          <button
+            onClick={() => navigate('/sign-in')}
+            className="px-6 py-3 border border-gray-300 text-gray-900 text-sm font-medium rounded-lg hover:bg-gray-50 transition"
+          >
+            Sign in →
+          </button>
         </div>
-    );
+
+        {/* Stats Row */}
+        <div className="flex gap-12 pt-8 border-t border-gray-100">
+          <div>
+            <div className="text-3xl font-bold text-blue-600">13</div>
+            <div className="text-xs text-gray-400 uppercase tracking-wider mt-1">Clinical indicators</div>
+          </div>
+          <div>
+            <div className="text-3xl font-bold text-blue-600">0–100</div>
+            <div className="text-xs text-gray-400 uppercase tracking-wider mt-1">Risk score range</div>
+          </div>
+          <div>
+            <div className="text-3xl font-bold text-blue-600">3</div>
+            <div className="text-xs text-gray-400 uppercase tracking-wider mt-1">Risk categories</div>
+          </div>
+        </div>
+      </section>
+
+      {/* THREE STEPS SECTION */}
+      <section className="bg-white border-t border-b border-gray-100 py-20 px-8">
+        <h2 className="text-3xl font-bold text-gray-900 text-center mb-12">
+          From entry to intervention, in three steps.
+        </h2>
+        <div className="max-w-6xl mx-auto grid grid-cols-3 gap-6">
+          {/* Card 1 */}
+          <div className="bg-gray-50 border border-gray-100 rounded-2xl p-7">
+            <div className="text-4xl font-bold text-blue-600 mb-4">1</div>
+            <h3 className="text-sm font-semibold text-gray-900 mb-2">Add patient data</h3>
+            <p className="text-sm text-gray-500 leading-relaxed">
+              Enter HbA1c, blood pressure, lipid panel, glucose levels and demographics through a validated clinical form with range checking.
+            </p>
+          </div>
+          {/* Card 2 */}
+          <div className="bg-gray-50 border border-gray-100 rounded-2xl p-7">
+            <div className="text-4xl font-bold text-blue-600 mb-4">2</div>
+            <h3 className="text-sm font-semibold text-gray-900 mb-2">Auto risk score</h3>
+            <p className="text-sm text-gray-500 leading-relaxed">
+              The Random Forest model weighs all 13 factors and returns a 0–100 score classified as Low, Medium or High — instantly.
+            </p>
+          </div>
+          {/* Card 3 */}
+          <div className="bg-gray-50 border border-gray-100 rounded-2xl p-7">
+            <div className="text-4xl font-bold text-blue-600 mb-4">3</div>
+            <h3 className="text-sm font-semibold text-gray-900 mb-2">Act on priorities</h3>
+            <p className="text-sm text-gray-500 leading-relaxed">
+              Your patient list is ranked by urgency. Focus your time where it makes the biggest clinical difference.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      {/* PRINCIPLES SECTION */}
+      <section className="bg-gray-50 py-24 px-8">
+        <h2 className="text-3xl font-bold text-gray-900 text-center mb-12">
+          Built the way clinicians think.
+        </h2>
+        <div className="max-w-6xl mx-auto grid grid-cols-3 gap-16">
+          {/* Principle 1 */}
+          <div>
+            <div className="w-2 h-2 rounded-full bg-blue-600 mb-4" />
+            <h3 className="font-semibold text-gray-900 mb-3">Ranked, not filtered</h3>
+            <p className="text-sm text-gray-500 leading-relaxed">
+              Every patient gets a score. The highest-risk cases rise to the top automatically — no one falls through the cracks.
+            </p>
+          </div>
+          {/* Principle 2 */}
+          <div>
+            <div className="w-2 h-2 rounded-full bg-amber-500 mb-4" />
+            <h3 className="font-semibold text-gray-900 mb-3">Transparent scoring</h3>
+            <p className="text-sm text-gray-500 leading-relaxed">
+              See exactly which indicators drove each patient's score. The model shows its work — no black-box predictions.
+            </p>
+          </div>
+          {/* Principle 3 */}
+          <div>
+            <div className="w-2 h-2 rounded-full bg-green-500 mb-4" />
+            <h3 className="font-semibold text-gray-900 mb-3">Updates as you do</h3>
+            <p className="text-sm text-gray-500 leading-relaxed">
+              Enter new lab results and watch the risk score recalculate in real time. No batch processing, no overnight runs.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      {/* INDICATORS SECTION */}
+      <section className="bg-white border-t border-b border-gray-100 py-20 px-8">
+        <h2 className="text-3xl font-bold text-gray-900 text-center mb-12">
+          Every factor, accounted for.
+        </h2>
+        <div className="max-w-2xl mx-auto grid grid-cols-3 gap-0">
+          {[
+            'HbA1c',
+            'BMI',
+            'Blood pressure (systolic)',
+            'Blood pressure (diastolic)',
+            'Cholesterol',
+            'Triglycerides',
+            'HDL',
+            'LDL',
+            'VLDL',
+            'Random blood sugar',
+            'Age',
+            'Gender',
+            'Social setting',
+          ].map((indicator, idx) => (
+            <div key={idx} className="flex items-center gap-3 py-3 border-b border-gray-100 text-sm font-medium text-gray-800">
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none" className="shrink-0">
+                <rect width="16" height="16" rx="4" fill="#dbeafe"/>
+                <path d="M4 8l3 3 5-5" stroke="#2563EB" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/>
+              </svg>
+              <span>{indicator}</span>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {/* CLOSING CTA SECTION */}
+      <section className="bg-gray-50 py-28 px-8 text-center">
+        <h2 className="text-4xl font-bold text-gray-900 mb-3">
+          Start with the patient who needs you first.
+        </h2>
+        <p className="text-gray-500 mb-8">
+          Your panel, ranked by clinical urgency. Ready in minutes.
+        </p>
+        <button
+          onClick={() => navigate('/sign-up')}
+          className="px-6 py-3 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition"
+        >
+          Create account
+        </button>
+      </section>
+
+      {/* FOOTER */}
+      <footer className="text-center text-xs text-gray-400 py-4 border-t border-gray-100">
+        © 2026 Diacify — Decision support only. Risk scores do not constitute a clinical diagnosis.
+      </footer>
+    </div>
+  );
 }
