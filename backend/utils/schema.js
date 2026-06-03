@@ -54,8 +54,8 @@ const checkWarnings = (data) => {
     if (data.bmi >= 30)             warnings.bmi          = 'Obese';
     else if (data.bmi < 18.5)       warnings.bmi          = 'Underweight';
 
-    if (data.bp_systolic >= 14.0)   warnings.bp_systolic  = 'Above target';
-    if (data.bp_diastolic >= 9.0)   warnings.bp_diastolic = 'Above target';
+    if (data.bp_systolic >= 140)   warnings.bp_systolic  = 'Above target';
+    if (data.bp_diastolic >= 90)   warnings.bp_diastolic = 'Above target';
 
     if (data.rbs >= 200)            warnings.rbs          = 'Diabetic threshold';
 

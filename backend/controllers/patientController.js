@@ -1,38 +1,31 @@
 import axios from 'axios';
 import * as db from '../config/database.js';
-import { patientSchema, patientCreateSchema, checkWarnings } from '../utils/schema.js';
+import { patientSchema, checkWarnings } from '../utils/schema.js';
 import logger from '../utils/logger.js';
 
 const ML_SERVICE_URL = process.env.ML_SERVICE_URL || 'http://localhost:8001';
 
-// Valid risk levels — used to validate the riskLevel query parameter in getAllPatients
 const VALID_RISK_LEVELS = ['low', 'medium', 'high'];
 
-// Flattens Zod's nested error structure into a flat array of readable strings
-// e.g. ['age: Min 0', 'bp_systolic: Min 50']
-const formatZodErrors = (zodError) =>
-    zodError.errors.map((e) => `${e.path.join('.')}: ${e.message}`);
+const formatZodErrors = (zodError) => {
+    const issues = zodError?.errors || zodError?.issues || [];
+    return issues.map((e) => `${e.path.join('.')}: ${e.message}`);
+};
 
-// Adding a required field to patientSchema automatically updates both field lists.
-// Optional fields (e.g. genetics) are excluded so they are not flagged as missing.
 const REQUIRED_UPDATE_FIELDS = Object.keys(patientSchema.shape).filter(
   (key) => !patientSchema.shape[key].isOptional()
 );
 
-// Checks which required fields are missing or empty in the request body
 const getMissingFields = (body, fields) => {
   const missing = [];
-
   for (const field of fields) {
     if (body[field] === undefined || body[field] === null || body[field] === '') {
       missing.push(field);
     }
   }
-
   return missing;
 };
 
-// MySQL stores top_factors as a JSON string — converts it back to an array
 const parseTopFactors = (patient) => {
   if (typeof patient.top_factors === 'string') {
     patient.top_factors = JSON.parse(patient.top_factors);
@@ -43,10 +36,8 @@ const parseTopFactors = (patient) => {
 // POST /api/patients
 const createPatient = async (req, res) => {
   try {
-
     const { userId } = req.auth;
 
-    // Runs a manual presence check before Zod so missing fields get a clear error message
     const missingFields = getMissingFields(req.body, REQUIRED_UPDATE_FIELDS);
     if (missingFields.length > 0) {
       return res.status(400).json({
@@ -56,9 +47,7 @@ const createPatient = async (req, res) => {
       });
     }
 
-    // Validates field types and clinical value ranges using the create schema
-    const result = patientCreateSchema.safeParse(req.body);
-
+    const result = patientSchema.safeParse(req.body);
     if (!result.success) {
       return res.status(400).json({
         success: false,
@@ -74,15 +63,27 @@ const createPatient = async (req, res) => {
       hba1c, bmi, rbs, genetics,
     } = result.data;
 
-    // Checks validated data against clinical warning thresholds.
-    // Warnings are informational — they do not block the record from being saved.
     const warnings = checkWarnings(result.data);
 
-    // Attempts to score the patient via ML; saves with pending status on any failure
-    // so patient data is never lost due to ML unavailability.
+    const year = new Date().getFullYear();
+    const countRow = await db.queryOne(
+      'SELECT COUNT(*) as count FROM patients WHERE YEAR(created_at) = YEAR(CURDATE())'
+    );
+    const sequence = String(countRow.count + 1).padStart(4, '0');
+    const patient_id = `PAT-${year}-${sequence}`;
+
+    await db.execute(
+      'INSERT INTO patients (patient_id, clerk_id, sex, social_life, genetics) VALUES (?, ?, ?, ?, ?)',
+      [patient_id, userId, sex, social_life, genetics ?? 0]
+    );
+
     let risk_score = null;
     let risk_category = 'pending';
     let top_factors = [];
+    let confidence_low = null;
+    let confidence_medium = null;
+    let confidence_high = null;
+    let low_confidence = false;
     let ml_pending = false;
     try {
       const mlResponse = await axios.post(`${ML_SERVICE_URL}/predict`, {
@@ -92,45 +93,49 @@ const createPatient = async (req, res) => {
         headers: { 'X-Internal-Secret': process.env.ML_INTERNAL_SECRET },
         timeout: 3000,
       });
-      ({ risk_score, risk_category, top_factors } = mlResponse.data);
+      ({ risk_score, risk_category, top_factors,
+         confidence_low, confidence_medium, confidence_high, low_confidence } = mlResponse.data);
     } catch (mlError) {
       logger.warn('ML service unavailable — saving patient with pending risk status:', mlError.message);
       ml_pending = true;
     }
 
-    // top_factors serialised to JSON string so MySQL can store it in the JSON column
     const top_factors_json = JSON.stringify(top_factors);
 
-    const sql = `
-            INSERT INTO patients
-                (clerk_id, age, sex, social_life,
-                 cholesterol, triglycerides, hdl, ldl, vldl,
-                 bp_systolic, bp_diastolic, hba1c, bmi, rbs,
-                 risk_score, risk_category, top_factors)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        `;
+    const visitResult = await db.execute(
+      `INSERT INTO visits
+        (patient_id, visit_date, age, bp_systolic, bp_diastolic,
+         cholesterol, triglycerides, hdl, ldl, vldl,
+         hba1c, bmi, rbs, risk_score, risk_category, top_factors,
+         confidence_low, confidence_medium, confidence_high, low_confidence)
+       VALUES (?, CURDATE(), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [patient_id, age, bp_systolic, bp_diastolic,
+       cholesterol, triglycerides, hdl, ldl, vldl,
+       hba1c, bmi, rbs, risk_score, risk_category, top_factors_json,
+       confidence_low, confidence_medium, confidence_high, low_confidence]
+    );
 
-    const values = [
-      userId, age, sex, social_life,
-      cholesterol, triglycerides, hdl, ldl, vldl,
-      bp_systolic, bp_diastolic, hba1c, bmi, rbs,
-      risk_score, risk_category, top_factors_json,
-    ];
+    await db.execute(
+      'INSERT INTO audit_log (clerk_id, action, patient_id, changed_fields) VALUES (?, ?, ?, ?)',
+      [userId, 'create', patient_id, JSON.stringify({ sex, social_life, genetics, age, hba1c })]
+    );
 
-    const dbResult = await db.execute(sql, values);
-
-    // Returns warnings alongside the patient data so the frontend can display
-    // them to the clinician without blocking the successful save
     res.status(201).json({
       success: true,
       message: 'Patient created successfully',
       warnings,
-      ...(ml_pending && { ml_pending: true }),
-      data: { patient_id: dbResult.insertId, risk_score, risk_category, top_factors },
+      ml_pending,
+      data: {
+        patient_id,
+        visit_id: visitResult.insertId,
+        risk_score,
+        risk_category,
+        top_factors,
+      },
     });
 
   } catch (error) {
-    logger.error('Error creating patient:', error.message);
+    logger.error('Error creating patient: ' + error.message + ' ' + error.stack);
     res.status(500).json({ success: false, message: 'Failed to create patient' });
   }
 };
@@ -141,10 +146,6 @@ const getAllPatients = async (req, res) => {
     const { userId } = req.auth;
     const { sortBy, riskLevel } = req.query;
 
-    let sql = 'SELECT * FROM patients WHERE clerk_id = ?';
-    const values = [userId];
-
-    // Validates riskLevel against allowed values before appending to the query
     if (riskLevel && riskLevel !== 'all') {
       if (!VALID_RISK_LEVELS.includes(riskLevel)) {
         return res.status(400).json({
@@ -152,19 +153,73 @@ const getAllPatients = async (req, res) => {
           message: 'Invalid riskLevel. Must be low, medium, or high',
         });
       }
-      sql += ' AND risk_category = ?';
+    }
+
+    // userId appears twice: once for the CTE WHERE clause, once for the outer WHERE clause
+    const values = [userId];
+    let outerWhere = 'WHERE p.clerk_id = ?';
+    values.push(userId);
+
+    if (riskLevel && riskLevel !== 'all') {
+      outerWhere += ' AND l.risk_category = ?';
       values.push(riskLevel);
     }
 
-    // Defaults to newest-first order; switches to highest risk first when sortBy is "risk"
-    sql += sortBy === 'risk' ? ' ORDER BY risk_score DESC' : ' ORDER BY patient_id DESC';
+    const orderClause = sortBy === 'date'
+      ? 'ORDER BY l.visit_date DESC'
+      : 'ORDER BY l.risk_score DESC';
 
-    const patients = await db.query(sql, values);
+    const sql = `
+      WITH ranked_visits AS (
+        SELECT v.*,
+          ROW_NUMBER() OVER (
+            PARTITION BY v.patient_id
+            ORDER BY v.visit_date DESC
+          ) AS rn
+        FROM visits v
+        INNER JOIN patients p ON v.patient_id = p.patient_id
+        WHERE p.clerk_id = ?
+      ),
+      latest AS (
+        SELECT * FROM ranked_visits WHERE rn = 1
+      ),
+      previous AS (
+        SELECT * FROM ranked_visits WHERE rn = 2
+      )
+      SELECT
+        p.patient_id, p.sex, p.social_life, p.genetics, p.created_at,
+        l.visit_id, l.visit_date, l.age, l.hba1c, l.bmi,
+        l.bp_systolic, l.bp_diastolic, l.rbs, l.cholesterol,
+        l.triglycerides, l.hdl, l.ldl, l.vldl,
+        l.risk_score, l.risk_category, l.top_factors,
+        l.confidence_low, l.confidence_medium, l.confidence_high,
+        l.low_confidence,
+        prev.risk_category AS previous_risk_category
+      FROM patients p
+      INNER JOIN latest l ON p.patient_id = l.patient_id
+      LEFT JOIN previous prev ON p.patient_id = prev.patient_id
+      ${outerWhere}
+      ${orderClause}
+    `;
 
-    // Parses top_factors from JSON string back to array for each patient
-    const parsed = patients.map(parseTopFactors);
+    const riskOrder = { low: 0, medium: 1, high: 2, pending: -1 };
 
-    res.status(200).json({ success: true, count: parsed.length, data: parsed });
+    const rows = await db.query(sql, values);
+    const patients = rows.map((row) => {
+      parseTopFactors(row);
+
+      let trend = 'stable';
+      if (row.previous_risk_category) {
+        const curr = riskOrder[row.risk_category] ?? -1;
+        const prev = riskOrder[row.previous_risk_category] ?? -1;
+        if (curr > prev) trend = 'worsening';
+        else if (curr < prev) trend = 'improving';
+      }
+
+      return { ...row, trend };
+    });
+
+    res.status(200).json({ success: true, count: patients.length, data: patients });
 
   } catch (error) {
     logger.error('Error fetching patients:', error.message);
@@ -176,17 +231,31 @@ const getAllPatients = async (req, res) => {
 const getPatientById = async (req, res) => {
   try {
     const { userId } = req.auth;
+
     const patient = await db.queryOne(
-        'SELECT * FROM patients WHERE patient_id = ? AND clerk_id = ?',
-        [req.params.id, userId]
+      'SELECT * FROM patients WHERE patient_id = ? AND clerk_id = ?',
+      [req.params.id, userId]
     );
 
-    // Returns 404 rather than an empty object so the frontend can handle it unambiguously
     if (!patient) {
       return res.status(404).json({ success: false, message: 'Patient not found' });
     }
 
-    res.status(200).json({ success: true, data: parseTopFactors(patient) });
+    const visits = await db.query(
+      'SELECT * FROM visits WHERE patient_id = ? ORDER BY visit_date DESC',
+      [req.params.id]
+    );
+
+    visits.forEach(parseTopFactors);
+
+    res.status(200).json({
+      success: true,
+      data: {
+        patient,
+        visits,
+        latest_visit: visits[0] || null,
+      },
+    });
 
   } catch (error) {
     logger.error('Error fetching patient:', error.message);
@@ -200,17 +269,15 @@ const updatePatient = async (req, res) => {
     const { id } = req.params;
     const { userId } = req.auth;
 
-    // Confirms the patient exists and belongs to this clinician before any validation or ML calls
     const existing = await db.queryOne(
-        'SELECT * FROM patients WHERE patient_id = ? AND clerk_id = ?',
-        [id, userId]
+      'SELECT * FROM patients WHERE patient_id = ? AND clerk_id = ?',
+      [id, userId]
     );
 
     if (!existing) {
       return res.status(404).json({ success: false, message: 'Patient not found' });
     }
 
-    // Runs the same manual presence check as createPatient before passing data to Zod
     const missingFields = getMissingFields(req.body, REQUIRED_UPDATE_FIELDS);
     if (missingFields.length > 0) {
       return res.status(400).json({
@@ -220,9 +287,7 @@ const updatePatient = async (req, res) => {
       });
     }
 
-    // Uses the base schema (without clerk_id) since the clinician cannot change after creation
     const result = patientSchema.safeParse(req.body);
-
     if (!result.success) {
       return res.status(400).json({
         success: false,
@@ -238,13 +303,27 @@ const updatePatient = async (req, res) => {
       hba1c, bmi, rbs, genetics,
     } = result.data;
 
-    // Checks validated data against clinical warning thresholds
     const warnings = checkWarnings(result.data);
 
-    // Re-scores the patient; saves with pending status on any failure so no data is lost.
+    const identityChanged =
+      sex !== existing.sex ||
+      social_life !== existing.social_life ||
+      (genetics ?? 0) !== existing.genetics;
+
+    if (identityChanged) {
+      await db.execute(
+        'UPDATE patients SET sex=?, social_life=?, genetics=? WHERE patient_id=? AND clerk_id=?',
+        [sex, social_life, genetics ?? 0, id, userId]
+      );
+    }
+
     let risk_score = null;
     let risk_category = 'pending';
     let top_factors = [];
+    let confidence_low = null;
+    let confidence_medium = null;
+    let confidence_high = null;
+    let low_confidence = false;
     let ml_pending = false;
     try {
       const mlResponse = await axios.post(`${ML_SERVICE_URL}/predict`, {
@@ -254,43 +333,44 @@ const updatePatient = async (req, res) => {
         headers: { 'X-Internal-Secret': process.env.ML_INTERNAL_SECRET },
         timeout: 3000,
       });
-      ({ risk_score, risk_category, top_factors } = mlResponse.data);
+      ({ risk_score, risk_category, top_factors,
+         confidence_low, confidence_medium, confidence_high, low_confidence } = mlResponse.data);
     } catch (mlError) {
       logger.warn('ML service unavailable — saving patient with pending risk status:', mlError.message);
       ml_pending = true;
     }
 
-    // Extracts all three ML outputs including the refreshed top_factors for this patient
     const top_factors_json = JSON.stringify(top_factors);
 
-    const sql = `
-            UPDATE patients SET
-                age=?, sex=?, social_life=?,
-                cholesterol=?, triglycerides=?, hdl=?, ldl=?, vldl=?,
-                bp_systolic=?, bp_diastolic=?,
-                hba1c=?, bmi=?, rbs=?,
-                risk_score=?, risk_category=?, top_factors=?
-            WHERE patient_id=? AND clerk_id=?
-        `;
+    const visitResult = await db.execute(
+      `INSERT INTO visits
+        (patient_id, visit_date, age, bp_systolic, bp_diastolic,
+         cholesterol, triglycerides, hdl, ldl, vldl,
+         hba1c, bmi, rbs, risk_score, risk_category, top_factors,
+         confidence_low, confidence_medium, confidence_high, low_confidence)
+       VALUES (?, CURDATE(), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [id, age, bp_systolic, bp_diastolic,
+       cholesterol, triglycerides, hdl, ldl, vldl,
+       hba1c, bmi, rbs, risk_score, risk_category, top_factors_json,
+       confidence_low, confidence_medium, confidence_high, low_confidence]
+    );
 
-    const values = [
-      age, sex, social_life,
-      cholesterol, triglycerides, hdl, ldl, vldl,
-      bp_systolic, bp_diastolic,
-      hba1c, bmi, rbs,
-      risk_score, risk_category, top_factors_json,
-      id, userId,
-    ];
+    await db.execute(
+      'INSERT INTO audit_log (clerk_id, action, patient_id, changed_fields) VALUES (?, ?, ?, ?)',
+      [userId, 'update', id, JSON.stringify({ age, hba1c, bmi, bp_systolic, bp_diastolic, rbs })]
+    );
 
-    await db.execute(sql, values);
-
-    // Returns warnings alongside updated risk details so the frontend can display them
     res.status(200).json({
       success: true,
-      message: 'Patient updated successfully',
+      message: 'Visit added successfully',
       warnings,
-      ...(ml_pending && { ml_pending: true }),
-      data: { patient_id: parseInt(id), risk_score, risk_category, top_factors },
+      ml_pending,
+      data: {
+        patient_id: id,
+        visit_id: visitResult.insertId,
+        risk_score,
+        risk_category,
+      },
     });
 
   } catch (error) {
@@ -305,17 +385,24 @@ const deletePatient = async (req, res) => {
     const { id } = req.params;
     const { userId } = req.auth;
 
-    // Checks the patient exists and belongs to this clinician before deletion
     const existing = await db.queryOne(
-        'SELECT * FROM patients WHERE patient_id = ? AND clerk_id = ?',
-        [id, userId]
+      'SELECT * FROM patients WHERE patient_id = ? AND clerk_id = ?',
+      [id, userId]
     );
 
     if (!existing) {
       return res.status(404).json({ success: false, message: 'Patient not found' });
     }
 
-    await db.execute('DELETE FROM patients WHERE patient_id = ? AND clerk_id = ?', [id, userId]);
+    await db.execute(
+      'DELETE FROM patients WHERE patient_id = ? AND clerk_id = ?',
+      [id, userId]
+    );
+
+    await db.execute(
+      'INSERT INTO audit_log (clerk_id, action, patient_id, changed_fields) VALUES (?, ?, ?, ?)',
+      [userId, 'delete', id, JSON.stringify({ deleted_patient_id: id })]
+    );
 
     res.status(200).json({ success: true, message: 'Patient deleted successfully' });
 
