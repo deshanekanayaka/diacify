@@ -167,7 +167,7 @@ const getAllPatients = async (req, res) => {
 
     const orderClause = sortBy === 'date'
       ? 'ORDER BY l.visit_date DESC'
-      : 'ORDER BY l.risk_score DESC';
+      : 'ORDER BY l.risk_score DESC, l.hba1c DESC, p.patient_id ASC';
 
     const sql = `
       WITH ranked_visits AS (
@@ -222,9 +222,9 @@ const getAllPatients = async (req, res) => {
     res.status(200).json({ success: true, count: patients.length, data: patients });
 
   } catch (error) {
-    logger.error('Error fetching patients:', error.message);
-    res.status(500).json({ success: false, message: 'Failed to fetch patients' });
-  }
+  logger.error('Error fetching patients: ' + error.message, { timestamp: new Date().toISOString() });
+  res.status(500).json({ success: false, message: 'Failed to fetch patients' });
+}
 };
 
 // GET /api/patients/:id
@@ -308,7 +308,7 @@ const updatePatient = async (req, res) => {
     const identityChanged =
       sex !== existing.sex ||
       social_life !== existing.social_life ||
-      (genetics ?? 0) !== existing.genetics;
+      (genetics ?? 0) !== Number(existing.genetics);
 
     if (identityChanged) {
       await db.execute(
@@ -412,4 +412,103 @@ const deletePatient = async (req, res) => {
   }
 };
 
-export { createPatient, getAllPatients, getPatientById, updatePatient, deletePatient };
+// POST /api/patients/:id/visits
+const createVisit = async (req, res) => {
+  try {
+    const clerk_id = req.auth.userId;
+    const patientId = req.params.id;
+
+    const {
+      visit_date, age, bp_systolic, bp_diastolic, hba1c, bmi,
+      rbs, cholesterol, triglycerides, hdl, ldl, vldl,
+    } = req.body;
+
+    const required = { visit_date, age, bp_systolic, bp_diastolic, hba1c, bmi };
+    const hasMissing = Object.values(required).some((v) => v === undefined || v === null || v === '');
+    if (hasMissing) {
+      return res.status(400).json({
+        success: false,
+        message: 'Missing required fields: visit_date, age, bp_systolic, bp_diastolic, hba1c, bmi',
+      });
+    }
+
+    const patientRow = await db.queryOne(
+      'SELECT patient_id, sex, genetics FROM patients WHERE patient_id = ? AND clerk_id = ?',
+      [patientId, clerk_id]
+    );
+
+    if (!patientRow) {
+      return res.status(404).json({ success: false, message: 'Patient not found' });
+    }
+
+    const rbsVal = rbs ?? null;
+    const cholesterolVal = cholesterol ?? null;
+    const triglyceridesVal = triglycerides ?? null;
+    const hdlVal = hdl ?? null;
+    const ldlVal = ldl ?? null;
+    const vldlVal = vldl ?? null;
+
+    const visitResult = await db.execute(
+      `INSERT INTO visits (patient_id, visit_date, age, bp_systolic, bp_diastolic,
+        hba1c, bmi, rbs, cholesterol, triglycerides, hdl, ldl, vldl,
+        risk_score, risk_category, low_confidence)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, null, 'pending', false)`,
+      [patientId, visit_date, age, bp_systolic, bp_diastolic,
+       hba1c, bmi, rbsVal, cholesterolVal, triglyceridesVal, hdlVal, ldlVal, vldlVal]
+    );
+    const visitId = visitResult.insertId;
+
+    let ml_pending = false;
+    try {
+      const mlResponse = await axios.post(
+        `${ML_SERVICE_URL}/predict`,
+        {
+          age, sex: patientRow.sex, hba1c, bmi, bp_systolic, bp_diastolic,
+          rbs: rbs || 0, triglycerides: triglycerides || 0,
+          hdl: hdl || 0, ldl: ldl || 0, genetics: patientRow.genetics || 0,
+        },
+        {
+          headers: { 'X-Internal-Secret': process.env.ML_INTERNAL_SECRET },
+          timeout: 3000,
+        }
+      );
+
+      const {
+        risk_score, risk_category, top_factors,
+        confidence_low, confidence_medium, confidence_high, low_confidence,
+      } = mlResponse.data;
+
+      await db.execute(
+        `UPDATE visits SET
+          risk_score = ?, risk_category = ?, top_factors = ?,
+          confidence_low = ?, confidence_medium = ?, confidence_high = ?,
+          low_confidence = ?
+         WHERE visit_id = ?`,
+        [risk_score, risk_category, JSON.stringify(top_factors),
+         confidence_low, confidence_medium, confidence_high, low_confidence,
+         visitId]
+      );
+    } catch (mlError) {
+      logger.warn('ML service unavailable — visit saved with pending risk status:', mlError.message);
+      ml_pending = true;
+    }
+
+    await db.execute(
+      'INSERT INTO audit_log (clerk_id, action, patient_id, changed_fields) VALUES (?, ?, ?, ?)',
+      [clerk_id, 'create', patientId, JSON.stringify({ visit_date, age, hba1c, bmi, bp_systolic, bp_diastolic })]
+    );
+
+    const finalVisitRow = await db.queryOne(
+      'SELECT * FROM visits WHERE visit_id = ?',
+      [visitId]
+    );
+
+    return res.status(201).json({ success: true, ml_pending, data: finalVisitRow });
+
+  } catch (error) {
+    logger.error('Error creating visit: ' + error.message + ' ' + error.stack);
+    res.status(500).json({ success: false, message: 'Failed to create visit' });
+  }
+};
+
+export { createPatient, getAllPatients, getPatientById, updatePatient, deletePatient, createVisit };
