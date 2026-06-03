@@ -27,7 +27,7 @@ bash 008_run_migrations.sh
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `DB_USER` | `root` | MySQL username |
-| `DB_PASS` | _(required)_ | MySQL password |
+| `DB_PASS` | _(empty)_ | MySQL password. Optional if MySQL allows passwordless login. Required for production. |
 | `DB_HOST` | `localhost` | MySQL host |
 
 Example:

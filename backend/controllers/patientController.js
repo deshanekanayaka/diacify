@@ -308,7 +308,7 @@ const updatePatient = async (req, res) => {
     const identityChanged =
       sex !== existing.sex ||
       social_life !== existing.social_life ||
-      (genetics ?? 0) !== existing.genetics;
+      (genetics ?? 0) !== Number(existing.genetics);
 
     if (identityChanged) {
       await db.execute(
