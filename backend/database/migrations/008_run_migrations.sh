@@ -11,7 +11,7 @@ echo "Running Diacify migrations against diacify_db..."
 
 for file in 001 002 003 004 005 006 007; do
   echo "Running ${file}..."
-  mysql -u "$DB_USER" ${DB_PASS:+-p"$DB_PASS"} -h "$DB_HOST" < ${file}_*.sql
+  mysql -u "$DB_USER" ${DB_PASS:+-p"$DB_PASS"} -h "$DB_HOST" -D diacify_db < ${file}_*.sql
   if [ $? -ne 0 ]; then
     echo "FAILED at ${file}. Stopping."
     exit 1

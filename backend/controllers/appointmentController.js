@@ -27,6 +27,12 @@ const createAppointment = async (req, res) => {
 
     // Validate scheduled_date is in the future
     const appointmentDate = new Date(scheduled_date);
+    if (Number.isNaN(appointmentDate.getTime())) {
+      return res.status(400).json({
+        success: false,
+        message: 'scheduled_date must be a valid date',
+      });
+    }
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 

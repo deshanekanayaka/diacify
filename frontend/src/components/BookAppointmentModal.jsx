@@ -37,7 +37,6 @@ const BookAppointmentModal = ({ isOpen, onClose, patientId, onBooked }) => {
             setDate(getDefaultDate());
             setType('Routine Review');
             setNotes('');
-            setSubmitting(false);
             setError(null);
         }
     }, [isOpen]);
@@ -45,6 +44,7 @@ const BookAppointmentModal = ({ isOpen, onClose, patientId, onBooked }) => {
     if (!isOpen) return null;
 
     const handleBook = async () => {
+        if (submitting) return;
         setSubmitting(true);
         setError(null);
         try {
@@ -85,7 +85,8 @@ const BookAppointmentModal = ({ isOpen, onClose, patientId, onBooked }) => {
                     <button
                         type="button"
                         onClick={onClose}
-                        className="text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg p-1.5 transition-colors cursor-pointer"
+                        disabled={submitting}
+                        className="text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg p-1.5 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                         <X size={18} />
                     </button>

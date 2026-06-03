@@ -441,13 +441,20 @@ const createVisit = async (req, res) => {
       return res.status(404).json({ success: false, message: 'Patient not found' });
     }
 
+    const rbsVal = rbs ?? null;
+    const cholesterolVal = cholesterol ?? null;
+    const triglyceridesVal = triglycerides ?? null;
+    const hdlVal = hdl ?? null;
+    const ldlVal = ldl ?? null;
+    const vldlVal = vldl ?? null;
+
     const visitResult = await db.execute(
       `INSERT INTO visits (patient_id, visit_date, age, bp_systolic, bp_diastolic,
         hba1c, bmi, rbs, cholesterol, triglycerides, hdl, ldl, vldl,
         risk_score, risk_category, low_confidence)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, null, 'pending', false)`,
       [patientId, visit_date, age, bp_systolic, bp_diastolic,
-       hba1c, bmi, rbs, cholesterol, triglycerides, hdl, ldl, vldl]
+       hba1c, bmi, rbsVal, cholesterolVal, triglyceridesVal, hdlVal, ldlVal, vldlVal]
     );
     const visitId = visitResult.insertId;
 

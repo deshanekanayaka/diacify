@@ -69,15 +69,18 @@ export default function PatientDetailPage({ clerkId }) {
   useEffect(() => { fetchAppointments(); }, [fetchAppointments]);
 
   const category = useMemo(() => {
-    const rc = (patient?.latest_visit?.risk_category || '').toLowerCase();
-    return rc === 'high' || rc === 'medium' || rc === 'low' ? rc : 'low';
+    const rc = (patient?.latest_visit?.risk_category ?? '').toLowerCase();
+    if (rc === 'high' || rc === 'medium' || rc === 'low') return rc;
+    return 'pending';
   }, [patient]);
 
   const riskPanelClass = category === 'high'
     ? 'bg-red-100 border-red-200'
     : category === 'medium'
     ? 'bg-amber-100 border-amber-200'
-    : 'bg-green-100 border-green-200';
+    : category === 'low'
+    ? 'bg-green-100 border-green-200'
+    : 'bg-gray-100 border-gray-200';
 
   const formatDate = (iso) => {
     if (!iso) return '—';
@@ -177,7 +180,10 @@ export default function PatientDetailPage({ clerkId }) {
           </button>
           <div className="flex items-center gap-3">
             <h1 className="text-2xl font-bold text-gray-900">Patient {pt.patient_id}</h1>
-            <RiskPill category={category} />
+            {category === 'pending'
+              ? <span className="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium bg-gray-100 text-gray-500">Pending</span>
+              : <RiskPill category={category} />
+            }
           </div>
           <div className="flex items-center gap-4 mt-2 flex-wrap">
             {[
@@ -217,7 +223,7 @@ export default function PatientDetailPage({ clerkId }) {
         <div className={`border rounded-xl p-6 ${riskPanelClass}`}>
           <div className="text-center mb-4">
             <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">CURRENT RISK SCORE</p>
-            <div className="text-6xl font-bold text-gray-900">{Math.round(Number(lv.risk_score ?? 0))}</div>
+            <div className="text-6xl font-bold text-gray-900">{category === 'pending' ? '—' : Math.round(Number(lv.risk_score))}</div>
             <p className="text-sm text-gray-600 mt-2">out of 100</p>
           </div>
           {/* Confidence bars */}
@@ -375,8 +381,8 @@ export default function PatientDetailPage({ clerkId }) {
             </thead>
             <tbody>
               {(patient.visits || []).map((v, idx) => {
-                const vrc = (v.risk_category || '').toLowerCase();
-                const visitCategory = vrc === 'high' || vrc === 'medium' || vrc === 'low' ? vrc : 'low';
+                const vrc = (v.risk_category ?? '').toLowerCase();
+                const visitCategory = vrc === 'high' || vrc === 'medium' || vrc === 'low' ? vrc : 'pending';
                 const rowId = v.visit_id ?? idx;
                 return (
                   <React.Fragment key={rowId}>
@@ -393,8 +399,13 @@ export default function PatientDetailPage({ clerkId }) {
                       <td className="px-2 py-3 text-sm">{v.bmi ?? '—'}</td>
                       <td className="px-2 py-3 text-sm">{v.bp_systolic ? `${v.bp_systolic}` : '—'}</td>
                       <td className="px-2 py-3 text-sm">{v.rbs ?? '—'}</td>
-                      <td className="px-2 py-3 text-sm">{Math.round(Number(v.risk_score ?? 0))}</td>
-                      <td className="px-2 py-3 text-sm"><RiskPill category={visitCategory} /></td>
+                      <td className="px-2 py-3 text-sm">{visitCategory === 'pending' ? '—' : Math.round(Number(v.risk_score))}</td>
+                      <td className="px-2 py-3 text-sm">
+                        {visitCategory === 'pending'
+                          ? <span className="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium bg-gray-100 text-gray-500">Pending</span>
+                          : <RiskPill category={visitCategory} />
+                        }
+                      </td>
                     </tr>
                     {expandedVisits.has(rowId) && (
                       <tr>

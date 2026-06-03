@@ -60,7 +60,8 @@ const AddVisitModal = ({ isOpen, onClose, patientId, onVisitAdded, latestVisit }
         const today = new Date();
         const monthsDiff = (today.getFullYear() - lastVisitDate.getFullYear()) * 12 + (today.getMonth() - lastVisitDate.getMonth());
         if (monthsDiff >= 12) {
-            return String(latestVisit.age + 1);
+            const yearsElapsed = Math.floor(monthsDiff / 12);
+            return String(latestVisit.age + yearsElapsed);
         }
         return String(latestVisit.age);
     };
@@ -88,7 +89,6 @@ const AddVisitModal = ({ isOpen, onClose, patientId, onVisitAdded, latestVisit }
         if (isOpen) {
             setForm(initialFormState);
             setError(null);
-            setSubmitting(false);
         }
     }, [isOpen, latestVisit]);
 
@@ -97,6 +97,15 @@ const AddVisitModal = ({ isOpen, onClose, patientId, onVisitAdded, latestVisit }
     const set = (field) => (e) => setForm((prev) => ({ ...prev, [field]: e.target.value }));
 
     const handleRecord = async () => {
+        if (submitting) return;
+
+        const requiredFields = ['age', 'bp_systolic', 'bp_diastolic', 'hba1c', 'bmi'];
+        const missing = requiredFields.filter((f) => form[f] === '');
+        if (missing.length > 0) {
+            setError(`Required fields missing: ${missing.join(', ')}`);
+            return;
+        }
+
         setSubmitting(true);
         setError(null);
         try {
@@ -108,12 +117,12 @@ const AddVisitModal = ({ isOpen, onClose, patientId, onVisitAdded, latestVisit }
                 bp_diastolic: Number(form.bp_diastolic),
                 hba1c: Number(form.hba1c),
                 bmi: Number(form.bmi),
-                rbs: Number(form.rbs),
-                cholesterol: Number(form.cholesterol),
-                triglycerides: Number(form.triglycerides),
-                hdl: Number(form.hdl),
-                ldl: Number(form.ldl),
-                vldl: Number(form.vldl),
+                rbs: form.rbs !== '' ? Number(form.rbs) : null,
+                cholesterol: form.cholesterol !== '' ? Number(form.cholesterol) : null,
+                triglycerides: form.triglycerides !== '' ? Number(form.triglycerides) : null,
+                hdl: form.hdl !== '' ? Number(form.hdl) : null,
+                ldl: form.ldl !== '' ? Number(form.ldl) : null,
+                vldl: form.vldl !== '' ? Number(form.vldl) : null,
             };
             await axios.post(
                 `${BASE_URL}/api/patients/${patientId}/visits`,
@@ -144,7 +153,8 @@ const AddVisitModal = ({ isOpen, onClose, patientId, onVisitAdded, latestVisit }
                     <button
                         type="button"
                         onClick={onClose}
-                        className="text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg p-1.5 transition-colors cursor-pointer"
+                        disabled={submitting}
+                        className="text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg p-1.5 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                         <X size={18} />
                     </button>
