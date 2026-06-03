@@ -1,6 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import { X } from 'lucide-react';
 import { useAuth } from '@clerk/clerk-react';
+import axios from 'axios';
+
+const BASE_URL = import.meta.env.VITE_API_URL;
 
 const getToday = () => {
     const d = new Date();
@@ -45,23 +48,85 @@ const SectionLabel = ({ children }) => (
     </h3>
 );
 
-const AddVisitModal = ({ isOpen, onClose, patientId }) => {
+const AddVisitModal = ({ isOpen, onClose, patientId, onVisitAdded, latestVisit }) => {
     const { getToken } = useAuth();
-    const [form, setForm] = useState({ ...EMPTY_VISIT, visit_date: getToday() });
+    const [submitting, setSubmitting] = useState(false);
+    const [error, setError] = useState(null);
+
+    // Calculate pre-fill age based on time elapsed since last visit
+    const getPrefilledAge = () => {
+        if (!latestVisit) return '';
+        const lastVisitDate = new Date(latestVisit.visit_date);
+        const today = new Date();
+        const monthsDiff = (today.getFullYear() - lastVisitDate.getFullYear()) * 12 + (today.getMonth() - lastVisitDate.getMonth());
+        if (monthsDiff >= 12) {
+            return String(latestVisit.age + 1);
+        }
+        return String(latestVisit.age);
+    };
+
+    const prefilledAge = getPrefilledAge();
+
+    const initialFormState = {
+        visit_date: getToday(),
+        age: prefilledAge,
+        bp_systolic: latestVisit?.bp_systolic ?? '',
+        bp_diastolic: latestVisit?.bp_diastolic ?? '',
+        hba1c: latestVisit?.hba1c ?? '',
+        bmi: latestVisit?.bmi ?? '',
+        rbs: latestVisit?.rbs ?? '',
+        cholesterol: latestVisit?.cholesterol ?? '',
+        triglycerides: latestVisit?.triglycerides ?? '',
+        hdl: latestVisit?.hdl ?? '',
+        ldl: latestVisit?.ldl ?? '',
+        vldl: latestVisit?.vldl ?? '',
+    };
+
+    const [form, setForm] = useState(initialFormState);
 
     useEffect(() => {
         if (isOpen) {
-            setForm({ ...EMPTY_VISIT, visit_date: getToday() });
+            setForm(initialFormState);
+            setError(null);
+            setSubmitting(false);
         }
-    }, [isOpen]);
+    }, [isOpen, latestVisit]);
 
     if (!isOpen) return null;
 
     const set = (field) => (e) => setForm((prev) => ({ ...prev, [field]: e.target.value }));
 
-    const handleRecord = () => {
-        // TODO: wire to POST /api/patients/:id/visits
-        onClose();
+    const handleRecord = async () => {
+        setSubmitting(true);
+        setError(null);
+        try {
+            const token = await getToken();
+            const payload = {
+                visit_date: form.visit_date,
+                age: Number(form.age),
+                bp_systolic: Number(form.bp_systolic),
+                bp_diastolic: Number(form.bp_diastolic),
+                hba1c: Number(form.hba1c),
+                bmi: Number(form.bmi),
+                rbs: Number(form.rbs),
+                cholesterol: Number(form.cholesterol),
+                triglycerides: Number(form.triglycerides),
+                hdl: Number(form.hdl),
+                ldl: Number(form.ldl),
+                vldl: Number(form.vldl),
+            };
+            await axios.post(
+                `${BASE_URL}/api/patients/${patientId}/visits`,
+                payload,
+                { headers: { Authorization: `Bearer ${token}` } }
+            );
+            if (onVisitAdded) onVisitAdded();
+            onClose();
+        } catch (err) {
+            setError(err.response?.data?.message || err.message || 'Failed to save visit');
+        } finally {
+            setSubmitting(false);
+        }
     };
 
     return (
@@ -87,6 +152,13 @@ const AddVisitModal = ({ isOpen, onClose, patientId }) => {
 
                 {/* Scrollable form body */}
                 <div className="flex-1 overflow-y-auto px-6 py-5 space-y-6">
+
+                    {/* Error message */}
+                    {error && (
+                        <div className="bg-red-50 border border-red-200 rounded-lg px-4 py-3">
+                            <p className="text-sm text-red-700">{error}</p>
+                        </div>
+                    )}
 
                     {/* Visit Details */}
                     <div>
@@ -218,16 +290,18 @@ const AddVisitModal = ({ isOpen, onClose, patientId }) => {
                         <button
                             type="button"
                             onClick={onClose}
-                            className="px-4 py-2 text-sm font-medium text-gray-600 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors cursor-pointer"
+                            disabled={submitting}
+                            className="px-4 py-2 text-sm font-medium text-gray-600 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                         >
                             Cancel
                         </button>
                         <button
                             type="button"
                             onClick={handleRecord}
-                            className="px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors cursor-pointer"
+                            disabled={submitting}
+                            className="px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                         >
-                            Record Visit
+                            {submitting ? 'Saving...' : 'Record Visit'}
                         </button>
                     </div>
                 </div>

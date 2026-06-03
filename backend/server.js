@@ -6,8 +6,9 @@ import rateLimit from 'express-rate-limit';
 import { globalClerkMiddleware, requireClerkAuth } from './middleware/auth.js';
 import logger from './utils/logger.js';
 
-import patientsRouter  from './routes/patients.js';
-import analyticsRouter from './routes/analytics.js';
+import patientsRouter      from './routes/patients.js';
+import analyticsRouter     from './routes/analytics.js';
+import appointmentRoutes   from './routes/appointmentRoutes.js';
 
 const app  = express();
 const PORT = process.env.PORT || 3000;
@@ -91,7 +92,8 @@ app.get('/health', readLimiter, async (req, res) => {
 });
 
 app.use('/api/patients', readLimiter, requireClerkAuth, patientsRouter);
-app.use('/api/analytics',   readLimiter,  requireClerkAuth, analyticsRouter);
+app.use('/api/analytics',    readLimiter, requireClerkAuth, analyticsRouter);
+app.use('/api/appointments', readLimiter, requireClerkAuth, appointmentRoutes);
 
 // 404 handler 
 app.use((req, res) => {

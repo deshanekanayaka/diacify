@@ -234,7 +234,7 @@ def calculate_risk_score(probabilities: np.ndarray, predicted_class: int) -> flo
     elif predicted_class == 1:
         return 40 + (prob_medium * 30)
     else:
-        return prob_low * 40
+        return prob_low * 39
 
 
 def calculate_risk_category(risk_score: float) -> str:

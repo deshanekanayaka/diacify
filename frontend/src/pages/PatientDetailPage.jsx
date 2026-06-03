@@ -12,38 +12,6 @@ import { ResponsiveContainer, LineChart, CartesianGrid, XAxis, YAxis, Line, Refe
 
 const BASE_URL = import.meta.env.VITE_API_URL;
 
-function Gauge({ value = 0, category }) {
-  const clamped = Math.max(0, Math.min(100, Number(value) || 0));
-
-  const W = 160;
-  const H = 90;
-  const cx = W / 2;
-  const cy = H - 10;
-  const r = 70;
-
-  // Track arc: full 180 degrees from left to right
-  const trackD = `M ${cx - r} ${cy} A ${r} ${r} 0 0 1 ${cx + r} ${cy}`;
-
-  // Value arc: 0% = left point, 100% = right point
-  // Angle goes from 180deg to 0deg (left to right)
-  const angle = Math.PI - (clamped / 100) * Math.PI;
-  const ex = cx + r * Math.cos(angle);
-  const ey = cy - r * Math.sin(angle);
-
-  // large-arc-flag is 1 if clamped > 50
-  const largeArc = clamped > 50 ? 1 : 0;
-  const valueD = `M ${cx - r} ${cy} A ${r} ${r} 0 ${largeArc} 1 ${ex} ${ey}`;
-
-  const arcColor = category === 'high' ? '#ef4444' : category === 'medium' ? '#f59e0b' : '#10b981';
-
-  return (
-    <svg width={W} height={H} viewBox={`0 0 ${W} ${H}`} className="block shrink-0">
-      <path d={trackD} fill="none" stroke="#e5e7eb" strokeWidth={12} strokeLinecap="round" />
-      <path d={valueD} fill="none" stroke={arcColor} strokeWidth={12} strokeLinecap="round" />
-      <circle cx={ex} cy={ey} r={5} fill={arcColor} />
-    </svg>
-  );
-}
 
 export default function PatientDetailPage({ clerkId }) {
   const { id } = useParams();
@@ -55,6 +23,7 @@ export default function PatientDetailPage({ clerkId }) {
   const [bookOpen, setBookOpen] = useState(false);
   const [visitOpen, setVisitOpen] = useState(false);
   const [expandedVisits, setExpandedVisits] = useState(new Set());
+  const [appointments, setAppointments] = useState([]);
 
   const toggleVisit = (rowId) => {
     setExpandedVisits(prev => {
@@ -85,8 +54,22 @@ export default function PatientDetailPage({ clerkId }) {
 
   useEffect(() => { fetchPatient(); }, [fetchPatient]);
 
+  const fetchAppointments = useCallback(async () => {
+    try {
+      const token = await getToken();
+      const res = await axios.get(`${BASE_URL}/api/appointments/${id}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.data?.success) setAppointments(res.data.data);
+    } catch {
+      setAppointments([]);
+    }
+  }, [id, getToken]);
+
+  useEffect(() => { fetchAppointments(); }, [fetchAppointments]);
+
   const category = useMemo(() => {
-    const rc = (patient?.risk_category || '').toLowerCase();
+    const rc = (patient?.latest_visit?.risk_category || '').toLowerCase();
     return rc === 'high' || rc === 'medium' || rc === 'low' ? rc : 'low';
   }, [patient]);
 
@@ -106,14 +89,14 @@ export default function PatientDetailPage({ clerkId }) {
     return `${dd}/${mm}/${yyyy}`;
   };
 
-  const topFactors = Array.isArray(patient?.top_factors) ? patient.top_factors : [];
+  const topFactors = Array.isArray(patient?.latest_visit?.top_factors) ? patient.latest_visit.top_factors : [];
 
   // Debug: log the patient object to see the full structure
   useEffect(() => {
     if (patient) {
       console.log('Patient object:', patient);
-      console.log('Top factors:', patient?.top_factors);
-      console.log('Confidence values:', { low: patient?.confidence_low, medium: patient?.confidence_medium, high: patient?.confidence_high });
+      console.log('Top factors:', patient?.latest_visit?.top_factors);
+      console.log('Confidence values:', { low: patient?.latest_visit?.confidence_low, medium: patient?.latest_visit?.confidence_medium, high: patient?.latest_visit?.confidence_high });
     }
   }, [patient]);
 
@@ -155,14 +138,19 @@ export default function PatientDetailPage({ clerkId }) {
   if (!patient) return null;
 
   const c = riskColorClass(category);
-  const hba1c = patient.HbA1c ?? patient.hba1c ?? null;
-  const bmi = patient.BMI ?? patient.bmi ?? null;
-  const rbs = patient.RBS ?? patient.rbs ?? null;
-  const sbp = patient.BP_Systolic ?? patient.bp_systolic ?? null;
-  const tg = patient.Triglycerides ?? patient.triglycerides ?? null;
+  const lv = patient.latest_visit || {};
+  const pt = patient.patient || {};
 
-  const visitDate = patient.created_at || patient.last_visit || patient.last_visit_date || null;
-  const lineData = [{ date: visitDate ? formatDate(visitDate) : '—', HbA1c: Number(hba1c ?? 0), Risk: Number(patient.risk_score ?? 0) }];
+  const bmi = lv.bmi ?? null;
+  const rbs = lv.rbs ?? null;
+  const sbp = lv.bp_systolic ?? null;
+  const tg = lv.triglycerides ?? null;
+
+  const lineData = [...(patient.visits || [])].reverse().map(v => ({
+    date: formatDate(v.visit_date),
+    HbA1c: Number(v.hba1c),
+    Risk: Number(v.risk_score),
+  }));
 
   const geneticsLabel = (val) => {
     const map = {
@@ -188,15 +176,15 @@ export default function PatientDetailPage({ clerkId }) {
             <ChevronLeft className="h-4 w-4" /> Back to dashboard
           </button>
           <div className="flex items-center gap-3">
-            <h1 className="text-2xl font-bold text-gray-900">Patient p{patient.patient_id}</h1>
+            <h1 className="text-2xl font-bold text-gray-900">Patient {pt.patient_id}</h1>
             <RiskPill category={category} />
           </div>
           <div className="flex items-center gap-4 mt-2 flex-wrap">
             {[
-              { label: null, value: `${patient.age ?? '—'} years` },
-              { label: null, value: patient.sex ? patient.sex.charAt(0).toUpperCase() + patient.sex.slice(1) : '—' },
-              { label: 'Social life', value: patient.social_life ?? '—' },
-              { label: 'Genetics', value: geneticsLabel(patient.genetics) },
+              { label: null, value: `${lv.age ?? '—'} years` },
+              { label: null, value: pt.sex ? pt.sex.charAt(0).toUpperCase() + pt.sex.slice(1) : '—' },
+              { label: 'Social life', value: pt.social_life ?? '—' },
+              { label: 'Genetics', value: geneticsLabel(pt.genetics) },
             ].map((item, i) => (
               <span key={i} className="text-sm text-gray-500">
                 {item.label
@@ -227,35 +215,31 @@ export default function PatientDetailPage({ clerkId }) {
       <div className="grid grid-cols-3 gap-6 mb-4">
         {/* Risk Score Panel */}
         <div className={`border rounded-xl p-6 ${riskPanelClass}`}>
-          {/* Gauge left, label + score right */}
-          <div className="flex items-center gap-6">
-            <Gauge value={Number(patient.risk_score ?? 0)} category={category} />
-            <div>
-              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">CURRENT RISK SCORE</p>
-              <div className="text-5xl font-bold text-gray-900">{Math.round(Number(patient.risk_score ?? 0))}</div>
-              <p className="text-xs text-gray-400 mt-1">out of 100</p>
-            </div>
+          <div className="text-center mb-4">
+            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">CURRENT RISK SCORE</p>
+            <div className="text-6xl font-bold text-gray-900">{Math.round(Number(lv.risk_score ?? 0))}</div>
+            <p className="text-sm text-gray-600 mt-2">out of 100</p>
           </div>
           {/* Confidence bars */}
           <div className="mt-3">
             <div className="flex items-center justify-between py-1.5">
               <span className="text-sm text-gray-600">Low</span>
-              {patient.confidence_low
-                ? <span className="font-medium">{Math.round(Number(patient.confidence_low))}%</span>
+              {lv.confidence_low
+                ? <span className="font-medium">{Math.round(Number(lv.confidence_low))}%</span>
                 : <span className="text-gray-400">Not available</span>
               }
             </div>
             <div className="flex items-center justify-between py-1.5">
               <span className="text-sm text-gray-600">Medium</span>
-              {patient.confidence_medium
-                ? <span className="font-medium">{Math.round(Number(patient.confidence_medium))}%</span>
+              {lv.confidence_medium
+                ? <span className="font-medium">{Math.round(Number(lv.confidence_medium))}%</span>
                 : <span className="text-gray-400">Not available</span>
               }
             </div>
             <div className="flex items-center justify-between py-1.5">
               <span className="text-sm text-gray-600">High</span>
-              {patient.confidence_high
-                ? <span className="font-medium">{Math.round(Number(patient.confidence_high))}%</span>
+              {lv.confidence_high
+                ? <span className="font-medium">{Math.round(Number(lv.confidence_high))}%</span>
                 : <span className="text-gray-400">Not available</span>
               }
             </div>
@@ -390,38 +374,47 @@ export default function PatientDetailPage({ clerkId }) {
               </tr>
             </thead>
             <tbody>
-              <tr className="border-b border-gray-100">
-                <td className="px-2 py-3">
-                  <ChevronRight
-                    size={14}
-                    className={`text-gray-400 cursor-pointer transition-transform ${expandedVisits.has(0) ? 'rotate-90' : ''}`}
-                    onClick={() => toggleVisit(0)}
-                  />
-                </td>
-                <td className="px-2 py-3 text-sm">{formatDate(visitDate)}</td>
-                <td className="px-2 py-3 text-sm">{hba1c ?? '—'}</td>
-                <td className="px-2 py-3 text-sm">{bmi ?? '—'}</td>
-                <td className="px-2 py-3 text-sm">{sbp ? `${sbp}` : '—'}</td>
-                <td className="px-2 py-3 text-sm">{rbs ?? '—'}</td>
-                <td className="px-2 py-3 text-sm">{Math.round(Number(patient.risk_score ?? 0))}</td>
-                <td className="px-2 py-3 text-sm"><RiskPill category={category} /></td>
-              </tr>
-              {expandedVisits.has(0) && (
-                <tr>
-                  <td colSpan={8}>
-                    <div className="grid grid-cols-4 gap-4 bg-gray-50 p-4 rounded-b-lg text-xs text-gray-600">
-                      {Object.entries(patient)
-                        .filter(([k]) => !['id', 'patient_id', 'created_at', 'updated_at', 'risk_score', 'risk_category'].includes(k))
-                        .map(([k, v]) => (
-                          <div key={k}>
-                            <div className="text-gray-400 uppercase text-xs">{k}</div>
-                            <div className="font-medium text-gray-800">{String(v)}</div>
+              {(patient.visits || []).map((v, idx) => {
+                const vrc = (v.risk_category || '').toLowerCase();
+                const visitCategory = vrc === 'high' || vrc === 'medium' || vrc === 'low' ? vrc : 'low';
+                const rowId = v.visit_id ?? idx;
+                return (
+                  <React.Fragment key={rowId}>
+                    <tr className="border-b border-gray-100">
+                      <td className="px-2 py-3">
+                        <ChevronRight
+                          size={14}
+                          className={`text-gray-400 cursor-pointer transition-transform ${expandedVisits.has(rowId) ? 'rotate-90' : ''}`}
+                          onClick={() => toggleVisit(rowId)}
+                        />
+                      </td>
+                      <td className="px-2 py-3 text-sm">{formatDate(v.visit_date)}</td>
+                      <td className="px-2 py-3 text-sm">{v.hba1c ?? '—'}</td>
+                      <td className="px-2 py-3 text-sm">{v.bmi ?? '—'}</td>
+                      <td className="px-2 py-3 text-sm">{v.bp_systolic ? `${v.bp_systolic}` : '—'}</td>
+                      <td className="px-2 py-3 text-sm">{v.rbs ?? '—'}</td>
+                      <td className="px-2 py-3 text-sm">{Math.round(Number(v.risk_score ?? 0))}</td>
+                      <td className="px-2 py-3 text-sm"><RiskPill category={visitCategory} /></td>
+                    </tr>
+                    {expandedVisits.has(rowId) && (
+                      <tr>
+                        <td colSpan={8}>
+                          <div className="grid grid-cols-4 gap-4 bg-gray-50 p-4 rounded-b-lg text-xs text-gray-600">
+                            {Object.entries(v)
+                              .filter(([k]) => !['visit_id', 'patient_id', 'created_at', 'updated_at', 'risk_score', 'risk_category'].includes(k))
+                              .map(([k, val]) => (
+                                <div key={k}>
+                                  <div className="text-gray-400 uppercase text-xs">{k}</div>
+                                  <div className="font-medium text-gray-800">{String(val)}</div>
+                                </div>
+                              ))}
                           </div>
-                        ))}
-                    </div>
-                  </td>
-                </tr>
-              )}
+                        </td>
+                      </tr>
+                    )}
+                  </React.Fragment>
+                );
+              })}
             </tbody>
           </table>
         </div>
@@ -449,11 +442,33 @@ export default function PatientDetailPage({ clerkId }) {
             </tr>
           </thead>
           <tbody>
-            <tr>
-              <td colSpan={4} className="text-center text-sm text-gray-400 py-8">
-                No appointments booked yet
-              </td>
-            </tr>
+            {appointments.length === 0 ? (
+              <tr>
+                <td colSpan={4} className="text-center text-sm text-gray-400 py-8">
+                  No appointments booked yet
+                </td>
+              </tr>
+            ) : appointments.map((a, idx) => {
+              const statusClass = a.status === 'completed'
+                ? 'bg-green-100 text-green-700'
+                : a.status === 'cancelled'
+                ? 'bg-red-100 text-red-700'
+                : 'bg-amber-100 text-amber-700';
+              return (
+                <tr key={a.appointment_id ?? idx} className="border-b border-gray-100">
+                  <td className="px-4 py-3 text-sm">{formatDate(a.scheduled_date)}</td>
+                  <td className="px-4 py-3 text-sm">
+                    {a.appointment_type ? a.appointment_type.charAt(0).toUpperCase() + a.appointment_type.slice(1) : '—'}
+                  </td>
+                  <td className="px-4 py-3 text-sm">
+                    <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium ${statusClass}`}>
+                      {a.status ? a.status.charAt(0).toUpperCase() + a.status.slice(1) : '—'}
+                    </span>
+                  </td>
+                  <td className="px-4 py-3 text-sm text-gray-600">{a.notes ?? '—'}</td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </div>
@@ -461,12 +476,15 @@ export default function PatientDetailPage({ clerkId }) {
       <BookAppointmentModal
         isOpen={bookOpen}
         onClose={() => setBookOpen(false)}
-        patientId={patient.patient_id}
+        patientId={pt.patient_id}
+        onBooked={fetchAppointments}
       />
       <AddVisitModal
         isOpen={visitOpen}
         onClose={() => setVisitOpen(false)}
-        patientId={patient.patient_id}
+        patientId={pt.patient_id}
+        latestVisit={patient.latest_visit}
+        onVisitAdded={fetchPatient}
       />
     </div>
   );

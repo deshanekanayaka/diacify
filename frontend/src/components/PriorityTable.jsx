@@ -122,7 +122,7 @@ const PriorityTable = ({ patients = [], loading, error, onRefresh }) => {
           <div className="modal-panel-sm" style={{ textAlign: 'center' }}>
             <div style={{ fontSize: 48, marginBottom: 12 }}>✅</div>
             <h2 className="modal-title" style={{ justifyContent: 'center', marginBottom: 8 }}>
-              <strong>p{savedId}</strong> Patient Saved Successfully
+            <strong>{savedId}</strong> Patient Saved Successfully
             </h2>
             <p style={{ fontSize: 14, color: 'var(--gray-500)', marginBottom: 24 }}>
               The patient record has been saved and risk score updated.
@@ -144,7 +144,7 @@ const PriorityTable = ({ patients = [], loading, error, onRefresh }) => {
             Delete Patient
           </AlertDialogTitle>
           <AlertDialogDescription className="text-sm text-gray-500 mb-6">
-            Are you sure you want to delete <strong>p{deleteTarget?.patient_id}</strong>? This cannot be undone.
+            Are you sure you want to delete <strong>{deleteTarget?.patient_id}</strong>?
           </AlertDialogDescription>
           {deleteError && (
             <div className="text-sm text-destructive border border-destructive/30 bg-destructive/10 rounded-md p-2 mb-4">{deleteError}</div>
@@ -232,7 +232,7 @@ const PriorityTable = ({ patients = [], loading, error, onRefresh }) => {
                       <TableRow key={p.patient_id} className="border-b border-gray-100 last:border-b-0 hover:bg-gray-50 transition-colors duration-100">
                         <TableCell>
                           <Link to={`/patients/${p.patient_id}`} className="text-blue-600 underline hover:text-blue-700">
-                            p{p.patient_id}
+                            {p.patient_id}
                           </Link>
                         </TableCell>
                         <TableCell>{p.age ?? '—'}</TableCell>
