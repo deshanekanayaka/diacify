@@ -194,7 +194,18 @@ const getAllPatients = async (req, res) => {
         l.risk_score, l.risk_category, l.top_factors,
         l.confidence_low, l.confidence_medium, l.confidence_high,
         l.low_confidence,
-        prev.risk_category AS previous_risk_category
+        prev.risk_category AS previous_risk_category,
+        (
+          SELECT JSON_ARRAYAGG(s.risk_score)
+          FROM (
+            SELECT risk_score, visit_date
+            FROM visits
+            WHERE patient_id = p.patient_id
+              AND risk_score IS NOT NULL
+            ORDER BY visit_date ASC
+            LIMIT 5
+          ) s
+        ) AS sparkline
       FROM patients p
       INNER JOIN latest l ON p.patient_id = l.patient_id
       LEFT JOIN previous prev ON p.patient_id = prev.patient_id
@@ -207,6 +218,12 @@ const getAllPatients = async (req, res) => {
     const rows = await db.query(sql, values);
     const patients = rows.map((row) => {
       parseTopFactors(row);
+
+      // Parse sparkline: MySQL returns JSON_ARRAYAGG result as a string
+      if (typeof row.sparkline === 'string') {
+        try { row.sparkline = JSON.parse(row.sparkline); } catch { row.sparkline = []; }
+      }
+      if (!Array.isArray(row.sparkline)) row.sparkline = [];
 
       let trend = 'stable';
       if (row.previous_risk_category) {
