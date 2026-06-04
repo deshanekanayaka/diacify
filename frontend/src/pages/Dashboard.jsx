@@ -73,7 +73,8 @@ const Dashboard = ({ clerkId }) => {
       if (riskLevel === 'high') result.high++;
       if (riskLevel === 'medium') result.medium++;
       if (riskLevel === 'low') result.low++;
-      if (patient.trend === 'worsening') result.worsening++;
+      const trend = (patient.trend || '').toLowerCase();
+      if (trend === 'worsening') result.worsening++;
     });
     return result;
   }, [patients]);
