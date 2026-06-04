@@ -9,14 +9,21 @@ const BASE_URL = import.meta.env.VITE_API_URL;
 
 // clerkId is passed from App.jsx and used to fetch only this clinician's patients
 const Dashboard = ({ clerkId }) => {
-  const [patients, setPatients] = useState([]); //Patients list fetched from backend
-  const [loading, setLoading] = useState(true); //loading indicators in StatCards and PriorityTable
-  const [error, setError] = useState(null); //error messages in PriorityTable
+  const [patients, setPatients] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
   const [showAdd, setShowAdd] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
   const [savedId, setSavedId] = useState(null);
 
+  const [alertDismissed, setAlertDismissed] = useState(false);
+
   const { getToken } = useAuth();
+
+  // Reset dismissal whenever the patients list refreshes so the banner reappears if still relevant
+  useEffect(() => {
+    setAlertDismissed(false);
+  }, [patients]);
 
   // useCallback ensures fetchPatients is only re-created when clerkId changes
   // otherwise a new function reference is created on every render, causing infinite re-fetches
@@ -58,15 +65,15 @@ const Dashboard = ({ clerkId }) => {
     return () => clearTimeout(timer);
   }, [showSuccess]);
 
-  //Only recalculates when the patients array actually changes. Or the loop would run
-  // on every re-render
+  // Only recalculates when the patients array actually changes
   const counts = useMemo(() => {
-    const result = { total: patients.length, high: 0, medium: 0, low: 0 };
+    const result = { total: patients.length, high: 0, medium: 0, low: 0, worsening: 0 };
     patients.forEach((patient) => {
       const riskLevel = (patient.risk_category || '').toLowerCase();
       if (riskLevel === 'high') result.high++;
       if (riskLevel === 'medium') result.medium++;
       if (riskLevel === 'low') result.low++;
+      if (patient.trend === 'worsening') result.worsening++;
     });
     return result;
   }, [patients]);
@@ -127,35 +134,40 @@ const Dashboard = ({ clerkId }) => {
           <div className="text-3xl font-bold text-gray-900">{loading ? '…' : counts.total}</div>
         </div>
         {/* High Risk */}
-<div className="bg-[#FFE9E5] border border-[#FFD2CA] rounded-xl p-5">
-  <div className="text-xs font-semibold text-gray-500 uppercase tracking-wider">
-    High Risk
-  </div>
-  <div className="text-3xl font-bold text-gray-900">
-    {loading ? '…' : counts.high}
-  </div>
-</div>
-
-{/* Medium Risk */}
-<div className="bg-[#FFF2D0] border border-[#FFE6A3] rounded-xl p-5">
-  <div className="text-xs font-semibold text-gray-500 uppercase tracking-wider">
-    Medium Risk
-  </div>
-  <div className="text-3xl font-bold text-gray-900">
-    {loading ? '…' : counts.medium}
-  </div>
-</div>
-
-{/* Low Risk */}
-<div className="bg-[#D6FDE6] border border-[#B4F6D0] rounded-xl p-5">
-  <div className="text-xs font-semibold text-gray-500 uppercase tracking-wider">
-    Low Risk
-  </div>
-  <div className="text-3xl font-bold text-gray-900">
-    {loading ? '…' : counts.low}
-  </div>
-</div>
+        <div className="bg-[#FFE9E5] border border-[#FFD2CA] rounded-xl p-5">
+          <div className="text-xs font-semibold text-gray-500 uppercase tracking-wider">High Risk</div>
+          <div className="text-3xl font-bold text-gray-900">{loading ? '…' : counts.high}</div>
+        </div>
+        {/* Medium Risk */}
+        <div className="bg-[#FFF2D0] border border-[#FFE6A3] rounded-xl p-5">
+          <div className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Medium Risk</div>
+          <div className="text-3xl font-bold text-gray-900">{loading ? '…' : counts.medium}</div>
+        </div>
+        {/* Low Risk */}
+        <div className="bg-[#D6FDE6] border border-[#B4F6D0] rounded-xl p-5">
+          <div className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Low Risk</div>
+          <div className="text-3xl font-bold text-gray-900">{loading ? '…' : counts.low}</div>
+        </div>
       </div>
+
+      {/* Deterioration alert banner — only shown when 1+ patients have worsened since last visit */}
+      {!loading && counts.worsening > 0 && !alertDismissed && (
+        <div className="flex items-center justify-between gap-3 mb-6 rounded-xl border border-red-200 bg-red-50 px-5 py-3">
+          <div className="flex items-center gap-3">
+            <span className="text-red-500 text-lg">⚠</span>
+            <p className="text-sm text-red-700 font-medium">
+              {counts.worsening} {counts.worsening === 1 ? 'patient has' : 'patients have'} moved to a higher risk category since their last visit.
+            </p>
+          </div>
+          <button
+            onClick={() => setAlertDismissed(true)}
+            className="text-red-400 hover:text-red-600 transition-colors cursor-pointer flex-shrink-0"
+            aria-label="Dismiss alert"
+          >
+            ✕
+          </button>
+        </div>
+      )}
 
       {/* Main content + right sidebar layout */}
       <div className="flex gap-6">

@@ -89,17 +89,17 @@ const PriorityTable = ({ patients = [], loading, error, onRefresh }) => {
 
   const riskCategory = (rc) => (rc || '').toLowerCase();
 
-    const formatDate = (iso) => {
-      if (!iso) return '—';
-      const d = new Date(iso);
-      if (isNaN(d.getTime())) return '—';
-      const dd = String(d.getDate()).padStart(2, '0');
-      const mm = String(d.getMonth() + 1).padStart(2, '0');
-      const yyyy = d.getFullYear();
-      return `${dd}/${mm}/${yyyy}`;
-    };
+  const formatDate = (iso) => {
+    if (!iso) return '—';
+    const d = new Date(iso);
+    if (isNaN(d.getTime())) return '—';
+    const dd = String(d.getDate()).padStart(2, '0');
+    const mm = String(d.getMonth() + 1).padStart(2, '0');
+    const yyyy = d.getFullYear();
+    return `${dd}/${mm}/${yyyy}`;
+  };
 
-    const riskTextClass = (cat) => riskColorClass(cat === 'high' || cat === 'medium' || cat === 'low' ? cat : 'low').text;
+  const riskTextClass = (cat) => riskColorClass(cat === 'high' || cat === 'medium' || cat === 'low' ? cat : 'low').text;
 
   return (
     <>
@@ -205,14 +205,13 @@ const PriorityTable = ({ patients = [], loading, error, onRefresh }) => {
         {!loading && !error && (
           <div className="p-2">
             <Table>
-              {/* item 6 */}
               <TableHeader>
                 <TableRow>
                   <TableHead className="w-35 bg-gray-50 text-xs font-bold text-gray-600 uppercase tracking-wider border-b border-gray-200 px-4 py-3">PATIENT ID</TableHead>
                   <TableHead className="w-20 bg-gray-50 text-xs font-bold text-gray-600 uppercase tracking-wider border-b border-gray-200 px-4 py-3">AGE</TableHead>
                   <TableHead className="w-25 bg-gray-50 text-xs font-bold text-gray-600 uppercase tracking-wider border-b border-gray-200 px-4 py-3">SEX</TableHead>
                   <TableHead className="w-40 bg-gray-50 text-xs font-bold text-gray-600 uppercase tracking-wider border-b border-gray-200 px-4 py-3">LAST VISIT</TableHead>
-                  <TableHead className="w-50 bg-gray-50 text-xs font-bold text-gray-600 uppercase tracking-wider border-b border-gray-200 px-4 py-3">RISK SCORE</TableHead>
+                  <TableHead className="w-50 bg-gray-50 text-xs font-bold text-gray-600 uppercase tracking-wider border-b border-gray-200 px-4 py-3 text-left">RISK SCORE</TableHead>
                   <TableHead className="w-30 bg-gray-50 text-xs font-bold text-gray-600 uppercase tracking-wider border-b border-gray-200 px-4 py-3">RISK</TableHead>
                   <TableHead className="w-20 bg-gray-50 text-xs font-bold text-gray-600 uppercase tracking-wider border-b border-gray-200 px-4 py-3 text-right pr-4">ACTIONS</TableHead>
                 </TableRow>
@@ -251,7 +250,6 @@ const PriorityTable = ({ patients = [], loading, error, onRefresh }) => {
                                 <EllipsisVertical className="h-5 w-5" />
                               </button>
                             </DropdownMenuTrigger>
-                            {/* item 12 */}
                             <DropdownMenuContent
                               align="end"
                               sideOffset={4}
