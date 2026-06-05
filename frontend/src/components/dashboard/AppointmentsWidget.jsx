@@ -25,7 +25,13 @@ const AppointmentsWidget = () => {
         const res = await axios.get(`${BASE_URL}/api/appointments/upcoming`, {
           headers: { Authorization: `Bearer ${token}` },
         });
-        if (!cancelled) setAppointments(res.data.data || []);
+        if (!cancelled) {
+          if (!res.data.success) {
+            setError(true);
+          } else {
+            setAppointments(res.data.data || []);
+          }
+        }
       } catch {
         if (!cancelled) setError(true);
       } finally {

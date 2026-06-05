@@ -21,6 +21,7 @@ export default function NetworkErrorBanner() {
     const retry = () => {
         setRetrying(true);
         api.get('/health').then(() => {
+            setRetrying(false);
             window.dispatchEvent(new Event('network-restored'));
             setVisible(false);
         }).catch(() => { setRetrying(false); });

@@ -136,21 +136,23 @@ const getUpcomingAppointments = async (req, res) => {
        FROM appointments
        WHERE clerk_id = ?
          AND status = 'scheduled'
-         AND scheduled_date <= DATE_ADD(CURDATE(), INTERVAL 7 DAY)
+         AND scheduled_date BETWEEN CURDATE() AND DATE_ADD(CURDATE(), INTERVAL 7 DAY)
        ORDER BY scheduled_date ASC`,
       [clerk_id]
     );
 
-    const today = new Date().toISOString().slice(0, 10);
+    const now = new Date();
+    const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
     const data = (rows || []).map((row) => {
-      const rowDate = new Date(row.scheduled_date).toISOString().slice(0, 10);
+      const d = new Date(row.scheduled_date);
+      const rowDate = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
       return {
         appointment_id: row.appointment_id,
         patient_id: row.patient_id,
         scheduled_date: rowDate,
         appointment_type: row.appointment_type,
         notes: row.notes,
-        is_overdue: rowDate < today,
+        is_overdue: rowDate < todayStr,
       };
     });
 
