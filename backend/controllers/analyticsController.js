@@ -1,96 +1,166 @@
 import { query } from '../config/database.js';
 import logger from '../utils/logger.js';
 
-// Fetches aggregated analytics data for a given clinician's patient list
-const getAnalytics = async (req, res) => {
-    // Reads the clinician's Clerk ID from the request URL parameters
-    const { clerk_id } = req.query;
+const emptyRiskCategoryCounts = month => ({
+    month,
+    low: 0,
+    medium: 0,
+    high: 0,
+});
 
-    // Rejects the request early if no clerk_id was provided
-    if (!clerk_id) {
-        return res.status(400).json({ error: 'clerk_id is required' });
+const emptyHba1cAverages = month => ({
+    month,
+    avgLow: null,
+    avgMedium: null,
+    avgHigh: null,
+});
+
+const normalizeRiskCategory = riskCategory => String(riskCategory || '').toLowerCase();
+
+const pivotRiskCategoryCounts = rows => {
+    const byMonth = new Map();
+
+    rows.forEach(row => {
+        if (!byMonth.has(row.month)) {
+            byMonth.set(row.month, emptyRiskCategoryCounts(row.month));
+        }
+
+        const monthData = byMonth.get(row.month);
+        const category = normalizeRiskCategory(row.risk_category);
+
+        if (category === 'low' || category === 'medium' || category === 'high') {
+            monthData[category] = Number(row.count);
+        }
+    });
+
+    return Array.from(byMonth.values());
+};
+
+const pivotHba1cAverages = rows => {
+    const byMonth = new Map();
+    const categoryKeys = {
+        low: 'avgLow',
+        medium: 'avgMedium',
+        high: 'avgHigh',
+    };
+
+    rows.forEach(row => {
+        if (!byMonth.has(row.month)) {
+            byMonth.set(row.month, emptyHba1cAverages(row.month));
+        }
+
+        const monthData = byMonth.get(row.month);
+        const category = normalizeRiskCategory(row.risk_category);
+        const averageKey = categoryKeys[category];
+
+        if (averageKey) {
+            monthData[averageKey] = row.avg_hba1c === null ? null : Number(row.avg_hba1c);
+        }
+    });
+
+    return Array.from(byMonth.values());
+};
+
+// Fetches aggregated analytics data for the authenticated clinician's patient list
+const getAnalytics = async (req, res) => {
+    const clerkId = req.auth?.userId;
+
+    if (!clerkId) {
+        return res.status(401).json({ error: 'Authenticated user is required' });
     }
 
     try {
-        // Groups patients into 10-year age buckets, split by risk category
-        const ageDistribution = await query(
+        const riskCategoryRows = await query(
             `SELECT
-                CASE
-                    WHEN age BETWEEN 20 AND 29 THEN '20-29'
-                    WHEN age BETWEEN 30 AND 39 THEN '30-39'
-                    WHEN age BETWEEN 40 AND 49 THEN '40-49'
-                    WHEN age BETWEEN 50 AND 59 THEN '50-59'
-                    WHEN age BETWEEN 60 AND 69 THEN '60-69'
-                    -- Catches all patients aged 70 and older
-                    WHEN age >= 70             THEN '70+'
-                    -- Fallback for ages outside the expected range
-                    ELSE 'Other'
-                END AS age_group,
-                -- Included so the chart can stack bars by severity
-                risk_category,
+                DATE_FORMAT(v.visit_date, '%Y-%m') AS month,
+                v.risk_category,
                 COUNT(*) AS count
-            FROM patients
-            -- Scopes results to only this clinician's patients
-            WHERE clerk_id = ?
-            -- One row per unique age group and risk level pair
-            GROUP BY age_group, risk_category
-            ORDER BY age_group`,
-            [clerk_id]
-        );
-
-        // Counts patients per 10-point risk score band for the histogram; excludes unscored records
-        const riskScoreDistribution = await query(
-            `SELECT
-                CASE
-                    WHEN risk_score BETWEEN 0  AND 9.99  THEN '0-10'
-                    WHEN risk_score BETWEEN 10 AND 19.99 THEN '10-20'
-                    WHEN risk_score BETWEEN 20 AND 29.99 THEN '20-30'
-                    WHEN risk_score BETWEEN 30 AND 39.99 THEN '30-40'
-                    WHEN risk_score BETWEEN 40 AND 49.99 THEN '40-50'
-                    WHEN risk_score BETWEEN 50 AND 59.99 THEN '50-60'
-                    WHEN risk_score BETWEEN 60 AND 69.99 THEN '60-70'
-                    WHEN risk_score BETWEEN 70 AND 79.99 THEN '70-80'
-                    WHEN risk_score BETWEEN 80 AND 89.99 THEN '80-90'
-                    -- Upper bound is inclusive at 100
-                    WHEN risk_score BETWEEN 90 AND 100   THEN '90-100'
-                END AS score_band,
-                COUNT(*) AS count
-            FROM patients
-            -- Scopes results to this clinician's patients
-            WHERE clerk_id = ?
-            -- Excludes patients who have not been scored yet
-              AND risk_score IS NOT NULL
-            -- One row per 10-point band, ordered for the histogram x-axis
-            GROUP BY score_band
-            ORDER BY score_band`,
-            [clerk_id]
-        );
-
-        // Groups patients by the month they were added and averages their risk scores.
-        // This shows whether the overall risk of the clinician's patient cohort is
-        // rising or falling over time — the health trend line chart.
-        const riskTrend = await query(
-            `SELECT
-                DATE_FORMAT(created_at, '%Y-%m') AS month,
-                ROUND(AVG(risk_score), 1)         AS avg_risk_score,
-                COUNT(*)                           AS patient_count
-            FROM patients
-            WHERE clerk_id = ?
-              AND risk_score IS NOT NULL
-            GROUP BY month
+            FROM visits v
+            JOIN patients p ON v.patient_id = p.patient_id
+            WHERE p.clerk_id = ?
+              AND v.visit_date >= DATE_SUB(CURDATE(), INTERVAL 12 MONTH)
+            GROUP BY month, v.risk_category
             ORDER BY month ASC`,
-            [clerk_id]
+            [clerkId]
         );
 
-        // MySQL returns COUNT(*) as a string. Cast to Number so chart libraries receive numeric values
+        const hba1cRows = await query(
+            `SELECT
+                DATE_FORMAT(v.visit_date, '%Y-%m') AS month,
+                v.risk_category,
+                ROUND(AVG(v.hba1c), 2) AS avg_hba1c
+            FROM visits v
+            JOIN patients p ON v.patient_id = p.patient_id
+            WHERE p.clerk_id = ?
+              AND v.visit_date >= DATE_SUB(CURDATE(), INTERVAL 12 MONTH)
+              AND v.hba1c IS NOT NULL
+            GROUP BY month, v.risk_category
+            ORDER BY month ASC`,
+            [clerkId]
+        );
+
+        const riskScoreDistributionRows = await query(
+            `SELECT
+                score_band,
+                COUNT(*) AS count
+            FROM (
+                SELECT
+                    CASE
+                        WHEN risk_score >= 0  AND risk_score < 10 THEN '0-10'
+                        WHEN risk_score >= 10 AND risk_score < 20 THEN '10-20'
+                        WHEN risk_score >= 20 AND risk_score < 30 THEN '20-30'
+                        WHEN risk_score >= 30 AND risk_score < 40 THEN '30-40'
+                        WHEN risk_score >= 40 AND risk_score < 50 THEN '40-50'
+                        WHEN risk_score >= 50 AND risk_score < 60 THEN '50-60'
+                        WHEN risk_score >= 60 AND risk_score < 70 THEN '60-70'
+                        WHEN risk_score >= 70 AND risk_score < 80 THEN '70-80'
+                        WHEN risk_score >= 80 AND risk_score < 90 THEN '80-90'
+                        WHEN risk_score >= 90 AND risk_score <= 100 THEN '90-100'
+                    END AS score_band
+                FROM (
+                    SELECT
+                        v.patient_id,
+                        v.risk_score,
+                        ROW_NUMBER() OVER (
+                            PARTITION BY v.patient_id
+                            ORDER BY v.visit_date DESC
+                        ) AS visit_rank
+                    FROM visits v
+                    JOIN patients p ON v.patient_id = p.patient_id
+                    WHERE p.clerk_id = ?
+                ) ranked_visits
+                WHERE visit_rank = 1
+                  AND risk_score IS NOT NULL
+            ) latest_scores
+            WHERE score_band IS NOT NULL
+            GROUP BY score_band
+            ORDER BY FIELD(
+                score_band,
+                '0-10',
+                '10-20',
+                '20-30',
+                '30-40',
+                '40-50',
+                '50-60',
+                '60-70',
+                '70-80',
+                '80-90',
+                '90-100'
+            )`,
+            [clerkId]
+        );
+
+        const riskCategoryMigration = pivotRiskCategoryCounts(riskCategoryRows);
+        const hba1cByRiskGroup = pivotHba1cAverages(hba1cRows);
+        const riskScoreDistribution = riskScoreDistributionRows.map(row => ({
+            score_band: row.score_band,
+            count: Number(row.count),
+        }));
+
         res.json({
-            ageDistribution: ageDistribution.map(r => ({ ...r, count: Number(r.count) })),
-            riskScoreDistribution: riskScoreDistribution.map(r => ({ ...r, count: Number(r.count) })),
-            riskTrend: riskTrend.map(r => ({
-                month: r.month,
-                avg_risk_score: Number(r.avg_risk_score),
-                patient_count: Number(r.patient_count),
-            })),
+            riskCategoryMigration,
+            hba1cByRiskGroup,
+            riskScoreDistribution,
         });
 
     } catch (error) {
