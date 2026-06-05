@@ -11,9 +11,9 @@ const useAnalytics = () => {
     // Initialised with empty arrays matching the API response shape —
     // charts render safely before data arrives without crashing on undefined
     const [data, setData] = useState({
-        ageDistribution: [],
+        riskCategoryMigration: [],
+        hba1cByRiskGroup: [],
         riskScoreDistribution: [],
-        riskTrend: [],
     });
 
     // Starts as true so the loading state is correct before the first fetch runs
@@ -32,7 +32,7 @@ const useAnalytics = () => {
             try {
                 const token = await getToken();
                 const res = await fetch(
-                    `${API_BASE}/api/analytics?clerk_id=${user.id}`,
+                    `${API_BASE}/api/analytics`,
                     {
                         signal: controller.signal,
                         headers: { Authorization: `Bearer ${token}` },
