@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useAuth } from '@clerk/clerk-react';
-import axios from 'axios';
+import axios from '../utils/axiosConfig';
 import { RiskPill, Sparkline, TrendArrow } from '@/components/risk-ui';
 import { riskColorClass } from '@/lib/risk';
 import { Skeleton } from '@/components/ui/skeleton';

@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import axios from 'axios';
+import axios from '../utils/axiosConfig';
 import { useAuth } from '@clerk/clerk-react';
 import PriorityTable from '../components/PriorityTable';
 import AddPatientModal from '../components/AddPatientModal';
+import AppointmentsWidget from '../components/dashboard/AppointmentsWidget';
 import { Plus } from 'lucide-react';
 
 const BASE_URL = import.meta.env.VITE_API_URL;
@@ -27,6 +28,7 @@ const Dashboard = ({ clerkId }) => {
 
   // useCallback ensures fetchPatients is only re-created when clerkId changes
   // otherwise a new function reference is created on every render, causing infinite re-fetches
+  
   const fetchPatients = useCallback(async () => {
     try {
       setLoading(true);
@@ -185,10 +187,7 @@ const Dashboard = ({ clerkId }) => {
 
         {/* This week's appointments widget on right (fixed width) */}
         <div className="w-72 flex-shrink-0">
-          <div className="bg-white rounded-xl border border-gray-200 p-5">
-            <h3 className="text-sm font-semibold text-gray-900 mb-4">This week's appointments</h3>
-            <div className="text-sm text-gray-400">No upcoming appointments</div>
-          </div>
+          <AppointmentsWidget />
         </div>
       </div>
     </div>

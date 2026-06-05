@@ -126,4 +126,41 @@ const getAppointmentsByPatient = async (req, res) => {
   }
 };
 
-export { createAppointment, getAppointmentsByPatient };
+// GET /api/appointments/upcoming
+const getUpcomingAppointments = async (req, res) => {
+  try {
+    const { userId: clerk_id } = req.auth;
+
+    const rows = await db.query(
+      `SELECT appointment_id, patient_id, scheduled_date, appointment_type, notes
+       FROM appointments
+       WHERE clerk_id = ?
+         AND status = 'scheduled'
+         AND scheduled_date BETWEEN CURDATE() AND DATE_ADD(CURDATE(), INTERVAL 7 DAY)
+       ORDER BY scheduled_date ASC`,
+      [clerk_id]
+    );
+
+    const now = new Date();
+    const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+    const data = (rows || []).map((row) => {
+      const d = new Date(row.scheduled_date);
+      const rowDate = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+      return {
+        appointment_id: row.appointment_id,
+        patient_id: row.patient_id,
+        scheduled_date: rowDate,
+        appointment_type: row.appointment_type,
+        notes: row.notes,
+        is_overdue: rowDate < todayStr,
+      };
+    });
+
+    res.status(200).json({ success: true, data });
+  } catch (error) {
+    logger.error('Error fetching upcoming appointments: ' + error.message + ' ' + error.stack);
+    res.status(500).json({ success: false, message: 'Failed to fetch upcoming appointments' });
+  }
+};
+
+export { createAppointment, getAppointmentsByPatient, getUpcomingAppointments };
