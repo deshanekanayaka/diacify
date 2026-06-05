@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import axios from 'axios';
+import axios from '../utils/axiosConfig';
 import { useAuth } from '@clerk/clerk-react';
 import { Link } from 'react-router-dom';
 import EditPatientModal from './EditPatientModal';

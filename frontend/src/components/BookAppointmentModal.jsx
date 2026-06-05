@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { X, ChevronDown } from 'lucide-react';
 import { useAuth } from '@clerk/clerk-react';
-import axios from 'axios';
+import axios from '../utils/axiosConfig';
 
 const BASE_URL = import.meta.env.VITE_API_URL;
 

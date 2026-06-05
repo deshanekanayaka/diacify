@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import axios from 'axios';
+import axios from '../utils/axiosConfig';
 import { useUser, useAuth } from '@clerk/clerk-react';
 import PatientFormModal, { EMPTY_FORM } from './PatientFormModal';
 

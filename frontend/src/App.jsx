@@ -1,4 +1,6 @@
 import { Routes, Route, Navigate, Link, useLocation } from 'react-router-dom';
+import ErrorBoundary from './components/ErrorBoundary';
+import NetworkErrorBanner from './components/NetworkErrorBanner';
 import {
     SignIn,
     SignUp,
@@ -138,6 +140,8 @@ function ProtectedRoute({ children }) {
 // Defines all client-side routes and their auth requirements
 export default function App() {
     return (
+        <ErrorBoundary>
+        <NetworkErrorBanner />
         <Routes>
 
             {/* Landing page — accessible without authentication */}
@@ -225,5 +229,6 @@ export default function App() {
             <Route path="*" element={<Navigate to="/" replace />} />
 
         </Routes>
+        </ErrorBoundary>
     );
 }
