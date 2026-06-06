@@ -35,6 +35,10 @@ jobs:
         run: pip install -r requirements.txt
         working-directory: machine-learning
 
+      - name: Train model for tests
+        working-directory: machine-learning
+        run: python train_model.py
+
       - name: Run pytest
         env:
           ML_INTERNAL_SECRET: ${{ secrets.ML_INTERNAL_SECRET }}

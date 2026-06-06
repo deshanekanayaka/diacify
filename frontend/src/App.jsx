@@ -63,7 +63,7 @@ function AppSidebar({ user }) {
             {/* Nav links */}
             <div className="flex-1 px-2 py-3">
                 <nav className="space-y-1">
-                    {NAV_LINKS.map(({ to, label, Icon }) => {
+                    {NAV_LINKS.map(({ to, label }) => {
                         const isActive = pathname === to;
                         return (
                             <Link
@@ -122,7 +122,7 @@ function SidebarLayout({ user, children }) {
 // Wraps any route that requires the user to be signed in
 function ProtectedRoute({ children }) {
     // isLoaded becomes true once Clerk has finished checking the session
-    const { isLoaded, isSignedIn, user } = useUser();
+    const { isLoaded, user } = useUser();
 
     // Holds rendering until Clerk has resolved the auth state
     if (!isLoaded) return <LoadingScreen />;
@@ -171,10 +171,10 @@ export default function App() {
                 path="/dashboard"
                 element={
                     <ProtectedRoute>
-                        {(user, Layout) => (
-                            <Layout user={user}>
+                        {(user) => (
+                            <SidebarLayout user={user}>
                                 <Dashboard clerkId={user.id} />
-                            </Layout>
+                            </SidebarLayout>
                         )}
                     </ProtectedRoute>
                 }
@@ -188,10 +188,10 @@ export default function App() {
                     // with the user object so the child component receives clerkId without
                     // needing to access Clerk directly
                     <ProtectedRoute>
-                        {(user, Layout) => (
-                            <Layout user={user}>
+                        {(user) => (
+                            <SidebarLayout user={user}>
                                 <Analytics clerkId={user.id} />
-                            </Layout>
+                            </SidebarLayout>
                         )}
                     </ProtectedRoute>
                 }
@@ -202,10 +202,10 @@ export default function App() {
                 path="/appointments"
                 element={
                     <ProtectedRoute>
-                        {(user, Layout) => (
-                            <Layout user={user}>
+                        {(user) => (
+                            <SidebarLayout user={user}>
                                 <Appointments />
-                            </Layout>
+                            </SidebarLayout>
                         )}
                     </ProtectedRoute>
                 }
@@ -216,10 +216,10 @@ export default function App() {
                 path="/patients/:id"
                 element={
                     <ProtectedRoute>
-                        {(user, Layout) => (
-                            <Layout user={user}>
+                        {(user) => (
+                            <SidebarLayout user={user}>
                                 <PatientDetailPage clerkId={user.id} />
-                            </Layout>
+                            </SidebarLayout>
                         )}
                     </ProtectedRoute>
                 }

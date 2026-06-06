@@ -3,7 +3,6 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { useAuth } from '@clerk/clerk-react';
 import axios from '../utils/axiosConfig';
 import { RiskPill, Sparkline, TrendArrow } from '@/components/risk-ui';
-import { riskColorClass } from '@/lib/risk';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import BookAppointmentModal from '../components/BookAppointmentModal';
@@ -140,7 +139,6 @@ export default function PatientDetailPage({ clerkId }) {
 
   if (!patient) return null;
 
-  const c = riskColorClass(category);
   const lv = patient.latest_visit || {};
   const pt = patient.patient || {};
 

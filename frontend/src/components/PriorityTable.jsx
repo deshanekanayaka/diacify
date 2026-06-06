@@ -7,7 +7,6 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { RiskPill } from '@/components/risk-ui';
-import { riskColorClass } from '@/lib/risk';
 import { EllipsisVertical } from 'lucide-react';
 
 const BASE_URL = import.meta.env.VITE_API_URL;
@@ -98,8 +97,6 @@ const PriorityTable = ({ patients = [], loading, error, onRefresh }) => {
     const yyyy = d.getFullYear();
     return `${dd}/${mm}/${yyyy}`;
   };
-
-  const riskTextClass = (cat) => riskColorClass(cat === 'high' || cat === 'medium' || cat === 'low' ? cat : 'low').text;
 
   return (
     <>

@@ -69,8 +69,6 @@ const PatientFormModal = ({ isOpen, onClose, title, subtitle, initialValues, onS
     useEffect(() => {
         if (isOpen) {
             reset(initialValues ?? EMPTY_FORM);
-            setWarnings({});
-            setPendingData(null);
         }
     }, [isOpen, initialValues, reset]);
 

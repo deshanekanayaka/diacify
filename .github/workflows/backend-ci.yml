@@ -24,7 +24,7 @@ jobs:
         image: mysql:8.0
         env:
           MYSQL_ROOT_PASSWORD: rootpassword
-          MYSQL_DATABASE: diacify_test
+          MYSQL_DATABASE: diacify_db
         ports:
           - 3306:3306
         options: >-
@@ -54,11 +54,11 @@ jobs:
           MYSQL_PORT: 3306
           MYSQL_USER: root
           MYSQL_PASSWORD: rootpassword
-          MYSQL_DATABASE: diacify_test
+          MYSQL_DATABASE: diacify_db
         run: |
           for file in backend/database/migrations/00[1-5]_*.sql; do
             echo "Running migration: $file"
-            mysql -h 127.0.0.1 -P 3306 -u root -prootpassword diacify_test < "$file"
+            mysql -h 127.0.0.1 -P 3306 -u root -prootpassword diacify_db < "$file"
           done
 
       - name: Run tests
@@ -68,7 +68,7 @@ jobs:
           TEST_DB_PORT: 3306
           TEST_DB_USER: root
           TEST_DB_PASSWORD: rootpassword
-          TEST_DB_NAME: diacify_test
+          TEST_DB_NAME: diacify_db
           CLERK_SECRET_KEY: ${{ secrets.CLERK_SECRET_KEY }}
           ML_INTERNAL_SECRET: ${{ secrets.ML_INTERNAL_SECRET }}
           ML_SERVICE_URL: http://localhost:8001

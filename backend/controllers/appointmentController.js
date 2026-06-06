@@ -126,6 +126,60 @@ const getAppointmentsByPatient = async (req, res) => {
   }
 };
 
+// GET /api/appointments
+const getAllAppointments = async (req, res) => {
+  try {
+    const { userId: clerk_id } = req.auth;
+
+    const rows = await db.query(
+      `SELECT a.appointment_id, a.patient_id, a.scheduled_date,
+              a.appointment_type, a.notes, a.status
+       FROM appointments a
+       JOIN patients p ON a.patient_id = p.patient_id
+       WHERE p.clerk_id = ?
+       ORDER BY a.scheduled_date ASC`,
+      [clerk_id]
+    );
+
+    const todayStr = new Date().toISOString().slice(0, 10);
+
+    const formatRow = (row) => {
+      const dateStr = row.scheduled_date instanceof Date
+        ? row.scheduled_date.toISOString().slice(0, 10)
+        : String(row.scheduled_date).slice(0, 10);
+      return {
+        appointment_id:   row.appointment_id,
+        patient_id:       row.patient_id,
+        scheduled_date:   dateStr,
+        appointment_type: row.appointment_type,
+        notes:            row.notes,
+        status:           row.status,
+      };
+    };
+
+    const upcoming = (rows || [])
+      .filter(r => {
+        const d = new Date(r.scheduled_date).toISOString().slice(0, 10);
+        return r.status === 'scheduled' && d >= todayStr;
+      })
+      .map(formatRow);
+
+    const past = (rows || [])
+      .filter(r => {
+        const d = new Date(r.scheduled_date).toISOString().slice(0, 10);
+        return r.status !== 'scheduled' || d < todayStr;
+      })
+      .sort((a, b) => new Date(b.scheduled_date) - new Date(a.scheduled_date))
+      .map(formatRow);
+
+    res.json({ success: true, data: { upcoming, past } });
+
+  } catch (error) {
+    logger.error('Error fetching all appointments: ' + error.message);
+    res.status(500).json({ success: false, message: 'Failed to fetch appointments' });
+  }
+};
+
 // GET /api/appointments/upcoming
 const getUpcomingAppointments = async (req, res) => {
   try {
@@ -144,8 +198,9 @@ const getUpcomingAppointments = async (req, res) => {
     const now = new Date();
     const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
     const data = (rows || []).map((row) => {
-      const d = new Date(row.scheduled_date);
-      const rowDate = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+      const rowDate = row.scheduled_date instanceof Date
+        ? row.scheduled_date.toISOString().slice(0, 10)
+        : String(row.scheduled_date).slice(0, 10);
       return {
         appointment_id: row.appointment_id,
         patient_id: row.patient_id,
@@ -163,4 +218,50 @@ const getUpcomingAppointments = async (req, res) => {
   }
 };
 
-export { createAppointment, getAppointmentsByPatient, getUpcomingAppointments };
+const updateAppointmentStatus = async (req, res) => {
+  try {
+    const { userId: clerk_id } = req.auth;
+    const { id } = req.params;
+    const { status } = req.body;
+
+    const allowed = ['completed', 'cancelled'];
+    if (!status || !allowed.includes(status)) {
+      return res.status(400).json({
+        success: false,
+        message: 'status must be completed or cancelled',
+      });
+    }
+
+    // Verify appointment exists and belongs to this clinician
+    const existing = await db.queryOne(
+      'SELECT appointment_id FROM appointments WHERE appointment_id = ? AND clerk_id = ?',
+      [id, clerk_id]
+    );
+
+    if (!existing) {
+      return res.status(404).json({
+        success: false,
+        message: 'Appointment not found',
+      });
+    }
+
+    await db.execute(
+      'UPDATE appointments SET status = ? WHERE appointment_id = ?',
+      [status, id]
+    );
+
+    res.json({ success: true, data: { appointment_id: id, status } });
+
+  } catch (error) {
+    logger.error('Error updating appointment status: ' + error.message);
+    res.status(500).json({ success: false, message: 'Failed to update appointment' });
+  }
+};
+
+export {
+  createAppointment,
+  getAppointmentsByPatient,
+  getUpcomingAppointments,
+  getAllAppointments,
+  updateAppointmentStatus,
+};
