@@ -35,7 +35,7 @@ const formatDate = (dateStr) => {
     if (!isNaN(date.getTime())) {
       return date.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
     }
-  } catch (e) {
+  } catch {
     // Continue to final fallback
   }
 
