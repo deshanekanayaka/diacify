@@ -100,9 +100,7 @@ app.add_middleware(
 )
 
 MODEL_PATH = os.path.join(
-    os.path.dirname(__file__),
-    "models",
-    f"random_forest_{MODEL_VERSION}.pkl",
+    os.path.dirname(__file__), "models", "random_forest_model.pkl"
 )
 
 try:

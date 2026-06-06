@@ -41,7 +41,7 @@ jobs:
 
       - name: Run pytest
         env:
-          ML_INTERNAL_SECRET: ${{ secrets.ML_INTERNAL_SECRET }}
+          ML_INTERNAL_SECRET: ${{ secrets.ML_INTERNAL_SECRET || 'test_secret' }}
         run: pytest tests/ -v
         working-directory: machine-learning
 
