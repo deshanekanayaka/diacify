@@ -18,8 +18,8 @@ Stack: React · Node.js/Express · MySQL · Python/FastAPI · Random Forest · C
 ### Analytics
 ![Analytics](./assets/analytics.png)
 
-### Book Appointment
-![Book Appointment](./assets/book-appointment.png)
+### Appointments
+![Appointments](./assets/appointments.png)
 
 ---
 
