@@ -135,8 +135,7 @@ const getAllAppointments = async (req, res) => {
       `SELECT a.appointment_id, a.patient_id, a.scheduled_date,
               a.appointment_type, a.notes, a.status
        FROM appointments a
-       JOIN patients p ON a.patient_id = p.patient_id
-       WHERE p.clerk_id = ?
+       WHERE a.clerk_id = ?
        ORDER BY a.scheduled_date ASC`,
       [clerk_id]
     );
@@ -234,17 +233,27 @@ const updateAppointmentStatus = async (req, res) => {
 
     // Verify appointment exists and belongs to this clinician
     const existing = await db.queryOne(
-      'SELECT appointment_id FROM appointments WHERE appointment_id = ? AND clerk_id = ?',
+      'SELECT appointment_id, status FROM appointments WHERE appointment_id = ? AND clerk_id = ?',
       [id, clerk_id]
     );
-
     if (!existing) {
       return res.status(404).json({
         success: false,
         message: 'Appointment not found',
       });
     }
-
+    if (existing.status === 'completed' && status === 'cancelled') {
+      return res.status(400).json({
+        success: false,
+        message: 'Cannot cancel a completed appointment',
+      });
+    }
+    if (existing.status === 'cancelled' && status === 'completed') {
+      return res.status(400).json({
+        success: false,
+        message: 'Cannot complete a cancelled appointment',
+      });
+    }
     await db.execute(
       'UPDATE appointments SET status = ? WHERE appointment_id = ?',
       [status, id]

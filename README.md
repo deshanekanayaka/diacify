@@ -136,7 +136,7 @@ A `low_confidence` flag is set when max class probability < 0.40, surfaced on th
 
 ## Before and After — What Changed
 
-This project was originally submitted as a university final year project.The examiner identified six critical issues. Every one has been addressed in this rebuild.
+This project was originally submitted as a university final year project. The examiner identified six critical issues. Every one has been addressed in this rebuild.
 
 | Issue | Original | Rebuilt |
 |---|---|---|
@@ -357,8 +357,11 @@ All `/api/*` routes require `Authorization: Bearer <clerk_session_token>`.
 ### Appointments
 | Method | Endpoint | Description |
 |---|---|---|
+| GET | `/api/appointments` | Get all appointments for the authenticated clinician |
+| GET | `/api/appointments/upcoming` | Get upcoming appointments |
 | POST | `/api/appointments` | Book appointment |
-| GET | `/api/appointments/:patientId` | Get patient appointments |
+| GET | `/api/appointments/:patientId` | Get all appointments for a patient |
+| PATCH | `/api/appointments/:id/status` | Update appointment status (completed / cancelled) |
 
 ### Analytics
 | Method | Endpoint | Description |

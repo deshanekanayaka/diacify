@@ -18,9 +18,29 @@ const TYPE_LABEL_MAP = {
 const TABLE_COLS = ['DATE', 'PATIENT', 'TYPE', 'NOTES', 'ACTIONS'];
 
 const formatDate = (dateStr) => {
-  const [year, month, day] = dateStr.split('-');
-  return new Date(Number(year), Number(month) - 1, Number(day))
-    .toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+  // Return empty string if input is null or undefined
+  if (!dateStr) return '';
+
+  // Check if input matches YYYY-MM-DD regex
+  const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+  if (dateRegex.test(dateStr)) {
+    const [year, month, day] = dateStr.split('-');
+    return new Date(Number(year), Number(month) - 1, Number(day))
+      .toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+  }
+
+  // Fall back to new Date(dateStr) if format doesn't match
+  try {
+    const date = new Date(dateStr);
+    if (!isNaN(date.getTime())) {
+      return date.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+    }
+  } catch (e) {
+    // Continue to final fallback
+  }
+
+  // Return original input if all parsing fails
+  return dateStr;
 };
 
 function AppointmentsTable({ rows, showActions, onComplete, onCancel }) {
@@ -164,7 +184,18 @@ const Appointments = () => {
         }
       );
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      
+      // Find the appointment before removing it
+      const appointmentToMove = upcoming.find(a => a.id === appointmentId);
+      
+      // Remove from upcoming
       setUpcoming(prev => prev.filter(a => a.id !== appointmentId));
+      
+      // Add to past with updated status
+      if (appointmentToMove) {
+        setPast(prev => [{ ...appointmentToMove, status: 'completed' }, ...prev]);
+      }
+      
       setConfirmComplete(null);
     } catch (err) {
       alert('Failed to update appointment: ' + err.message);
@@ -186,7 +217,18 @@ const Appointments = () => {
         }
       );
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      
+      // Find the appointment before removing it
+      const appointmentToMove = upcoming.find(a => a.id === appointmentId);
+      
+      // Remove from upcoming
       setUpcoming(prev => prev.filter(a => a.id !== appointmentId));
+      
+      // Add to past with updated status
+      if (appointmentToMove) {
+        setPast(prev => [{ ...appointmentToMove, status: 'cancelled' }, ...prev]);
+      }
+      
       setConfirmCancel(null);
     } catch (err) {
       alert('Failed to cancel appointment: ' + err.message);

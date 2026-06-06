@@ -112,7 +112,7 @@ try:
     print(f"Features ({len(FEATURE_NAMES)}): {FEATURE_NAMES}")
 except FileNotFoundError:
     print(f"Model file not found at {MODEL_PATH}")
-    print("Run train_model.py and rename the output to random_forest_v1.pkl")
+    print("Run train_model.py to generate random_forest_model.pkl")
     model = None
     FEATURE_NAMES = []
 
@@ -306,7 +306,7 @@ def predict_risk(
     if model is None:
         raise HTTPException(
             status_code=503,
-            detail="ML model not loaded. Run train_model.py and rename output to random_forest_v1.pkl.",
+            detail="ML model not loaded. Run train_model.py to generate random_forest_model.pkl.",
         )
 
     try:
