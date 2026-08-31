@@ -22,6 +22,12 @@ _MAX_PLAUSIBLE_BMI = 70.0
 # *down* to, so these become missing rather than an invented number.
 _MIN_PLAUSIBLE_BMI = 10.0
 
+# An RBS reading below this isn't survivable. Unlike BMI's low end, this
+# isn't a general "plausible range" - it's specifically about RBS's own
+# distribution, where the single value below it (1.0) is an isolated
+# outlier with a large gap to the next-lowest real value (69.0).
+_MIN_PLAUSIBLE_RBS = 30.0
+
 
 def parse_age(raw: str) -> float | None:
     """Extract the numeric age from a raw field like "51Years" or "27 Years".
@@ -68,12 +74,42 @@ def parse_bmi(raw) -> float | None:
         The BMI, clipped to _MAX_PLAUSIBLE_BMI if it exceeds it, or None if
         it's unparseable, missing, or below _MIN_PLAUSIBLE_BMI.
     """
+    value = parse_lab_value(raw)
+    if value is None or value < _MIN_PLAUSIBLE_BMI:
+        return None
+    return min(value, _MAX_PLAUSIBLE_BMI)
+
+
+def parse_lab_value(raw) -> float | None:
+    """Coerce a raw lab field to numeric, with no plausibility bounds.
+
+    Used for fields with no known data-entry-error pattern: an extreme
+    value here is rare but medically real, unlike BMI or BP.
+
+    Args:
+        raw: The raw value (string or float, e.g. from a NaN CSV cell).
+    Returns:
+        The value as a float, or None if it's missing or unparseable.
+    """
     value = _try_parse_float(str(raw).strip())
     if value is None or math.isnan(value):
         return None
-    if value < _MIN_PLAUSIBLE_BMI:
+    return value
+
+
+def parse_rbs(raw) -> float | None:
+    """Coerce a raw RBS (random blood sugar) field, with a survivability floor.
+
+    Args:
+        raw: The raw RBS value (string or float, e.g. from a NaN CSV cell).
+    Returns:
+        The value as a float, or None if it's missing, unparseable, or
+        below _MIN_PLAUSIBLE_RBS.
+    """
+    value = parse_lab_value(raw)
+    if value is None or value < _MIN_PLAUSIBLE_RBS:
         return None
-    return min(value, _MAX_PLAUSIBLE_BMI)
+    return value
 
 
 def _try_parse_float(value: str) -> float | None:
