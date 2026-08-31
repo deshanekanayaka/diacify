@@ -46,7 +46,7 @@ def parse_blood_pressure(raw: str) -> tuple[float | None, float | None]:
 
     Recovers from common typos (an extra "/" or ".") by parsing each side
     independently, and corrects the dataset's two BP unit conventions (see
-    _normalize_units) so every returned reading is in real mmHg.
+    _normalize_bp_units_to_mmhg) so every returned reading is in real mmHg.
 
     Args:
         raw: The raw BP string, e.g. "130/90" or "12.0/8.0".
@@ -62,7 +62,7 @@ def parse_blood_pressure(raw: str) -> tuple[float | None, float | None]:
 
     systolic = _try_parse_float(parts[0])
     diastolic = _try_parse_float(parts[1])
-    return _normalize_units(systolic, diastolic)
+    return _normalize_bp_units_to_mmhg(systolic, diastolic)
 
 
 def parse_bmi(raw) -> float | None:
@@ -126,7 +126,7 @@ def _try_parse_float(value: str) -> float | None:
         return None
 
 
-def _normalize_units(
+def _normalize_bp_units_to_mmhg(
     systolic: float | None, diastolic: float | None
 ) -> tuple[float | None, float | None]:
     """Scale dataset-unit BP readings (roughly mmHg / 10) up to real mmHg.
