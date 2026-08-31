@@ -1,6 +1,6 @@
 import math
 
-from clinical_fields import parse_age, parse_blood_pressure, parse_bmi
+from clinical_fields import parse_age, parse_blood_pressure, parse_bmi, parse_lab_value, parse_rbs
 
 
 def test_parse_age_strips_the_years_suffix():
@@ -78,3 +78,36 @@ def test_parse_bmi_treats_an_implausibly_low_value_as_missing_not_clipped():
     # typo, but there's no safe floor to clip it *to*, unlike the upper
     # bound where 70 is itself a real, meaningful clinical value.
     assert parse_bmi("5.1") is None
+
+
+def test_parse_lab_value_reads_a_clean_number():
+    assert parse_lab_value("171") == 171.0
+
+
+def test_parse_lab_value_returns_none_for_missing_or_unparseable():
+    assert parse_lab_value(math.nan) is None
+    assert parse_lab_value("…") is None
+
+
+def test_parse_lab_value_does_not_clip_extreme_but_real_values():
+    # Unlike BMI/BP, there's no known data-entry-error pattern for these
+    # labs - a very high triglyceride or HDL reading is rare but real, so
+    # nothing here should be bounded.
+    assert parse_lab_value("888") == 888.0
+    assert parse_lab_value("251") == 251.0
+
+
+def test_parse_rbs_reads_a_clean_number():
+    assert parse_rbs("120") == 120.0
+
+
+def test_parse_rbs_treats_an_implausibly_low_value_as_missing():
+    # RBS of 1 mg/dL isn't survivable - an isolated outlier with a huge gap
+    # to the next-lowest real value (69), same pattern as BMI's low end.
+    assert parse_rbs("1") is None
+
+
+def test_parse_rbs_does_not_clip_a_high_but_real_value():
+    # 497 mg/dL is extreme but real for uncontrolled diabetes - unlike the
+    # low end, there's no implausible-high threshold to enforce here.
+    assert parse_rbs("497") == 497.0
