@@ -1,3 +1,4 @@
+import math
 import re
 
 _LEADING_DIGITS = re.compile(r"\d+")
@@ -10,6 +11,16 @@ _LEADING_DIGITS = re.compile(r"\d+")
 # two clusters are actually far apart (max 18 vs min 83), so 30 sits safely
 # in the gap between them.
 _IMPLAUSIBLE_MMHG_THRESHOLD = 30
+
+# The raw dataset's true maximum BMI (332.2) is a known data-entry error.
+# 70 is itself a real, meaningful "severely obese" reading, so clipping to
+# it preserves that signal without letting the garbled digit distort scale.
+_MAX_PLAUSIBLE_BMI = 70.0
+
+# Below this, survival isn't physiologically possible - almost certainly a
+# typo, but unlike the upper bound there's no meaningful value to clip
+# *down* to, so these become missing rather than an invented number.
+_MIN_PLAUSIBLE_BMI = 10.0
 
 
 def parse_age(raw: str) -> float | None:
@@ -46,6 +57,23 @@ def parse_blood_pressure(raw: str) -> tuple[float | None, float | None]:
     systolic = _try_parse_float(parts[0])
     diastolic = _try_parse_float(parts[1])
     return _normalize_units(systolic, diastolic)
+
+
+def parse_bmi(raw) -> float | None:
+    """Coerce a raw BMI field to a plausible numeric value.
+
+    Args:
+        raw: The raw BMI value (string or float, e.g. from a NaN CSV cell).
+    Returns:
+        The BMI, clipped to _MAX_PLAUSIBLE_BMI if it exceeds it, or None if
+        it's unparseable, missing, or below _MIN_PLAUSIBLE_BMI.
+    """
+    value = _try_parse_float(str(raw).strip())
+    if value is None or math.isnan(value):
+        return None
+    if value < _MIN_PLAUSIBLE_BMI:
+        return None
+    return min(value, _MAX_PLAUSIBLE_BMI)
 
 
 def _try_parse_float(value: str) -> float | None:
