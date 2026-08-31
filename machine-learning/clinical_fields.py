@@ -147,3 +147,68 @@ def _normalize_bp_units_to_mmhg(
     scaled_systolic = systolic * 10 if systolic is not None else None
     scaled_diastolic = diastolic * 10 if diastolic is not None else None
     return scaled_systolic, scaled_diastolic
+
+
+def parse_sex(raw) -> str | None:
+    """Canonicalize the sex field to lowercase.
+
+    Args:
+        raw: The raw sex value, e.g. "MALE".
+    Returns:
+        "male" or "female", or None if it's missing or unrecognized.
+    """
+    return _parse_categorical(raw, {"male", "female"})
+
+
+def parse_social_life(raw) -> str | None:
+    """Canonicalize the social-life field to lowercase.
+
+    Args:
+        raw: The raw value, e.g. "city" or "VILLAGE".
+    Returns:
+        "city" or "village", or None if it's missing or unrecognized.
+    """
+    return _parse_categorical(raw, {"city", "village"})
+
+
+def _parse_categorical(raw, valid_values: set[str]) -> str | None:
+    """Lowercase and validate a raw value against a fixed set of categories.
+
+    Args:
+        raw: The raw value (string or float, e.g. from a NaN CSV cell).
+        valid_values: The lowercase strings this field is allowed to be.
+    Returns:
+        The lowercased value if it's one of valid_values, else None.
+    """
+    value = str(raw).strip().lower()
+    return value if value in valid_values else None
+
+
+_VALID_GENETICS_CODES = {0, 1, 2, 3, 4}
+
+
+def parse_genetics(raw) -> int | None:
+    """Count the distinct affected relatives named in a genetics code.
+
+    The raw format is hyphen-separated digits (1=father, 2=mother,
+    3=maternal uncle, 4=paternal uncle; 0 means no family history).
+
+    Args:
+        raw: The raw genetics string, e.g. "1-2-3" or "0".
+    Returns:
+        The count of distinct affected relatives (0-4), or None if any
+        part isn't a documented code (1-4) or the value is missing -
+        one unrecognized digit makes the whole value unreliable, so it's
+        not partially salvaged.
+    """
+    codes = set()
+    for part in str(raw).split("-"):
+        try:
+            code = int(part.strip())
+        except ValueError:
+            return None
+        if code not in _VALID_GENETICS_CODES:
+            return None
+        codes.add(code)
+    codes.discard(0)
+    return len(codes)
