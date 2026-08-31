@@ -229,6 +229,14 @@ Low coupling, high cohesion. Things that change together live together. Apply th
 
 Comments explain **why**, not **what**: constraints, trade-offs, non-obvious decisions, workarounds, and reasons the obvious solution fails. If code needs a comment to explain its basic purpose, extract a well-named function instead. No unowned TODOs.
 
+**Exception — function docstrings are required.** Every function gets a brief
+docstring: one summary line, plus Args/Returns when non-trivial. Keep it short
+and purpose-stating, not a restatement of the type hints (`raw: str -> float |
+None` already says the types; the docstring says what the value *means*). This
+is a deliberate override of the "no what-comments" rule above, chosen for fast
+skim-reading of a file you didn't just write — inline `why` comments still
+follow the rule as stated.
+
 ---
 
 ## 7. Testing
