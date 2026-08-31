@@ -1,4 +1,6 @@
-from clinical_fields import parse_age, parse_blood_pressure
+import math
+
+from clinical_fields import parse_age, parse_blood_pressure, parse_bmi
 
 
 def test_parse_age_strips_the_years_suffix():
@@ -44,3 +46,35 @@ def test_parse_blood_pressure_recovers_the_valid_side_of_a_partial_typo():
 def test_parse_blood_pressure_returns_missing_for_placeholder_junk():
     for junk in ("…", "----", "..", "nan"):
         assert parse_blood_pressure(junk) == (None, None)
+
+
+def test_parse_bmi_reads_a_plausible_value_unchanged():
+    assert parse_bmi("27.6") == 27.6
+
+
+def test_parse_bmi_returns_none_for_a_missing_value():
+    assert parse_bmi(math.nan) is None
+
+
+def test_parse_bmi_returns_none_for_garbled_text():
+    # A real row in the source data: two numbers concatenated by a
+    # data-entry error, with no safe way to tell which one was intended.
+    assert parse_bmi("32.133.1") is None
+
+
+def test_parse_bmi_clips_an_implausibly_high_value():
+    # The raw dataset's true maximum (332.2) is a known data-entry error;
+    # clipping preserves the "severely obese" signal without letting one
+    # garbled digit distort the model's feature scale.
+    assert parse_bmi("332.2") == 70.0
+
+
+def test_parse_bmi_does_not_clip_a_value_at_the_upper_bound():
+    assert parse_bmi("70") == 70.0
+
+
+def test_parse_bmi_treats_an_implausibly_low_value_as_missing_not_clipped():
+    # BMI 5.1 is below the survivable minimum (~10) - almost certainly a
+    # typo, but there's no safe floor to clip it *to*, unlike the upper
+    # bound where 70 is itself a real, meaningful clinical value.
+    assert parse_bmi("5.1") is None
