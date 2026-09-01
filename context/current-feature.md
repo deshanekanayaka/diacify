@@ -124,10 +124,11 @@ reviewed vertical slices, in this order:
   fixing that would mean re-fitting imputation inside every fold (an
   sklearn `Pipeline`/`TransformerMixin` rewrite of `imputation.py`) -
   not warranted given the effect is tiny (the BMI median moved by only
-  0.3 out of ~29 when checked earlier). Verified against the full
-  dataset: 93.0% mean accuracy (±2.61% std) across 5 folds on the
-  tuned model, consistent with both the single test-set evaluation
-  (94.74%) and legacy's reported figure.
+  0.3 out of ~29 when checked earlier). Verified with the tuned model
+  on the real dataset's 529-row training split: 93.0% mean accuracy
+  (±2.61% std) across 5 folds, consistent with both the single
+  test-set evaluation (94.74%, on the separate 133-row held-out split)
+  and legacy's reported figure.
 
 Read these first, every session:
 
