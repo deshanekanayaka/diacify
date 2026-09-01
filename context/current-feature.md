@@ -53,10 +53,11 @@ reviewed vertical slices, in this order:
 **Done:**
 - Feature matrix construction — `feature_matrix.py::to_feature_vector`, `FEATURE_NAMES` (PR #19)
 - Train/test split, leakage-safe imputation/ratio-median fitting — `split.py::split_rows`, `prepare_train_test_data`, `TrainTestData` (PR #20)
-- Baseline model + single train/test evaluation — `model.py::fit_baseline_model`, `evaluate_model`, `EvaluationResult` (feature/ml-baseline-model)
+- Baseline model + single train/test evaluation — `model.py::fit_baseline_model`, `evaluate_model`, `EvaluationResult` (PR #21)
+- Hyperparameter search — `hyperparameter_search.py::search_hyperparameters`, `PARAM_GRID` (feature/ml-hyperparameter-search)
 
 **Remaining:**
-- Steps 4-8 above
+- Steps 5-8 above
 
 ## Notes
 
@@ -101,6 +102,18 @@ reviewed vertical slices, in this order:
   same ballpark as legacy's ~94.9% CV figure despite the different
   (leakage-free) preprocessing, with balanced precision/recall across
   all three classes.
+- Hyperparameter search matches legacy's exact grid (256 combinations:
+  `max_depth`, `min_samples_split`, `max_features`, `max_samples`) and
+  3-fold CV. `search_hyperparameters` returns the fitted `GridSearchCV`
+  directly rather than a custom wrapper - this module is inherently
+  sklearn-native data-science code, not domain logic, so there's no
+  real seam to abstract behind; later steps (CV, feature importance,
+  persistence) need direct access to `.best_estimator_`/`.cv_results_`
+  anyway. Verified against the full dataset: best params
+  (`max_depth=10, max_features=1.0, max_samples=1.0,
+  min_samples_split=0.01`) push held-out test accuracy from the
+  baseline's 92.48% to 94.74% - now essentially matching legacy's own
+  reported ~94.9%, despite our stricter, leakage-free preprocessing.
 
 ## Context files
 
