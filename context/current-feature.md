@@ -56,10 +56,11 @@ reviewed vertical slices, in this order:
 - Baseline model + single train/test evaluation — `model.py::fit_baseline_model`, `evaluate_model`, `EvaluationResult` (PR #21)
 - Hyperparameter search — `hyperparameter_search.py::search_hyperparameters`, `PARAM_GRID` (PR #22)
 - Cross-validation — `cross_validation.py::cross_validate_model`, `CrossValidationResult` (PR #23)
-- Feature importance, `genetics` dropped with evidence — `feature_importance.py::rank_feature_importance` (feature/ml-feature-importance)
+- Feature importance, `genetics` dropped with evidence — `feature_importance.py::rank_feature_importance` (PR #24)
+- Bias audit by sex and age bucket — `bias_audit.py::audit_bias` (feature/ml-bias-audit)
 
 **Remaining:**
-- Steps 6-8 above
+- Steps 8 above (persistence)
 
 ## Notes
 
@@ -141,6 +142,21 @@ reviewed vertical slices, in this order:
   93.0%→92.81% CV mean, both within noise), and every other feature's
   ranking stayed essentially identical - good evidence it really was
   dead weight, not a fluke of one run.
+- Bias audit found a real latent bug in `classification_report` (see
+  `BUGS.md`): without an explicit `labels` argument, it crashes if a
+  demographic subgroup doesn't contain all three risk categories.
+  Legacy never hit it (its subgroups happened to always span all
+  three), but it was a live risk either way. Fixed by passing
+  `labels=[category.value for category in RiskCategory]` explicitly.
+  Verified against the full dataset with the tuned model: sex shows no
+  meaningful disparity (male/female both 0.90-1.0 precision/recall
+  across classes), but `age_over_60` performs noticeably worse than
+  every other subgroup (0.75-0.89 vs 0.90-1.0 elsewhere) - it's also
+  the smallest group (n=22 of 133 test rows). Documented honestly
+  rather than smoothed over; worth keeping in mind if this model is
+  ever used for patients over 60 specifically.
+
+## Context files
 
 Read these first, every session:
 

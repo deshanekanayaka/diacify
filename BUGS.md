@@ -5,6 +5,75 @@ prevent the same class of bug going forward. Newest first.
 
 ---
 
+## classification_report crashes on a demographic subgroup missing a class
+
+**Found:** 2026-09-01, writing tests for the bias audit
+(`feature/ml-bias-audit`).
+
+**What happened:**
+
+The bias audit breaks the test set into subgroups (male/female,
+under-40/40-60/over-60) and reports precision/recall/F1 per subgroup.
+Both legacy and our first draft called `classification_report` with
+`target_names=["Low", "Medium", "High"]` but no `labels` argument:
+
+```python
+classification_report(
+    y_true_subgroup,
+    y_pred_subgroup,
+    target_names=["Low", "Medium", "High"],
+    output_dict=True,
+    zero_division=0,
+)
+```
+
+`classification_report` infers which classes to report on from
+whatever's actually present in `y_true`/`y_pred`, unless told
+otherwise. If a subgroup happens to be small enough that one risk
+category never appears in it (a real possibility - the age-bucket and
+sex splits can be small), the inferred class count won't match the
+3-item `target_names` list, and it raises:
+
+```text
+ValueError: Number of classes, 1, does not match size of target_names, 3.
+```
+
+Legacy never hit this in practice because its 133-row test set
+happened to have all three classes in every subgroup - but the bug was
+latent in the code either way, waiting for a smaller or less balanced
+subgroup.
+
+**Fix:**
+
+Pass `labels` explicitly, so every report always covers all three
+classes regardless of what a given subgroup happens to contain:
+
+```python
+# bias_audit.py
+classification_report(
+    [y_true[i] for i in indices],
+    [y_pred[i] for i in indices],
+    labels=[category.value for category in RiskCategory],
+    target_names=_CLASS_NAMES,
+    output_dict=True,
+    zero_division=0,
+)
+```
+
+**Prevention:**
+
+- When slicing evaluation data into subgroups, don't assume every
+  subgroup will contain every class - test with a subgroup deliberately
+  small enough to be missing one. This bug was only found because the
+  test fixtures were small (by design, for test speed), which is
+  exactly the condition that triggers it.
+- Any `classification_report`/`confusion_matrix` call operating on a
+  subset of data (a subgroup, a fold, a single class of interest)
+  should pass `labels` explicitly rather than relying on inference from
+  that subset.
+
+---
+
 ## Train/test leakage via imputation medians computed before the split
 
 **Found:** 2026-09-01, while planning the train/test split for model
