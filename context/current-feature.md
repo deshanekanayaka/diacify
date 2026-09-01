@@ -51,10 +51,11 @@ reviewed vertical slices, in this order:
 8. Persistence (model + feature order + imputation medians together)
 
 **Done:**
-- Feature matrix construction — `feature_matrix.py::to_feature_vector`, `FEATURE_NAMES` (feature/ml-feature-matrix)
+- Feature matrix construction — `feature_matrix.py::to_feature_vector`, `FEATURE_NAMES` (PR #19)
+- Train/test split, leakage-safe imputation/ratio-median fitting — `split.py::split_rows`, `prepare_train_test_data`, `TrainTestData` (feature/ml-train-test-split)
 
 **Remaining:**
-- Steps 2-8 above
+- Steps 3-8 above
 
 ## Notes
 
@@ -67,6 +68,27 @@ reviewed vertical slices, in this order:
 - The feature-matrix module will use our own established snake_case
   naming (`hba1c`, `sex_encoded`, ...) rather than reintroducing
   legacy's Pandas-style names (`HbA1c`, `Sex_Encoded`, ...).
+- Checked legacy's actual call order (`main()` in `train_model.py`):
+  it preprocesses (imputes, engineers features, labels) the *whole*
+  662-row dataset first, and only splits 80/20 afterward for
+  evaluation — meaning legacy's medians were computed using test rows
+  too, a real (if minor) evaluation leak. Decided to fix this rather
+  than reproduce it: `split.py::prepare_train_test_data` splits first,
+  fits `imputation.Medians`/`features.RatioMedians` on the training
+  rows only, then transforms both splits with those training-only
+  statistics. Trade-off: our accuracy numbers won't be directly
+  comparable to legacy's reported ~94.9% CV accuracy, since the
+  preprocessing itself now differs slightly.
+- `split_rows` stratifies by `labels.base_label_from_hba1c` (Stage A
+  only), not the full two-stage `RiskCategory` — the full label needs
+  imputed BMI/RBS/ratios, which must not be computed before the split
+  exists. `base_label_from_hba1c` was extracted from `assign_label` as
+  a pure refactor (no behavior change) specifically to make this
+  possible without a second copy of the HbA1c thresholds.
+- Verified against the full 662-row dataset: 529/133 split (≈80/20,
+  all rows accounted for), and confirmed the leakage fix actually
+  works — the train-only BMI median (28.7) differs from the
+  full-dataset median (29.0).
 
 ## Context files
 
