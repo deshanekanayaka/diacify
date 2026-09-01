@@ -1,186 +1,101 @@
 # Current Feature
 
-**Feature:** ML model training and evaluation
+**Feature:** Backend API design (Node/Express, Supabase Auth + RLS)
 
 ## Status
 
-In Progress
+In progress. First slice (auth gatekeeper) implemented on
+`feature/api-auth-gatekeeper`, not yet merged.
+
+Note: the previous feature, "ML model training and evaluation," is
+complete (PRs #19–#26, see `context/progress.md`) but its "Done" status
+update lives on an unmerged branch (`docs/archive-ml-model-training`)
+that hadn't reached `main` when this feature branched. Reconcile the
+two when that branch merges.
 
 ## Goals
 
-Train and evaluate a risk-classification model on the preprocessed,
-labeled dataset produced by the ML preprocessing pipeline (see
-`docs/phase-1-investigation.md` and `context/progress.md`). Understand
-every step — feature selection, train/test split, model choice,
-hyperparameter search, evaluation methodology, bias auditing, and
-persistence — rather than inheriting legacy's pipeline unexamined.
+Design and build Diacify's backend API from scratch (no backend code
+existed before this feature — see `docs/phase-1-investigation.md`
+D1/D1a/D6). Adapted from a generic API-design guide the user brought
+in, with one correction made explicit up front: the guide assumes a
+public, API-key-authenticated developer product; Diacify is a
+first-party app already committed (D6) to Supabase Auth (JWT) +
+Postgres Row-Level Security, so the API-key/gatekeeper-hashing
+sections of the guide were dropped rather than adopted wholesale. Its
+other principles (rolling-window rate limiting, RLS as
+defense-in-depth, filter/pagination naming, CORS preflight handling,
+`{ error: "message" }` error shape) carry over adapted to JWT auth.
 
 ## Decisions made
 
-- **Model**: `RandomForestClassifier`, matching legacy. Defensible for
-  this problem (tabular clinical data, ~660 rows, 3-class
-  classification): handles non-linear feature interactions natively,
-  gives feature importances for free, and legacy's own numbers (~94.9%
-  mean CV accuracy) show it already works well here.
-- **Feature set**: started from legacy's exact 14 features (HbA1c,
-  Age, Sex, BMI, BP systolic/diastolic, RBS, TG/HDL ratio, LDL/HDL
-  ratio, Trig, HDL, Genetics, hypertension_flag, age×BMI interaction),
-  now **13** — `genetics` was dropped once feature importance measured
-  it at 0.0003 (dead last, ~3 orders of magnitude below `hba1c`'s
-  0.41). `Chol`/`VLDL`/`social_life` stay excluded too (legacy found
-  no value in them).
+- **Auth mechanism kept to what D6 already chose**: Supabase JWT +
+  Postgres RLS, not a parallel API-key system. No `api_keys` table.
+  Rejected building API-key support speculatively for a third-party-
+  consumer use case that doesn't exist in Diacify's domain.
+- **JWT verification: local, not a live call to Supabase's Auth API.**
+  Verify the token's signature locally against Supabase's cached JWKS
+  public key (via `jose`), rather than calling
+  `supabase.auth.getUser(jwt)` on every request. Trade-off accepted: a
+  banned/deleted clinician stays valid until their token naturally
+  expires (Supabase default ~1hr), in exchange for no per-request
+  network dependency on Supabase's uptime, and for actually
+  understanding JWT verification mechanics (the whole reason D6 chose
+  Supabase over Clerk) instead of delegating it to an SDK call again.
+- **Config validation moved from per-request to boot-time.** The
+  approved spec's response table listed a 500 for "required env var
+  unset," but that's a startup-time condition, not a per-request one —
+  implemented as a fail-fast crash on server start instead, so
+  `requireAuth` itself has no reachable 500 path once the server is
+  running.
 
 ## Implementation plan
 
-Bigger than a preprocessing slice — real statistical machinery, not
-just pure parsing functions — so still built as small, test-first,
-reviewed vertical slices, in this order:
+Vertical slices, smallest defensible thing first — auth proven in
+isolation before any schema or data exists:
 
-1. Feature matrix construction (`CleanRow` + `EngineeredFeatures` +
-   `RiskCategory` → a fixed-order feature vector)
-2. Train/test split — critically, this is where `imputation.fit` and
-   `features.fit_ratio_medians` move from running on the whole dataset
-   to running on the training split only, closing a leakage gap that
-   was deliberately deferred until a split existed
-3. Baseline model + single train/test evaluation
-4. Hyperparameter search (grid search, matching legacy's params)
-5. Cross-validation (5-fold stratified, matching legacy)
-6. Feature importance (this is also where `genetics`'s value gets
-   decided with evidence)
-7. Bias audit (by sex, by age bucket — matching legacy)
-8. Persistence (model + feature order + imputation medians together)
+1. Auth gatekeeper only — verify a Supabase JWT, 401/503, no data yet
+2. First table + RLS, proven with a mandatory cross-tenant isolation
+   test (clinician A must never read/write clinician B's rows — D6
+   flagged this as non-negotiable)
+3. First real endpoint — `GET /api/patients` (list, own rows only,
+   paginated/filtered)
+4. First write endpoint — `POST /api/patients`, with rate limiting
+   added (rolling window, keyed on clinician id)
 
 **Done:**
-- Feature matrix construction — `feature_matrix.py::to_feature_vector`, `FEATURE_NAMES` (PR #19)
-- Train/test split, leakage-safe imputation/ratio-median fitting — `split.py::split_rows`, `prepare_train_test_data`, `TrainTestData` (PR #20)
-- Baseline model + single train/test evaluation — `model.py::fit_baseline_model`, `evaluate_model`, `EvaluationResult` (PR #21)
-- Hyperparameter search — `hyperparameter_search.py::search_hyperparameters`, `PARAM_GRID` (PR #22)
-- Cross-validation — `cross_validation.py::cross_validate_model`, `CrossValidationResult` (PR #23)
-- Feature importance, `genetics` dropped with evidence — `feature_importance.py::rank_feature_importance` (PR #24)
-- Bias audit by sex and age bucket — `bias_audit.py::audit_bias` (PR #25)
-- Persistence — `persistence.py::ModelPackage`, `save_model_package`, `load_model_package`, `build_metadata`, `save_metadata` (feature/ml-persistence)
-- Run-everything script + navigation README — `train.py::train_and_evaluate`, `main`; `machine-learning/README.md` (feature/ml-persistence)
+- Auth gatekeeper — `backend/src/middleware/requireAuth.ts`,
+  `createRequireAuth` (6 tests: missing header, malformed header,
+  wrong signature, expired token, valid token, key-fetch failure →
+  503). Backend scaffolding (TS strict, Express, Vitest, ESLint) added
+  alongside it. Not yet wired to a real Supabase project — tested
+  against a locally generated JWKS fixture, no live infra needed for
+  this slice. (`feature/api-auth-gatekeeper`, not yet merged)
 
 **Remaining:**
-- None — this feature is complete. Model training and evaluation is
-  done end-to-end: raw CSV → clean, imputed, feature-engineered,
-  labeled rows → trained, tuned, cross-validated, audited model →
-  persisted artifacts.
+- Wire `requireAuth` to a real Supabase project (needs the user to
+  create the project and provide its URL) + boot-time env validation
+  + `server.ts`
+- Patients table schema + RLS + cross-tenant isolation test
+- `GET /api/patients`
+- `POST /api/patients` + rate limiting
+- Everything past that (visits, appointments, analytics, ported
+  ML-predict endpoint) — not yet planned in detail
 
 ## Notes
 
-- Legacy's training pipeline (`train_model.py`, recovered from git
-  history at commit `e3cfdad5`) is the reference implementation for
-  this feature — its exact hyperparameter grid, split ratio/seed
-  (80/20 stratified, `random_state=42`), and bias-audit groups (sex;
-  age <40 / 40–60 / >60) are being preserved, since they're already
-  validated choices, not just inherited defaults.
-- The feature-matrix module will use our own established snake_case
-  naming (`hba1c`, `sex_encoded`, ...) rather than reintroducing
-  legacy's Pandas-style names (`HbA1c`, `Sex_Encoded`, ...).
-- Checked legacy's actual call order (`main()` in `train_model.py`):
-  it preprocesses (imputes, engineers features, labels) the *whole*
-  662-row dataset first, and only splits 80/20 afterward for
-  evaluation — meaning legacy's medians were computed using test rows
-  too, a real (if minor) evaluation leak. Decided to fix this rather
-  than reproduce it: `split.py::prepare_train_test_data` splits first,
-  fits `imputation.Medians`/`features.RatioMedians` on the training
-  rows only, then transforms both splits with those training-only
-  statistics. Trade-off: our accuracy numbers won't be directly
-  comparable to legacy's reported ~94.9% CV accuracy, since the
-  preprocessing itself now differs slightly.
-- `split_rows` stratifies by `labels.base_label_from_hba1c` (Stage A
-  only), not the full two-stage `RiskCategory` — the full label needs
-  imputed BMI/RBS/ratios, which must not be computed before the split
-  exists. `base_label_from_hba1c` was extracted from `assign_label` as
-  a pure refactor (no behavior change) specifically to make this
-  possible without a second copy of the HbA1c thresholds.
-- Verified against the full 662-row dataset: 529/133 split (≈80/20,
-  all rows accounted for), and confirmed the leakage fix actually
-  works — the train-only BMI median (28.7) differs from the
-  full-dataset median (29.0).
-- Baseline model uses legacy's exact baseline hyperparameters
-  (`max_depth=5, min_samples_split=0.01, max_features=0.8,
-  max_samples=0.8, random_state=0, class_weight="balanced"`) - not
-  yet grid-searched, that's the next step. `model.py` returns data
-  (`EvaluationResult`), it doesn't print - matches the project's "pure
-  computation separate from side effects" standard; a reporting/CLI
-  layer, if one gets built, is a separate concern.
-  Verified against the full dataset: 92.48% test accuracy, in the
-  same ballpark as legacy's ~94.9% CV figure despite the different
-  (leakage-free) preprocessing, with balanced precision/recall across
-  all three classes.
-- Hyperparameter search matches legacy's exact grid (256 combinations:
-  `max_depth`, `min_samples_split`, `max_features`, `max_samples`) and
-  3-fold CV. `search_hyperparameters` returns the fitted `GridSearchCV`
-  directly rather than a custom wrapper - this module is inherently
-  sklearn-native data-science code, not domain logic, so there's no
-  real seam to abstract behind; later steps (CV, feature importance,
-  persistence) need direct access to `.best_estimator_`/`.cv_results_`
-  anyway. Verified against the full dataset: best params
-  (`max_depth=10, max_features=1.0, max_samples=1.0,
-  min_samples_split=0.01`) push held-out test accuracy from the
-  baseline's 92.48% to 94.74% - now essentially matching legacy's own
-  reported ~94.9%, despite our stricter, leakage-free preprocessing.
-- Cross-validation runs on the training split only (529 rows), not the
-  full 662-row dataset legacy used. Legacy's `k_fold_validation` ran
-  CV over the whole dataset, but that data was imputed with one global
-  median - meaning each CV fold's held-out rows still had their
-  imputed values shaped by that same fold's own rows, a smaller nested
-  version of the leak already fixed at the train/test split. Properly
-  fixing that would mean re-fitting imputation inside every fold (an
-  sklearn `Pipeline`/`TransformerMixin` rewrite of `imputation.py`) -
-  not warranted given the effect is tiny (the BMI median moved by only
-  0.3 out of ~29 when checked earlier). Verified with the tuned model
-  on the real dataset's 529-row training split: 93.0% mean accuracy
-  (±2.61% std) across 5 folds, consistent with both the single
-  test-set evaluation (94.74%, on the separate 133-row held-out split)
-  and legacy's reported figure.
-- Feature importance (`rank_feature_importance`) is what finally
-  decided `genetics`: ranked dead last at 0.0003, ~3 orders of
-  magnitude below `hba1c`'s 0.41 - the same signature as the fields
-  legacy already excluded. Dropped from `FEATURE_NAMES`/
-  `to_feature_vector` (13 features now); `CleanRow.genetics` itself is
-  untouched, since it's still a valid imputed clinical value, just no
-  longer fed to the model. Re-verified the whole pipeline afterward:
-  dropping it barely moved anything (94.74%→93.98% test accuracy,
-  93.0%→92.81% CV mean, both within noise), and every other feature's
-  ranking stayed essentially identical - good evidence it really was
-  dead weight, not a fluke of one run.
-- Bias audit found a real latent bug in `classification_report` (see
-  `BUGS.md`): without an explicit `labels` argument, it crashes if a
-  demographic subgroup doesn't contain all three risk categories.
-  Legacy never hit it (its subgroups happened to always span all
-  three), but it was a live risk either way. Fixed by passing
-  `labels=[category.value for category in RiskCategory]` explicitly.
-  Verified against the full dataset with the tuned model: sex shows no
-  meaningful disparity (male/female both 0.90-1.0 precision/recall
-  across classes), but `age_over_60` performs noticeably worse than
-  every other subgroup (0.75-0.89 vs 0.90-1.0 elsewhere) - it's also
-  the smallest group (n=22 of 133 test rows). Documented honestly
-  rather than smoothed over; worth keeping in mind if this model is
-  ever used for patients over 60 specifically.
-- Persistence saves two artifacts, matching legacy's split: a pickled
-  `ModelPackage` (`models/random_forest_model.pkl`, gitignored -
-  binary, rebuilt from source) bundling the model with its
-  `feature_names`, `medians`, and `ratio_medians` so a future serving
-  layer can impute a new patient identically to training; and
-  `models/model_metadata.json` (committed - human-readable audit
-  trail), with `CLINICAL_THRESHOLDS` newly exposed from `labels.py`
-  (was private module constants) so the exact thresholds behind a
-  model's labels travel with it. Verified end-to-end against the full
-  662-row dataset: both artifacts saved and round-tripped correctly
-  (loaded `medians`/`feature_names` match, loaded model's predictions
-  match the original).
-- Built `train.py` as a thin orchestration script (`train_and_evaluate`
-  composes the already-tested pipeline functions with zero new logic;
-  `main` handles the only I/O - loading the CSV, saving artifacts,
-  printing a summary) and `README.md` (a table of all 14 modules, in
-  dependency order, plus how to run the pipeline and tests) - so
-  someone new to this code has both a narrative entry point and a map.
-  Verified by actually running `python3 train.py` against the real
-  dataset: reproduces the exact numbers already verified manually
-  (93.98% test accuracy, 92.81% CV mean, same feature ranking).
+- `req.user` is read via a cast to `AuthenticatedRequest` rather than
+  Express global type-augmentation, deliberately — there's only one
+  call site (a test route) so far. Revisit once a second real route
+  handler needs `req.user` (slice 3, `GET /api/patients`); adding the
+  global augmentation now would be solving a duplication problem that
+  doesn't exist yet.
+- `getKey` is a parameter to `createRequireAuth`, not hardcoded to
+  Supabase's JWKS endpoint — production wiring will pass
+  `createRemoteJWKSet(supabaseJwksUrl)`, tests pass
+  `createLocalJWKSet(fixtureKeys)`. Same verification logic either
+  way; this is what let the gatekeeper be fully tested without a live
+  Supabase project existing yet.
 
 ## Context files
 
