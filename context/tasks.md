@@ -4,8 +4,4 @@ Live task state, groomed weekly. One line per task: `- [ ] <task> (<phase/sprint
 
 ## Now
 
-- [ ] Label assignment logic (ML preprocessing pipeline)
-
-## Later / parked
-
-- [ ] Model training and evaluation (unparks once labeling is done)
+- [ ] Model training and evaluation (ML model training — new feature, unparked)
