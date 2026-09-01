@@ -45,7 +45,6 @@ def test_feature_vector_carries_the_correct_values():
         "ldl_hdl_ratio": 2.0,
         "trig": 150.0,
         "hdl": 50.0,
-        "genetics": 2.0,
         "hypertension_flag": 0.0,
         "age_bmi_interaction": 1250.0,
     }

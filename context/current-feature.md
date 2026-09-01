@@ -22,13 +22,13 @@ persistence — rather than inheriting legacy's pipeline unexamined.
   classification): handles non-linear feature interactions natively,
   gives feature importances for free, and legacy's own numbers (~94.9%
   mean CV accuracy) show it already works well here.
-- **Feature set**: legacy's exact 14 features (HbA1c, Age, Sex, BMI, BP
-  systolic/diastolic, RBS, TG/HDL ratio, LDL/HDL ratio, Trig, HDL,
-  Genetics, hypertension_flag, age×BMI interaction). `Chol`/`VLDL`/
-  `social_life` stay excluded (legacy found no value); `genetics` stays
-  in per an earlier decision — its real feature-importance ranking
-  (once trained) will show whether it's pulling weight, rather than
-  guessing now.
+- **Feature set**: started from legacy's exact 14 features (HbA1c,
+  Age, Sex, BMI, BP systolic/diastolic, RBS, TG/HDL ratio, LDL/HDL
+  ratio, Trig, HDL, Genetics, hypertension_flag, age×BMI interaction),
+  now **13** — `genetics` was dropped once feature importance measured
+  it at 0.0003 (dead last, ~3 orders of magnitude below `hba1c`'s
+  0.41). `Chol`/`VLDL`/`social_life` stay excluded too (legacy found
+  no value in them).
 
 ## Implementation plan
 
@@ -55,7 +55,8 @@ reviewed vertical slices, in this order:
 - Train/test split, leakage-safe imputation/ratio-median fitting — `split.py::split_rows`, `prepare_train_test_data`, `TrainTestData` (PR #20)
 - Baseline model + single train/test evaluation — `model.py::fit_baseline_model`, `evaluate_model`, `EvaluationResult` (PR #21)
 - Hyperparameter search — `hyperparameter_search.py::search_hyperparameters`, `PARAM_GRID` (PR #22)
-- Cross-validation — `cross_validation.py::cross_validate_model`, `CrossValidationResult` (feature/ml-cross-validation)
+- Cross-validation — `cross_validation.py::cross_validate_model`, `CrossValidationResult` (PR #23)
+- Feature importance, `genetics` dropped with evidence — `feature_importance.py::rank_feature_importance` (feature/ml-feature-importance)
 
 **Remaining:**
 - Steps 6-8 above
@@ -129,6 +130,17 @@ reviewed vertical slices, in this order:
   (±2.61% std) across 5 folds, consistent with both the single
   test-set evaluation (94.74%, on the separate 133-row held-out split)
   and legacy's reported figure.
+- Feature importance (`rank_feature_importance`) is what finally
+  decided `genetics`: ranked dead last at 0.0003, ~3 orders of
+  magnitude below `hba1c`'s 0.41 - the same signature as the fields
+  legacy already excluded. Dropped from `FEATURE_NAMES`/
+  `to_feature_vector` (13 features now); `CleanRow.genetics` itself is
+  untouched, since it's still a valid imputed clinical value, just no
+  longer fed to the model. Re-verified the whole pipeline afterward:
+  dropping it barely moved anything (94.74%→93.98% test accuracy,
+  93.0%→92.81% CV mean, both within noise), and every other feature's
+  ranking stayed essentially identical - good evidence it really was
+  dead weight, not a fluke of one run.
 
 Read these first, every session:
 
