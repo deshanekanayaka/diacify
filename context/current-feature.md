@@ -54,10 +54,11 @@ reviewed vertical slices, in this order:
 - Feature matrix construction — `feature_matrix.py::to_feature_vector`, `FEATURE_NAMES` (PR #19)
 - Train/test split, leakage-safe imputation/ratio-median fitting — `split.py::split_rows`, `prepare_train_test_data`, `TrainTestData` (PR #20)
 - Baseline model + single train/test evaluation — `model.py::fit_baseline_model`, `evaluate_model`, `EvaluationResult` (PR #21)
-- Hyperparameter search — `hyperparameter_search.py::search_hyperparameters`, `PARAM_GRID` (feature/ml-hyperparameter-search)
+- Hyperparameter search — `hyperparameter_search.py::search_hyperparameters`, `PARAM_GRID` (PR #22)
+- Cross-validation — `cross_validation.py::cross_validate_model`, `CrossValidationResult` (feature/ml-cross-validation)
 
 **Remaining:**
-- Steps 5-8 above
+- Steps 6-8 above
 
 ## Notes
 
@@ -114,8 +115,19 @@ reviewed vertical slices, in this order:
   min_samples_split=0.01`) push held-out test accuracy from the
   baseline's 92.48% to 94.74% - now essentially matching legacy's own
   reported ~94.9%, despite our stricter, leakage-free preprocessing.
-
-## Context files
+- Cross-validation runs on the training split only (529 rows), not the
+  full 662-row dataset legacy used. Legacy's `k_fold_validation` ran
+  CV over the whole dataset, but that data was imputed with one global
+  median - meaning each CV fold's held-out rows still had their
+  imputed values shaped by that same fold's own rows, a smaller nested
+  version of the leak already fixed at the train/test split. Properly
+  fixing that would mean re-fitting imputation inside every fold (an
+  sklearn `Pipeline`/`TransformerMixin` rewrite of `imputation.py`) -
+  not warranted given the effect is tiny (the BMI median moved by only
+  0.3 out of ~29 when checked earlier). Verified against the full
+  dataset: 93.0% mean accuracy (±2.61% std) across 5 folds on the
+  tuned model, consistent with both the single test-set evaluation
+  (94.74%) and legacy's reported figure.
 
 Read these first, every session:
 
