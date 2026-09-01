@@ -57,11 +57,11 @@ surfaced and agreed before implementation, per `CLAUDE.md` §2.
   dropped, not carried into `CleanRow` — nothing downstream needs a
   patient identifier.
 - Verified against the full 662-row dataset: missingness is low (~0-4%)
-  for every field except `fbs`, which is missing in 96.5% of rows
-  (639/662). That's a distinct problem from ordinary missingness and
-  needs its own decision at the imputation stage — median-imputing a
-  column that's almost entirely absent would be fabricating data, not
-  filling gaps.
+  for every field except `fbs`, which was missing in 96.5% of rows
+  (639/662). Decided to drop `fbs` entirely rather than impute it —
+  median-imputing a column that's almost entirely absent would be
+  fabricating data, not filling gaps. `CleanRow` no longer has an `fbs`
+  field.
 
 ## Context files
 

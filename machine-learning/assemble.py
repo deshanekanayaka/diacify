@@ -29,7 +29,6 @@ class CleanRow:
     ldl: float | None
     vldl: float | None
     hba1c: float | None
-    fbs: float | None
     sex: str | None
     social_life: str | None
     genetics: int | None
@@ -61,7 +60,6 @@ def parse_clinical_row(raw: Mapping[str, Any]) -> CleanRow:
         ldl=parse_lab_value(raw["LDL"]),
         vldl=parse_lab_value(raw["VLDL"]),
         hba1c=parse_lab_value(raw["HbA1c"]),
-        fbs=parse_lab_value(raw["FBS"]),
         sex=parse_sex(raw["Sex"]),
         social_life=parse_social_life(raw["Social Life"]),
         genetics=parse_genetics(raw["genetics_raw"]),

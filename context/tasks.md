@@ -4,7 +4,7 @@ Live task state, groomed weekly. One line per task: `- [ ] <task> (<phase/sprint
 
 ## Now
 
-- [ ] Decide and implement an imputation strategy for missing values (ML preprocessing pipeline) — blocked on a decision: which method (e.g. column median, computed once and reused, matching the legacy's train/serve parity pattern) and where it lives in the pipeline; also needs a separate decision for `fbs` (96.5% missing — a different problem from ordinary imputation)
+- [ ] Decide and implement an imputation strategy for missing values (ML preprocessing pipeline) — blocked on a decision: which method (e.g. column median, computed once and reused, matching the legacy's train/serve parity pattern) and where it lives in the pipeline
 
 ## Later / parked
 
