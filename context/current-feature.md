@@ -57,10 +57,15 @@ reviewed vertical slices, in this order:
 - Hyperparameter search — `hyperparameter_search.py::search_hyperparameters`, `PARAM_GRID` (PR #22)
 - Cross-validation — `cross_validation.py::cross_validate_model`, `CrossValidationResult` (PR #23)
 - Feature importance, `genetics` dropped with evidence — `feature_importance.py::rank_feature_importance` (PR #24)
-- Bias audit by sex and age bucket — `bias_audit.py::audit_bias` (feature/ml-bias-audit)
+- Bias audit by sex and age bucket — `bias_audit.py::audit_bias` (PR #25)
+- Persistence — `persistence.py::ModelPackage`, `save_model_package`, `load_model_package`, `build_metadata`, `save_metadata` (feature/ml-persistence)
+- Run-everything script + navigation README — `train.py::train_and_evaluate`, `main`; `machine-learning/README.md` (feature/ml-persistence)
 
 **Remaining:**
-- Steps 8 above (persistence)
+- None — this feature is complete. Model training and evaluation is
+  done end-to-end: raw CSV → clean, imputed, feature-engineered,
+  labeled rows → trained, tuned, cross-validated, audited model →
+  persisted artifacts.
 
 ## Notes
 
@@ -155,6 +160,27 @@ reviewed vertical slices, in this order:
   the smallest group (n=22 of 133 test rows). Documented honestly
   rather than smoothed over; worth keeping in mind if this model is
   ever used for patients over 60 specifically.
+- Persistence saves two artifacts, matching legacy's split: a pickled
+  `ModelPackage` (`models/random_forest_model.pkl`, gitignored -
+  binary, rebuilt from source) bundling the model with its
+  `feature_names`, `medians`, and `ratio_medians` so a future serving
+  layer can impute a new patient identically to training; and
+  `models/model_metadata.json` (committed - human-readable audit
+  trail), with `CLINICAL_THRESHOLDS` newly exposed from `labels.py`
+  (was private module constants) so the exact thresholds behind a
+  model's labels travel with it. Verified end-to-end against the full
+  662-row dataset: both artifacts saved and round-tripped correctly
+  (loaded `medians`/`feature_names` match, loaded model's predictions
+  match the original).
+- Built `train.py` as a thin orchestration script (`train_and_evaluate`
+  composes the already-tested pipeline functions with zero new logic;
+  `main` handles the only I/O - loading the CSV, saving artifacts,
+  printing a summary) and `README.md` (a table of all 14 modules, in
+  dependency order, plus how to run the pipeline and tests) - so
+  someone new to this code has both a narrative entry point and a map.
+  Verified by actually running `python3 train.py` against the real
+  dataset: reproduces the exact numbers already verified manually
+  (93.98% test accuracy, 92.81% CV mean, same feature ranking).
 
 ## Context files
 

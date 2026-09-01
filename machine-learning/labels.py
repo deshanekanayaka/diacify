@@ -23,6 +23,19 @@ _LDL_HDL_HIGH = 3.5
 # Minimum number of secondary flags required to trigger an upgrade
 _UPGRADE_FLAG_THRESHOLD = 2
 
+# Public, for inclusion in persisted model metadata (see persistence.py) -
+# an audit trail should show exactly which thresholds produced a given
+# model's labels.
+CLINICAL_THRESHOLDS = {
+    "hba1c_prediabetes": _HBA1C_PREDIABETES,
+    "hba1c_diabetes": _HBA1C_DIABETES,
+    "bmi_obese": _BMI_OBESE,
+    "rbs_high": _RBS_HIGH,
+    "tg_hdl_high": _TG_HDL_HIGH,
+    "ldl_hdl_high": _LDL_HDL_HIGH,
+    "upgrade_flag_threshold": _UPGRADE_FLAG_THRESHOLD,
+}
+
 
 class RiskCategory(IntEnum):
     """A patient's assigned risk classification, ordered low to high."""

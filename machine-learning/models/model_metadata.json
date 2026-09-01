@@ -1,0 +1,231 @@
+{
+  "training_date": "2026-09-01T15:02:25.101669",
+  "dataset_size": 662,
+  "test_set_size": 133,
+  "labelling_method": "ADA 2025 HbA1c thresholds + five-flag composite upgrade rule",
+  "fbs_excluded": true,
+  "fbs_exclusion_reason": "96.5% missing (639 of 662 records) - statistically unreliable",
+  "genetics_excluded": true,
+  "genetics_exclusion_reason": "feature importance 0.0003, ~3 orders of magnitude below the top feature - negligible predictive value",
+  "cv_mean_accuracy": 0.9281,
+  "cv_std": 0.0247,
+  "cv_fold_scores": [
+    0.9434,
+    0.9434,
+    0.9528,
+    0.9151,
+    0.8857
+  ],
+  "test_accuracy": 0.9398,
+  "per_class_metrics": {
+    "Low": {
+      "precision": 0.925,
+      "recall": 0.9737,
+      "f1-score": 0.9487,
+      "support": 38.0
+    },
+    "Medium": {
+      "precision": 0.9298,
+      "recall": 0.9298,
+      "f1-score": 0.9298,
+      "support": 57.0
+    },
+    "High": {
+      "precision": 0.9722,
+      "recall": 0.9211,
+      "f1-score": 0.9459,
+      "support": 38.0
+    }
+  },
+  "feature_importances": {
+    "hba1c": 0.4137,
+    "tg_hdl_ratio": 0.1924,
+    "ldl_hdl_ratio": 0.1574,
+    "bmi": 0.0917,
+    "rbs": 0.0453,
+    "hypertension_flag": 0.0344,
+    "systolic": 0.0256,
+    "trig": 0.0157,
+    "age_bmi_interaction": 0.0127,
+    "hdl": 0.0047,
+    "diastolic": 0.0046,
+    "age": 0.0016,
+    "sex_encoded": 0.0003
+  },
+  "bias_audit": {
+    "sex_male": {
+      "Low": {
+        "precision": 0.9090909090909091,
+        "recall": 0.9523809523809523,
+        "f1-score": 0.9302325581395349,
+        "support": 21.0
+      },
+      "Medium": {
+        "precision": 0.9285714285714286,
+        "recall": 0.9285714285714286,
+        "f1-score": 0.9285714285714286,
+        "support": 42.0
+      },
+      "High": {
+        "precision": 0.9629629629629629,
+        "recall": 0.9285714285714286,
+        "f1-score": 0.9454545454545454,
+        "support": 28.0
+      },
+      "accuracy": 0.9340659340659341,
+      "macro avg": {
+        "precision": 0.9335417668751002,
+        "recall": 0.9365079365079364,
+        "f1-score": 0.9347528440551697,
+        "support": 91.0
+      },
+      "weighted avg": {
+        "precision": 0.9346579346579347,
+        "recall": 0.9340659340659341,
+        "f1-score": 0.9341495713588737,
+        "support": 91.0
+      }
+    },
+    "sex_female": {
+      "Low": {
+        "precision": 0.9444444444444444,
+        "recall": 1.0,
+        "f1-score": 0.9714285714285714,
+        "support": 17.0
+      },
+      "Medium": {
+        "precision": 0.9333333333333333,
+        "recall": 0.9333333333333333,
+        "f1-score": 0.9333333333333333,
+        "support": 15.0
+      },
+      "High": {
+        "precision": 1.0,
+        "recall": 0.9,
+        "f1-score": 0.9473684210526315,
+        "support": 10.0
+      },
+      "accuracy": 0.9523809523809523,
+      "macro avg": {
+        "precision": 0.9592592592592593,
+        "recall": 0.9444444444444445,
+        "f1-score": 0.9507101086048454,
+        "support": 42.0
+      },
+      "weighted avg": {
+        "precision": 0.9537037037037037,
+        "recall": 0.9523809523809523,
+        "f1-score": 0.952094522019334,
+        "support": 42.0
+      }
+    },
+    "age_under_40": {
+      "Low": {
+        "precision": 1.0,
+        "recall": 1.0,
+        "f1-score": 1.0,
+        "support": 15.0
+      },
+      "Medium": {
+        "precision": 1.0,
+        "recall": 1.0,
+        "f1-score": 1.0,
+        "support": 18.0
+      },
+      "High": {
+        "precision": 1.0,
+        "recall": 1.0,
+        "f1-score": 1.0,
+        "support": 1.0
+      },
+      "accuracy": 1.0,
+      "macro avg": {
+        "precision": 1.0,
+        "recall": 1.0,
+        "f1-score": 1.0,
+        "support": 34.0
+      },
+      "weighted avg": {
+        "precision": 1.0,
+        "recall": 1.0,
+        "f1-score": 1.0,
+        "support": 34.0
+      }
+    },
+    "age_40_60": {
+      "Low": {
+        "precision": 0.9047619047619048,
+        "recall": 0.95,
+        "f1-score": 0.926829268292683,
+        "support": 20.0
+      },
+      "Medium": {
+        "precision": 0.9333333333333333,
+        "recall": 0.9333333333333333,
+        "f1-score": 0.9333333333333333,
+        "support": 30.0
+      },
+      "High": {
+        "precision": 1.0,
+        "recall": 0.9629629629629629,
+        "f1-score": 0.9811320754716981,
+        "support": 27.0
+      },
+      "accuracy": 0.948051948051948,
+      "macro avg": {
+        "precision": 0.9460317460317461,
+        "recall": 0.9487654320987654,
+        "f1-score": 0.9470982256992381,
+        "support": 77.0
+      },
+      "weighted avg": {
+        "precision": 0.9492888064316637,
+        "recall": 0.948051948051948,
+        "f1-score": 0.9484045636829807,
+        "support": 77.0
+      }
+    },
+    "age_over_60": {
+      "Low": {
+        "precision": 0.75,
+        "recall": 1.0,
+        "f1-score": 0.8571428571428571,
+        "support": 3.0
+      },
+      "Medium": {
+        "precision": 0.7777777777777778,
+        "recall": 0.7777777777777778,
+        "f1-score": 0.7777777777777778,
+        "support": 9.0
+      },
+      "High": {
+        "precision": 0.8888888888888888,
+        "recall": 0.8,
+        "f1-score": 0.8421052631578947,
+        "support": 10.0
+      },
+      "accuracy": 0.8181818181818182,
+      "macro avg": {
+        "precision": 0.8055555555555555,
+        "recall": 0.8592592592592592,
+        "f1-score": 0.8256752993595099,
+        "support": 22.0
+      },
+      "weighted avg": {
+        "precision": 0.8244949494949495,
+        "recall": 0.8181818181818182,
+        "f1-score": 0.8178400546821599,
+        "support": 22.0
+      }
+    }
+  },
+  "clinical_thresholds": {
+    "hba1c_prediabetes": 5.7,
+    "hba1c_diabetes": 6.5,
+    "bmi_obese": 30.0,
+    "rbs_high": 126.0,
+    "tg_hdl_high": 2.8,
+    "ldl_hdl_high": 3.5,
+    "upgrade_flag_threshold": 2
+  }
+}
