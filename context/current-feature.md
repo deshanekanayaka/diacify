@@ -33,10 +33,11 @@ surfaced and agreed before implementation, per `CLAUDE.md` §2.
 - Parse remaining lab fields, RBS floor — `clinical_fields.py::parse_lab_value`, `parse_rbs` (PR #13)
 - Parse categorical fields — `clinical_fields.py::parse_sex`, `parse_social_life`, `parse_genetics` (PR #14)
 - Assemble all parsers into one clean-row function — `assemble.py::parse_clinical_row`, `CleanRow` (PR #15)
-- Decide and implement an imputation strategy — `imputation.py::fit`, `transform`, `Medians` (feature/ml-imputation)
+- Decide and implement an imputation strategy — `imputation.py::fit`, `transform`, `Medians` (PR #16)
+- Feature engineering: ratios, hypertension flag, age×BMI interaction — `features.py::fit_ratio_medians`, `engineer_features`, `RatioMedians`, `EngineeredFeatures` (feature/ml-feature-engineering)
 
 **Remaining:**
-- None — imputation was the last preprocessing step; feature engineering unparks next
+- None — this was the last item in "ML preprocessing pipeline"; label assignment is next
 
 ## Notes
 
@@ -80,6 +81,20 @@ surfaced and agreed before implementation, per `CLAUDE.md` §2.
   count. Whether it's actually useful is deferred to feature
   engineering / model training, where real evidence (feature
   importance) can decide it — not a guess made during cleaning.
+- Feature engineering matches legacy's four features (TG/HDL ratio,
+  LDL/HDL ratio, hypertension flag, age×BMI interaction) — these feed
+  directly into the label-assignment upgrade rule, so building all
+  four now keeps labeling unblocked next.
+- The two ratios divide by HDL, so legacy added a fallback for HDL≤0
+  (shipped training-time median instead of dividing) — itself a fix
+  for a real historical train/serve skew bug. Checked: HDL≤0 doesn't
+  occur anywhere in the real 662-row dataset (min 19.0), so this isn't
+  a live data issue like FBS or the BP-unit bug — it's a defensive
+  case for a malformed single served patient, built now anyway to
+  mirror imputation's fit/transform train/serve-parity pattern.
+  `RatioMedians`/`fit_ratio_medians` are a second, smaller instance of
+  that same pattern, separate from `imputation.Medians` because they're
+  fit on derived ratios, not raw fields.
 
 ## Context files
 
