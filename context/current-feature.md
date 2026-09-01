@@ -52,10 +52,11 @@ reviewed vertical slices, in this order:
 
 **Done:**
 - Feature matrix construction — `feature_matrix.py::to_feature_vector`, `FEATURE_NAMES` (PR #19)
-- Train/test split, leakage-safe imputation/ratio-median fitting — `split.py::split_rows`, `prepare_train_test_data`, `TrainTestData` (feature/ml-train-test-split)
+- Train/test split, leakage-safe imputation/ratio-median fitting — `split.py::split_rows`, `prepare_train_test_data`, `TrainTestData` (PR #20)
+- Baseline model + single train/test evaluation — `model.py::fit_baseline_model`, `evaluate_model`, `EvaluationResult` (feature/ml-baseline-model)
 
 **Remaining:**
-- Steps 3-8 above
+- Steps 4-8 above
 
 ## Notes
 
@@ -89,6 +90,17 @@ reviewed vertical slices, in this order:
   all rows accounted for), and confirmed the leakage fix actually
   works — the train-only BMI median (28.7) differs from the
   full-dataset median (29.0).
+- Baseline model uses legacy's exact baseline hyperparameters
+  (`max_depth=5, min_samples_split=0.01, max_features=0.8,
+  max_samples=0.8, random_state=0, class_weight="balanced"`) - not
+  yet grid-searched, that's the next step. `model.py` returns data
+  (`EvaluationResult`), it doesn't print - matches the project's "pure
+  computation separate from side effects" standard; a reporting/CLI
+  layer, if one gets built, is a separate concern.
+  Verified against the full dataset: 92.48% test accuracy, in the
+  same ballpark as legacy's ~94.9% CV figure despite the different
+  (leakage-free) preprocessing, with balanced precision/recall across
+  all three classes.
 
 ## Context files
 
