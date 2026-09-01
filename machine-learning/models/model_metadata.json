@@ -1,5 +1,5 @@
 {
-  "training_date": "2026-09-01T14:51:18.802425",
+  "training_date": "2026-09-01T15:02:25.101669",
   "dataset_size": 662,
   "test_set_size": 133,
   "labelling_method": "ADA 2025 HbA1c thresholds + five-flag composite upgrade rule",

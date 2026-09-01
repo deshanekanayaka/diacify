@@ -59,6 +59,7 @@ reviewed vertical slices, in this order:
 - Feature importance, `genetics` dropped with evidence — `feature_importance.py::rank_feature_importance` (PR #24)
 - Bias audit by sex and age bucket — `bias_audit.py::audit_bias` (PR #25)
 - Persistence — `persistence.py::ModelPackage`, `save_model_package`, `load_model_package`, `build_metadata`, `save_metadata` (feature/ml-persistence)
+- Run-everything script + navigation README — `train.py::train_and_evaluate`, `main`; `machine-learning/README.md` (feature/ml-persistence)
 
 **Remaining:**
 - None — this feature is complete. Model training and evaluation is
@@ -171,6 +172,17 @@ reviewed vertical slices, in this order:
   662-row dataset: both artifacts saved and round-tripped correctly
   (loaded `medians`/`feature_names` match, loaded model's predictions
   match the original).
+- Built `train.py` as a thin orchestration script (`train_and_evaluate`
+  composes the already-tested pipeline functions with zero new logic;
+  `main` handles the only I/O - loading the CSV, saving artifacts,
+  printing a summary) and `README.md` (a table of all 14 modules, in
+  dependency order, plus how to run the pipeline and tests) - so
+  someone new to this code has both a narrative entry point and a map.
+  Verified by actually running `python3 train.py` against the real
+  dataset: reproduces the exact numbers already verified manually
+  (93.98% test accuracy, 92.81% CV mean, same feature ranking).
+
+## Context files
 
 Read these first, every session:
 
