@@ -34,10 +34,11 @@ surfaced and agreed before implementation, per `CLAUDE.md` §2.
 - Parse categorical fields — `clinical_fields.py::parse_sex`, `parse_social_life`, `parse_genetics` (PR #14)
 - Assemble all parsers into one clean-row function — `assemble.py::parse_clinical_row`, `CleanRow` (PR #15)
 - Decide and implement an imputation strategy — `imputation.py::fit`, `transform`, `Medians` (PR #16)
-- Feature engineering: ratios, hypertension flag, age×BMI interaction — `features.py::fit_ratio_medians`, `engineer_features`, `RatioMedians`, `EngineeredFeatures` (feature/ml-feature-engineering)
+- Feature engineering: ratios, hypertension flag, age×BMI interaction — `features.py::fit_ratio_medians`, `engineer_features`, `RatioMedians`, `EngineeredFeatures` (PR #17)
+- Label assignment: ADA 2025 base label + secondary-flag upgrade rule — `labels.py::assign_label`, `RiskCategory` (feature/ml-label-assignment)
 
 **Remaining:**
-- None — this was the last item in "ML preprocessing pipeline"; label assignment is next
+- None — this was the last item in "ML preprocessing pipeline"; model training and evaluation is next, as its own feature
 
 ## Notes
 
@@ -95,6 +96,17 @@ surfaced and agreed before implementation, per `CLAUDE.md` §2.
   `RatioMedians`/`fit_ratio_medians` are a second, smaller instance of
   that same pattern, separate from `imputation.Medians` because they're
   fit on derived ratios, not raw fields.
+- Label assignment (`labels.py`) preserves legacy's rule and exact
+  thresholds as-is — they're grounded in real cited sources (ADA 2025
+  for HbA1c, Diabetes UK for hypertension/obesity, Baneu et al. 2024
+  for the TG/HDL ratio), not arbitrary. The only change from legacy is
+  representation: `RiskCategory` is an `IntEnum` (LOW/MEDIUM/HIGH)
+  instead of legacy's raw `0`/`1`/`2` codes — self-documenting at call
+  sites, while staying comparable/addable so the "upgrade one tier,
+  capped at HIGH" logic stays plain arithmetic
+  (`RiskCategory(min(base.value + 1, RiskCategory.HIGH.value))`).
+  Verified against the full dataset: all 662 rows labeled, distribution
+  226 low / 240 medium / 196 high — balanced enough to train on.
 
 ## Context files
 
