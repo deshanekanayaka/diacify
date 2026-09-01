@@ -4,7 +4,6 @@ Live task state, groomed weekly. One line per task: `- [ ] <task> (<phase/sprint
 
 ## Now
 
-- [ ] Wire `requireAuth` to a real Supabase project + boot-time env validation + `server.ts` (backend API design, slice 1 follow-up)
 - [ ] Patients table schema + RLS + cross-tenant isolation test (backend API design, slice 2)
 - [ ] `GET /api/patients` (backend API design, slice 3)
 - [ ] `POST /api/patients` + rate limiting (backend API design, slice 4)
