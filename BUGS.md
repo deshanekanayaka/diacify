@@ -12,9 +12,11 @@ training (`feature/ml-train-test-split`).
 
 **What happened:**
 
-Legacy's `train_model.py` preprocesses the entire 662-row dataset —
-including fitting the imputation medians used to fill in missing
-values — *before* splitting into train/test:
+Some patients have missing values (e.g. no recorded BMI). To fill
+those gaps, legacy computed the median BMI across all 662 patients,
+then filled every gap with that number — before splitting the data
+into "train" (for building the model) and "test" (for judging how
+good it is):
 
 ```python
 # train_model.py, main()
@@ -22,6 +24,11 @@ df, training_medians = load_and_preprocess_data(CSV_PATH)   # medians fit on all
 x, y, feature_columns = prepare_features(df)
 x_train, x_test, y_train, y_test = split_data(x, y)          # split happens after
 ```
+
+Legacy's order:
+1. Fill in missing values using ALL 662 patients
+2. THEN split into train (529) / test (133)
+3. Train on train, judge on test
 
 Because the medians used to fill missing values were computed from
 the full dataset, the test set's own values influenced a statistic
@@ -49,6 +56,13 @@ def prepare_train_test_data(rows: Sequence[CleanRow]) -> TrainTestData:
     test_engineered = [features.engineer_features(row, ratio_medians) for row in test_imputed]
     ...
 ```
+
+Our order:
+1. Split into train (529) / test (133) FIRST
+2. Fill in missing values using ONLY the 529 train patients
+3. Use that same fill-in number on the test patients too
+   (never recompute it from test data)
+4. Train on train, judge on test
 
 Verified the fix actually takes effect by comparing the two medians
 directly: fitting on all 662 rows gives a BMI median of `29.0`; fitting
