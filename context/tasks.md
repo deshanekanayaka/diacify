@@ -4,4 +4,7 @@ Live task state, groomed weekly. One line per task: `- [ ] <task> (<phase/sprint
 
 ## Now
 
-- Nothing queued — "ML model training and evaluation" is complete pending this PR's merge. Next feature to be decided.
+- [ ] Wire `requireAuth` to a real Supabase project + boot-time env validation + `server.ts` (backend API design, slice 1 follow-up)
+- [ ] Patients table schema + RLS + cross-tenant isolation test (backend API design, slice 2)
+- [ ] `GET /api/patients` (backend API design, slice 3)
+- [ ] `POST /api/patients` + rate limiting (backend API design, slice 4)
