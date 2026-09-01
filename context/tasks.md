@@ -4,11 +4,10 @@ Live task state, groomed weekly. One line per task: `- [ ] <task> (<phase/sprint
 
 ## Now
 
-- [ ] Baseline model + single train/test evaluation (ML model training)
+- [ ] Hyperparameter search (ML model training)
 
 ## Later / parked
 
-- [ ] Hyperparameter search (ML model training)
 - [ ] Cross-validation (ML model training)
 - [ ] Feature importance (ML model training)
 - [ ] Bias audit (ML model training)
