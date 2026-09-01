@@ -2,7 +2,7 @@ from dataclasses import replace
 
 from assemble import CleanRow
 from features import EngineeredFeatures
-from labels import RiskCategory, assign_label, base_label_from_hba1c
+from labels import CLINICAL_THRESHOLDS, RiskCategory, assign_label, base_label_from_hba1c
 
 # A row/features pair with every secondary flag safely below threshold, so
 # only Stage A (the HbA1c base label) is in play unless a test overrides it.
@@ -36,6 +36,18 @@ def _row_with(**overrides) -> CleanRow:
 
 def _features_with(**overrides) -> EngineeredFeatures:
     return replace(_FEATURES, **overrides)
+
+
+def test_clinical_thresholds_matches_the_values_used_by_assign_label():
+    assert CLINICAL_THRESHOLDS == {
+        "hba1c_prediabetes": 5.7,
+        "hba1c_diabetes": 6.5,
+        "bmi_obese": 30.0,
+        "rbs_high": 126.0,
+        "tg_hdl_high": 2.8,
+        "ldl_hdl_high": 3.5,
+        "upgrade_flag_threshold": 2,
+    }
 
 
 def test_base_label_from_hba1c_needs_only_hba1c():

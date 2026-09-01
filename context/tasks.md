@@ -4,4 +4,4 @@ Live task state, groomed weekly. One line per task: `- [ ] <task> (<phase/sprint
 
 ## Now
 
-- [ ] Persistence (ML model training)
+- Nothing queued — "ML model training and evaluation" is complete pending this PR's merge. Next feature to be decided.
