@@ -1,9 +1,12 @@
 from assemble import CleanRow
 from features import EngineeredFeatures
 
-# Matches legacy's validated 14-feature set (docs/phase-1-investigation.md,
+# Started from legacy's validated 14-feature set (docs/phase-1-investigation.md,
 # train_model.py). Chol, VLDL, and social_life are deliberately excluded -
-# legacy found no predictive value in them.
+# legacy found no predictive value in them. genetics was kept through
+# preprocessing pending real evidence, then dropped here once
+# feature_importance.py measured it at 0.0003 - three orders of magnitude
+# below the top feature, the same signature as the fields legacy excluded.
 FEATURE_NAMES = (
     "hba1c",
     "age",
@@ -16,7 +19,6 @@ FEATURE_NAMES = (
     "ldl_hdl_ratio",
     "trig",
     "hdl",
-    "genetics",
     "hypertension_flag",
     "age_bmi_interaction",
 )
@@ -45,7 +47,6 @@ def to_feature_vector(row: CleanRow, features: EngineeredFeatures) -> dict[str, 
         "ldl_hdl_ratio": features.ldl_hdl_ratio,
         "trig": row.trig,
         "hdl": row.hdl,
-        "genetics": float(row.genetics),
         "hypertension_flag": 1.0 if features.hypertension_flag else 0.0,
         "age_bmi_interaction": features.age_bmi_interaction,
     }

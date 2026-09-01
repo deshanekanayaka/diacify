@@ -4,9 +4,8 @@ Live task state, groomed weekly. One line per task: `- [ ] <task> (<phase/sprint
 
 ## Now
 
-- [ ] Feature importance (ML model training)
+- [ ] Bias audit (ML model training)
 
 ## Later / parked
 
-- [ ] Bias audit (ML model training)
 - [ ] Persistence (ML model training)
