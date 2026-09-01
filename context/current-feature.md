@@ -67,18 +67,30 @@ isolation before any schema or data exists:
 - Auth gatekeeper — `backend/src/middleware/requireAuth.ts`,
   `createRequireAuth` (6 tests: missing header, malformed header,
   wrong signature, expired token, valid token, key-fetch failure →
-  503). Backend scaffolding (TS strict, Express, Vitest, ESLint) added
-  alongside it. Not yet wired to a real Supabase project — tested
-  against a locally generated JWKS fixture, no live infra needed for
-  this slice. (`feature/api-auth-gatekeeper`, not yet merged)
+  503). Backend scaffolding (TS strict, Express, Vitest, ESLint).
+- Boot-time env validation — `backend/src/config/env.ts::loadEnv`
+  (2 tests: throws if `SUPABASE_URL` unset, returns it when set).
+- Real Supabase wiring — `backend/src/auth/supabaseJwks.ts`
+  (`createRemoteJWKSet` against `/auth/v1/.well-known/jwks.json`) +
+  `backend/src/server.ts` (`GET /health` public, `GET /api/whoami`
+  protected — temporary, proves the gatekeeper end-to-end, will be
+  replaced by a real endpoint in slice 3).
+- **Verified against the real Supabase project**
+  (`wyyufufcbecorvrnoseh`), not just fixtures: confirmed the project
+  already uses asymmetric signing (`ECC P-256`, current key) rather
+  than the legacy HS256 shared secret — checked directly in the
+  dashboard rather than assumed, since Supabase's docs don't state
+  what new projects default to. Got a real access token from a
+  dashboard-created test user via the password grant endpoint, hit the
+  running server's `/api/whoami` with it: `200`, `userId` matched the
+  token's `sub` claim exactly. Unauthenticated request to the same
+  route against the real server: `401`, as expected.
+  (all on `feature/api-auth-gatekeeper`, not yet merged)
 
 **Remaining:**
-- Wire `requireAuth` to a real Supabase project (needs the user to
-  create the project and provide its URL) + boot-time env validation
-  + `server.ts`
-- Patients table schema + RLS + cross-tenant isolation test
-- `GET /api/patients`
-- `POST /api/patients` + rate limiting
+- Patients table schema + RLS + cross-tenant isolation test (slice 2)
+- `GET /api/patients` (slice 3)
+- `POST /api/patients` + rate limiting (slice 4)
 - Everything past that (visits, appointments, analytics, ported
   ML-predict endpoint) — not yet planned in detail
 
@@ -96,6 +108,16 @@ isolation before any schema or data exists:
   `createLocalJWKSet(fixtureKeys)`. Same verification logic either
   way; this is what let the gatekeeper be fully tested without a live
   Supabase project existing yet.
+- `requireAuth`/`jwtVerify` never restricts which signing algorithm is
+  accepted — it verifies against whatever the JWKS resolver returns.
+  This mattered in practice: the real project turned out to already be
+  on asymmetric `ES256`, but the code would have worked unchanged
+  against `RS256` too, since nothing hardcodes an expected algorithm.
+- Installed the `supabase-community/supabase-plugin` Claude Code
+  plugin (user scope) via `npx plugins add supabase-community/supabase-plugin`
+  for Supabase-specific skills/docs access. Its MCP server (direct
+  project querying) still needs interactive OAuth the user hasn't run
+  yet — unavailable in non-interactive sessions until then.
 
 ## Context files
 
