@@ -4,7 +4,8 @@
 
 ## Status
 
-In Progress
+Done — merged to main (PRs #19–#26). Archived to `context/progress.md`.
+Next feature not yet decided.
 
 ## Goals
 
