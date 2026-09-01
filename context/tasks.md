@@ -4,10 +4,9 @@ Live task state, groomed weekly. One line per task: `- [ ] <task> (<phase/sprint
 
 ## Now
 
-- [ ] Decide and implement an imputation strategy for missing values (ML preprocessing pipeline) — blocked on a decision: which method (e.g. column median, computed once and reused, matching the legacy's train/serve parity pattern) and where it lives in the pipeline
+- [ ] Feature engineering: ratios, interaction terms, derived flags (ML preprocessing pipeline)
 
 ## Later / parked
 
-- [ ] Feature engineering: ratios, interaction terms, derived flags (unparks once imputation is decided and implemented)
 - [ ] Label assignment logic (unparks once feature engineering is done)
 - [ ] Model training and evaluation (unparks once labeling is done)

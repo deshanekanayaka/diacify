@@ -32,10 +32,11 @@ surfaced and agreed before implementation, per `CLAUDE.md` §2.
 - Parse and bound BMI — `clinical_fields.py::parse_bmi` (PR #12)
 - Parse remaining lab fields, RBS floor — `clinical_fields.py::parse_lab_value`, `parse_rbs` (PR #13)
 - Parse categorical fields — `clinical_fields.py::parse_sex`, `parse_social_life`, `parse_genetics` (PR #14)
-- Assemble all parsers into one clean-row function — `assemble.py::parse_clinical_row`, `CleanRow` (feature/ml-assemble-clean-row)
+- Assemble all parsers into one clean-row function — `assemble.py::parse_clinical_row`, `CleanRow` (PR #15)
+- Decide and implement an imputation strategy — `imputation.py::fit`, `transform`, `Medians` (feature/ml-imputation)
 
 **Remaining:**
-- Decide and implement an imputation strategy for the missing values each parser leaves behind
+- None — imputation was the last preprocessing step; feature engineering unparks next
 
 ## Notes
 
@@ -61,7 +62,24 @@ surfaced and agreed before implementation, per `CLAUDE.md` §2.
   (639/662). Decided to drop `fbs` entirely rather than impute it —
   median-imputing a column that's almost entirely absent would be
   fabricating data, not filling gaps. `CleanRow` no longer has an `fbs`
-  field.
+  field. `docs/phase-1-investigation.md` confirms the legacy pipeline
+  reached the same conclusion, independently, for the same reason.
+- Imputation is a `fit(rows) -> Medians` / `transform(row, medians) ->
+  row` pair, not a one-shot function — deliberately matching the
+  legacy's "ship training-time medians, reuse them at serving time"
+  pattern (which fixed a real historical train/serve skew bug). We
+  don't have a train/test split yet, so `fit` currently runs on the
+  whole cleaned dataset; when a split exists, `fit` moves to the
+  training split only and `transform`'s signature doesn't change.
+- `sex` and `social_life` are not imputed — both are 0% missing in the
+  real data, so there's no categorical-imputation behavior designed
+  yet. Flagged as a gap if that ever changes.
+- `genetics` is kept (not dropped, despite only 0.2% missing and
+  uncertainty about its model value) and median-imputed like the other
+  numeric fields, rounded to the nearest int since it's a discrete
+  count. Whether it's actually useful is deferred to feature
+  engineering / model training, where real evidence (feature
+  importance) can decide it — not a guess made during cleaning.
 
 ## Context files
 
