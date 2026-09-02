@@ -6,8 +6,8 @@
 
 In progress. Slice 1 (auth gatekeeper) merged to main (PR #28).
 Slice 2 (patients table + RLS, plus the anon-default-privileges bug
-fix) merged to main (PR #30). Slice 3 (`GET /api/patients`) not yet
-started.
+fix) merged to main (PR #30). Slice 3 (`GET /api/patients`)
+implemented on `feature/get-patients-endpoint`, not yet merged.
 
 Note: the previous feature, "ML model training and evaluation," is
 complete (PRs #19–#26, see `context/progress.md`) but its "Done" status
@@ -122,20 +122,82 @@ isolation before any schema or data exists:
   shows zero rows for `anon` on `patients` now) and the full test
   suite still passes.
 
+- `GET /api/patients` (slice 3) — architecture decision first: the
+  backend queries Postgres via a **request-scoped `@supabase/supabase-js`
+  client** built per-request from the caller's own verified JWT
+  (`backend/src/db/requestClient.ts::createRequestClient`), not a raw
+  `pg` connection with hand-rolled role impersonation. Rejected the
+  raw-`pg` option specifically because a mistake in manual session
+  impersonation fails silently (queries run as superuser, RLS does
+  nothing) — a worse version of the bug just found and fixed in slice
+  2. This meant `requireAuth`'s `req.user` grew a second field,
+  `accessToken` (the raw JWT, not just the decoded `sub`), so route
+  handlers can build that per-request client.
+  `backend/src/routes/pagination.ts::parsePagination` (8 tests, pure
+  function): parses `limit`/`page`, defaults 20/1, non-numeric or `< 1`
+  rejected with 400, a limit above 100 is silently clamped rather than
+  rejected (still a reasonable request). No `sort`/filter query params
+  yet — `patients` has only one sortable column (`created_at`, fixed
+  descending) and no filterable clinical columns, so exposing params
+  with a single possible value would be premature surface.
+  `backend/src/routes/patients.ts::createPatientsRouter` — `GET /`
+  behind `requireAuth`, response `{ data, page, limit, total }`.
+  `backend/src/routes/patients.test.ts` (6 tests, against real local
+  Postgres via `supabase start`, exercising the actual HTTP route with
+  `supertest`, not just the DB layer): 401 with no auth, a clinician's
+  own patients returned newest-first, an empty list (not an error) for
+  a clinician with none, pagination, both 400 cases. Also verified
+  against the real Supabase project: `200` with the caller's real
+  (empty) patient list, `401` unauthenticated.
+  Temporary `/api/whoami` route from slice 1 removed — this is the
+  real endpoint it was standing in for.
+- **Hardening from a pre-merge review pass** (4 findings pasted by the
+  user, each independently verified against real behavior before
+  fixing — one was stale, three were real):
+  - Generated `backend/src/db/database.types.ts` (`supabase gen types
+    typescript --linked`, regenerate after any migration) and typed
+    `createRequestClient` as `SupabaseClient<Database>` — `.from()`
+    calls now get compile-time table/column checking instead of
+    trusting a bare string.
+  - `parsePositiveInt` now also requires `Number.isSafeInteger` — a
+    `page` like `99999999999999999999` previously passed validation
+    (regex + `>= 1`) and produced `from`/`to` as `1e+22`. Tested
+    directly against the real client: it happened to degrade
+    gracefully (`200`, empty data) rather than crashing, but that's
+    incidental behavior of Supabase's HTTP layer, not something
+    validation should rely on. Fixed at the one validation boundary,
+    not duplicated as a second check in the route.
+  - Both RLS/route test files accumulate test users otherwise —
+    confirmed directly (9 auth users, 8 orphaned patient rows already
+    on the local stack before this fix, from repeated runs this
+    session). Added `backend/src/db/testCleanup.ts::deleteTestUser`
+    (admin-API delete, local-stack-only — `clinician_id`'s `on delete
+    cascade` means deleting the user also removes their patients, no
+    separate cleanup needed) and wired `afterAll` into both test
+    files. Confirmed fixed by running the suite twice and checking the
+    count stayed flat rather than growing.
+  - Added a secondary `.order("id", { ascending: false })` after
+    `created_at` in the patients query — Postgres doesn't guarantee
+    stable row order across paginated queries when the sort key has
+    ties. Added a test that walks every page and checks no patient is
+    repeated or omitted — but it doesn't force an actual tie (not
+    reliably achievable via the public signup/insert API), so it
+    verifies general pagination completeness rather than regression-
+    testing the tie-break case specifically. Said so plainly rather
+    than implying the test proves more than it does.
+
 **Remaining:**
-- `GET /api/patients` (slice 3)
 - `POST /api/patients` + rate limiting (slice 4)
 - Everything past that (visits, appointments, analytics, ported
   ML-predict endpoint) — not yet planned in detail
 
 ## Notes
 
-- `req.user` is read via a cast to `AuthenticatedRequest` rather than
-  Express global type-augmentation, deliberately — there's only one
-  call site (a test route) so far. Revisit once a second real route
-  handler needs `req.user` (slice 3, `GET /api/patients`); adding the
-  global augmentation now would be solving a duplication problem that
-  doesn't exist yet.
+- `req.user` is still read via a cast to `AuthenticatedRequest` rather
+  than Express global type-augmentation. Slice 3 added the real second
+  call site this was waiting on (`patients.ts`) — deliberately kept as
+  a cast anyway for now, since two call sites is still a small, direct
+  cost; revisit if a third shows up in slice 4.
 - `getKey` is a parameter to `createRequireAuth`, not hardcoded to
   Supabase's JWKS endpoint — production wiring will pass
   `createRemoteJWKSet(supabaseJwksUrl)`, tests pass

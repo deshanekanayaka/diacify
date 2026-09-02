@@ -4,5 +4,4 @@ Live task state, groomed weekly. One line per task: `- [ ] <task> (<phase/sprint
 
 ## Now
 
-- [ ] `GET /api/patients` (backend API design, slice 3)
 - [ ] `POST /api/patients` + rate limiting (backend API design, slice 4)
