@@ -30,7 +30,7 @@ async function buildApp(getKey: JWTVerifyGetKey) {
   const app = express();
   app.get("/protected", createRequireAuth(getKey), (req, res) => {
     const authedReq = req as AuthenticatedRequest;
-    res.status(200).json({ userId: authedReq.user?.id });
+    res.status(200).json({ userId: authedReq.user?.id, accessToken: authedReq.user?.accessToken });
   });
   return app;
 }
@@ -92,7 +92,7 @@ describe("requireAuth", () => {
     const response = await request(app).get("/protected").set("Authorization", `Bearer ${token}`);
 
     expect(response.status).toBe(200);
-    expect(response.body).toEqual({ userId: "clinician-456" });
+    expect(response.body).toEqual({ userId: "clinician-456", accessToken: token });
   });
 
   it("returns 503 when the signing key cannot be fetched", async () => {

@@ -1,6 +1,7 @@
 /** Server configuration read from the environment at process startup. */
 export interface Env {
   supabaseUrl: string;
+  supabasePublishableKey: string;
 }
 
 /**
@@ -14,5 +15,11 @@ export function loadEnv(source: NodeJS.ProcessEnv = process.env): Env {
   if (!supabaseUrl) {
     throw new Error("SUPABASE_URL is not set");
   }
-  return { supabaseUrl };
+
+  const supabasePublishableKey = source.SUPABASE_PUBLISHABLE_KEY;
+  if (!supabasePublishableKey) {
+    throw new Error("SUPABASE_PUBLISHABLE_KEY is not set");
+  }
+
+  return { supabaseUrl, supabasePublishableKey };
 }
