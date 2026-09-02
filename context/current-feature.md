@@ -95,10 +95,7 @@ isolation before any schema or data exists:
   present — an UPDATE policy needs `USING` to find the row at all, and
   without `WITH CHECK` a clinician could reassign a row's
   `clinician_id` to someone else's), plus an explicit `GRANT` to
-  `authenticated` only (table-level access is separate from RLS — a
-  new table has neither by default; `anon` deliberately gets no grant
-  at all, so an unauthenticated request gets a hard permission error
-  rather than a deceptively-empty result).
+  `authenticated`.
   `backend/src/db/patients.rls.test.ts` (5 tests, against a real local
   Postgres via `supabase start` — not mocked): two real clinician
   accounts signed up inline (local stack auto-confirms, unlike the
@@ -107,6 +104,22 @@ isolation before any schema or data exists:
   outright. Ran `supabase db advisors` against the real project after
   pushing — clean on everything this migration touches (two unrelated
   pre-existing findings surfaced, see Notes).
+- **Bug found via code review, fixed and logged** (`BUGS.md`): `anon`
+  actually had full CRUD grants on `patients` despite the migration
+  only ever granting `authenticated` — Supabase's project-level default
+  privileges auto-grant every new table to `anon`/`authenticated` the
+  instant `CREATE TABLE` runs, before a migration's own `GRANT` line
+  executes. RLS still blocked `anon` at the row level throughout (two
+  independent gates; one silently failed open, the other held — no
+  data was ever actually exposed), but the table-level gate wasn't
+  really closed the way it was documented to be. Fixed at the root
+  with a new migration: revoked `anon`'s existing grant, and revoked
+  the default privilege itself (`alter default privileges for role
+  postgres in schema public revoke all on tables from anon`) so every
+  *future* table starts closed, not just `patients`. Re-verified
+  against the real project (`information_schema.role_table_grants`
+  shows zero rows for `anon` on `patients` now) and the full test
+  suite still passes.
 
 **Remaining:**
 - `GET /api/patients` (slice 3)
