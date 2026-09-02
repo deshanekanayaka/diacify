@@ -5,6 +5,163 @@ prevent the same class of bug going forward. Newest first.
 
 ---
 
+## Pagination had no deterministic tiebreaker, risking repeated or skipped rows across pages
+
+**Found:** 2026-09-02, via a CodeRabbit review comment on PR for
+`feature/get-patients-endpoint` (`GET /api/patients`).
+
+**What happened:**
+
+The patients query sorted only by `created_at`:
+
+```ts
+const { data, error, count } = await client
+  .from("patients")
+  .select("*", { count: "exact" })
+  .order("created_at", { ascending: false })
+  .range(from, to);
+```
+
+Postgres does not guarantee a stable row order across *separate*
+queries when the sort column has ties — two rows with the same
+`created_at` can come back in a different relative order on different
+requests. Since each page of results is its own separate query
+(`range(0, 19)`, then `range(20, 39)`, ...), a tie straddling a page
+boundary could mean the same patient shows up on two pages, or a
+different patient never shows up on any page.
+
+**Fix:**
+
+```ts
+.order("created_at", { ascending: false })
+.order("id", { ascending: false })
+```
+
+`id` is a UUID primary key — always unique, so once it's added as a
+secondary sort key there are never any remaining ties, and row order is
+fully deterministic across every page, every time.
+
+**Verification note, stated honestly:** the regression test added
+(`patients.test.ts`, "walks every page with limit=1...") walks all
+pages and checks every patient appears exactly once — but it doesn't
+force an actual tie, since two sequential HTTP inserts essentially
+never land on the exact same `created_at` in practice. It verifies
+general pagination completeness, not a reproduction of the specific
+tie-break bug. The fix is applied on the general correctness principle
+(ties are possible in principle, however rare here), not because the
+test proves the bug would otherwise occur.
+
+**Prevention:**
+
+- Any paginated query needs a sort key that's unique per row, not just
+  "good enough in practice." A primary key as a secondary sort column
+  is the cheap, general fix.
+
+---
+
+## Pagination accepted numbers beyond `Number.MAX_SAFE_INTEGER`, producing nonsensical range values
+
+**Found:** 2026-09-02, via a CodeRabbit review comment on PR for
+`feature/get-patients-endpoint` (`GET /api/patients`).
+
+**What happened:**
+
+`parsePositiveInt` validated a query param with a regex and a
+lower-bound check, but nothing checked the *upper* bound of what
+`Number()` can safely represent:
+
+```ts
+function parsePositiveInt(value: unknown): number | null | undefined {
+  if (value === undefined) return undefined;
+  if (typeof value !== "string" || !/^\d+$/.test(value)) return null;
+  const parsed = Number(value);
+  return parsed >= 1 ? parsed : null;   // no upper bound check
+}
+```
+
+`?page=99999999999999999999` (20 nines) passes `/^\d+$/` (all digits)
+and `Number(...)  >= 1`, so it was accepted as "valid." Confirmed
+directly:
+
+```
+Number("99999999999999999999999999")  →  1e+22
+Number.isSafeInteger(1e+22)            →  false
+```
+
+That value then fed directly into `from = (page - 1) * limit`,
+producing `from`/`to` as `1e+22` — sent to Supabase's `.range()` call.
+Tested against the real client: it happened to return `200` with an
+empty result rather than crashing, but that's incidental behavior of
+Supabase's HTTP layer serializing a garbage range header, not a
+guarantee — and even the "safe" outcome is a `200` for a request that
+should have been rejected as invalid.
+
+**Fix:**
+
+```ts
+return Number.isSafeInteger(parsed) && parsed >= 1 ? parsed : null;
+```
+
+An out-of-safe-range `page` or `limit` is now rejected with a clean
+`400`, at the same single validation boundary that already handles
+non-numeric and negative input — not a second check bolted onto the
+route.
+
+**Prevention:**
+
+- When validating a numeric string from user input, check both bounds
+  (`Number.isSafeInteger`, not just `>= 1`) — a regex confirming
+  "digits only" says nothing about whether the resulting number is
+  small enough to do arithmetic on safely.
+
+---
+
+## Test runs left orphaned clinician accounts and patient rows on the local Supabase stack
+
+**Found:** 2026-09-02, via a CodeRabbit review comment on PR for
+`feature/get-patients-endpoint`, confirmed by directly counting rows
+before any fix.
+
+**What happened:**
+
+Both `patients.rls.test.ts` and `patients.test.ts` sign up real
+clinician accounts against the local Supabase stack (`supabase start`)
+to prove RLS/the route work end-to-end. Every run created new accounts
+via `auth.signUp`, but nothing ever deleted them afterward. Confirmed
+the accumulation directly rather than assuming it was a problem:
+
+```sql
+select count(*) from auth.users;   -- 9
+select count(*) from patients;     -- 8
+```
+
+— both already non-zero from ordinary repeated test runs earlier in
+this same session, with no `supabase db reset` in between.
+
+**Fix:**
+
+`backend/src/db/testCleanup.ts::deleteTestUser` — deletes a user via
+the local stack's admin API in an `afterAll` hook in both test files.
+`clinician_id`'s `on delete cascade` means deleting the user also
+removes every patient row they owned, so no separate patient cleanup
+is needed.
+
+**Verification:** ran the full suite twice in a row and confirmed
+`auth.users`'s count stayed flat rather than growing by 4 (2 test
+files × 2 clinicians each) on the second run.
+
+**Prevention:**
+
+- Any test that creates real accounts/rows against a real (even local)
+  backing store needs matching `afterAll` cleanup — don't rely on
+  periodic manual `supabase db reset` to keep the local stack usable.
+- `SUPABASE_SECRET_KEY` (the local stack's admin key, needed for
+  `auth.admin.deleteUser`) lives only in `.env.test`, gitignored, and
+  is only ever read by `testCleanup.ts` — never wired anywhere that
+  could reach the real project.
+
+---
+
 ## `anon` had full table-level grants on `patients`, despite the migration only ever granting `authenticated`
 
 **Found:** 2026-09-02, via a CodeRabbit review comment on PR #30
