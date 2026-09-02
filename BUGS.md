@@ -5,6 +5,83 @@ prevent the same class of bug going forward. Newest first.
 
 ---
 
+## `anon` had full table-level grants on `patients`, despite the migration only ever granting `authenticated`
+
+**Found:** 2026-09-02, via a CodeRabbit review comment on PR #30
+(`feature/patients-table-rls`), then independently confirmed against the
+real project before trusting it.
+
+**What happened:**
+
+The `patients` table migration only ever wrote:
+
+```sql
+grant select, insert, update, delete on patients to authenticated;
+```
+
+— deliberately never granting anything to `anon`, on the assumption that
+a brand-new table starts with no privileges for anyone until explicitly
+granted. Querying the real project's actual grants after the fact showed
+otherwise:
+
+```sql
+select grantee, privilege_type
+from information_schema.role_table_grants
+where table_name = 'patients';
+-- anon: DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE
+-- authenticated: same set
+```
+
+Root cause: Supabase pre-configures `ALTER DEFAULT PRIVILEGES` on the
+`public` schema at project provisioning time, so that any table created
+by the `postgres` role (the role migrations run as) automatically grants
+full CRUD to both `anon` and `authenticated` the instant `CREATE TABLE`
+runs — before a migration's own `GRANT` statements ever execute.
+Confirmed by querying `pg_default_acl` directly:
+
+```sql
+select defaclrole::regrole::text, defaclnamespace::regnamespace::text,
+       defaclobjtype
+from pg_default_acl;
+-- postgres / public / r  (tables), pre-existing, not something our
+-- migrations set
+```
+
+**Why it didn't leak data:** table-level grants and RLS are two
+independent gates. The RLS policy on `patients` is scoped `to
+authenticated` only, so even with the table-level grant, `anon` matched
+no policy and Postgres denied by default — an anonymous request was
+still correctly blocked at the row level. One gate silently failed open;
+the other happened to hold.
+
+**Fix:** new migration
+(`supabase/migrations/20260902094835_revoke_anon_default_privileges.sql`),
+not an edit to the already-applied one:
+
+```sql
+revoke all on patients from anon;
+
+alter default privileges for role postgres in schema public
+  revoke all on tables from anon;
+```
+
+The second statement is the actual root-cause fix — it stops every
+*future* table created by a migration from repeating this, not just
+`patients`. Re-verified against the real project: `anon` now has zero
+grants on `patients`, and the full test suite (including the RLS
+isolation tests) still passes.
+
+**Prevention:**
+
+- Don't assume a new Supabase table starts with no privileges just
+  because nothing granted any — check `information_schema.role_table_grants`
+  (or `pg_default_acl` for the platform-level default) directly rather
+  than inferring intended behavior from the migration file alone.
+- Table-level grants and RLS policies are separate, independent gates;
+  verify both explicitly rather than assuming one implies the other.
+
+---
+
 ## classification_report crashes on a demographic subgroup missing a class
 
 **Found:** 2026-09-01, writing tests for the bias audit

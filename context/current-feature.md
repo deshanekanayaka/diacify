@@ -5,7 +5,8 @@
 ## Status
 
 In progress. Slice 1 (auth gatekeeper) merged to main (PR #28).
-Slice 2 (patients table + RLS) not yet started.
+Slice 2 (patients table + RLS) implemented on
+`feature/patients-table-rls`, not yet merged.
 
 Note: the previous feature, "ML model training and evaluation," is
 complete (PRs #19–#26, see `context/progress.md`) but its "Done" status
@@ -87,8 +88,40 @@ isolation before any schema or data exists:
   route against the real server: `401`, as expected.
   (all on `feature/api-auth-gatekeeper`, not yet merged)
 
+- Patients table + RLS — `supabase/migrations/`: creates `patients`
+  (`id uuid`, `clinician_id uuid references auth.users(id) on delete
+  cascade default auth.uid()`, `created_at`), enables RLS with one
+  `for all to authenticated` policy (`USING` + `WITH CHECK` both
+  present — an UPDATE policy needs `USING` to find the row at all, and
+  without `WITH CHECK` a clinician could reassign a row's
+  `clinician_id` to someone else's), plus an explicit `GRANT` to
+  `authenticated`.
+  `backend/src/db/patients.rls.test.ts` (5 tests, against a real local
+  Postgres via `supabase start` — not mocked): two real clinician
+  accounts signed up inline (local stack auto-confirms, unlike the
+  real project), clinician A creates a patient, clinician B is proven
+  unable to SELECT/UPDATE/DELETE it, an anonymous request is rejected
+  outright. Ran `supabase db advisors` against the real project after
+  pushing — clean on everything this migration touches (two unrelated
+  pre-existing findings surfaced, see Notes).
+- **Bug found via code review, fixed and logged** (`BUGS.md`): `anon`
+  actually had full CRUD grants on `patients` despite the migration
+  only ever granting `authenticated` — Supabase's project-level default
+  privileges auto-grant every new table to `anon`/`authenticated` the
+  instant `CREATE TABLE` runs, before a migration's own `GRANT` line
+  executes. RLS still blocked `anon` at the row level throughout (two
+  independent gates; one silently failed open, the other held — no
+  data was ever actually exposed), but the table-level gate wasn't
+  really closed the way it was documented to be. Fixed at the root
+  with a new migration: revoked `anon`'s existing grant, and revoked
+  the default privilege itself (`alter default privileges for role
+  postgres in schema public revoke all on tables from anon`) so every
+  *future* table starts closed, not just `patients`. Re-verified
+  against the real project (`information_schema.role_table_grants`
+  shows zero rows for `anon` on `patients` now) and the full test
+  suite still passes.
+
 **Remaining:**
-- Patients table schema + RLS + cross-tenant isolation test (slice 2)
 - `GET /api/patients` (slice 3)
 - `POST /api/patients` + rate limiting (slice 4)
 - Everything past that (visits, appointments, analytics, ported
@@ -118,6 +151,38 @@ isolation before any schema or data exists:
   for Supabase-specific skills/docs access. Its MCP server (direct
   project querying) still needs interactive OAuth the user hasn't run
   yet — unavailable in non-interactive sessions until then.
+- Patients' primary key: plain `uuid default gen_random_uuid()`, not
+  legacy's human-readable `PAT-YYYY-NNNN` (which required a dedicated
+  `id_sequences` table and concurrency-safe minting logic). Decided
+  deliberately — that scheme is real, already-validated UX, but
+  orthogonal to what this slice is actually testing (RLS ownership
+  isolation) and adds a second hard problem to a slice meant to prove
+  one. Revisit as its own slice if a human-readable identifier turns
+  out to matter for the real UI.
+- Left `sex`, `social_life`, `genetics` off the `patients` table for
+  now — legacy had them, but their exact valid values (especially
+  `social_life`'s and what `genetics`' 0–4 range means) aren't
+  documented anywhere read so far, and guessing would mean inventing
+  domain behavior. Deferred to whenever patient creation (a real Zod
+  schema) is actually designed, rather than guessed here.
+- Two pre-existing findings surfaced by `supabase db advisors
+  --linked`, unrelated to this migration (not fixed — flagged, not
+  silently patched, since they predate this slice): a Supabase-managed
+  `rls_auto_enable` event-trigger function flagged as an anon/
+  authenticated-callable `SECURITY DEFINER` function (likely a
+  platform false-positive — it's an event-trigger function, not really
+  RPC-callable in a meaningful way — but not independently confirmed);
+  and leaked-password-protection being off in Auth settings (a
+  one-toggle fix, whenever it's prioritized).
+- Local Supabase dev stack (`supabase start`, Docker) is what made the
+  RLS test practical at all: its `enable_confirmations = false` config
+  means signups auto-confirm, unlike the real project — so two real
+  clinician accounts can be created inline, in every test run, with no
+  manual dashboard step and no need to ever hold the `service_role`
+  key. `backend/.env.test` (gitignored, mirrors `.env.test.example`)
+  points the test at `127.0.0.1:54321` with the local stack's fixed,
+  non-secret default keys — kept separate from `backend/.env`, which
+  still points `npm run dev` at the real project.
 
 ## Context files
 
