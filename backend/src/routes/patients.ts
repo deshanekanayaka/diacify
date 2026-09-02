@@ -30,6 +30,7 @@ export function createPatientsRouter(supabaseUrl: string, supabasePublishableKey
       .from("patients")
       .select("*", { count: "exact" })
       .order("created_at", { ascending: false })
+      .order("id", { ascending: false })
       .range(from, to);
 
     if (error) {

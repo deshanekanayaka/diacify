@@ -2,9 +2,10 @@ import express from "express";
 import request from "supertest";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { config } from "dotenv";
-import { beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { createSupabaseJwks } from "../auth/supabaseJwks.js";
+import { deleteTestUser } from "../db/testCleanup.js";
 import { createRequireAuth } from "../middleware/requireAuth.js";
 import { createPatientsRouter } from "./patients.js";
 
@@ -20,12 +21,18 @@ if (!supabaseUrl || !supabasePublishableKey) {
   );
 }
 
-async function signUpTestClinician(label: string): Promise<{ client: SupabaseClient; accessToken: string }> {
+interface TestClinician {
+  client: SupabaseClient;
+  accessToken: string;
+  userId: string;
+}
+
+async function signUpTestClinician(label: string): Promise<TestClinician> {
   const client = createClient(supabaseUrl!, supabasePublishableKey!);
   const email = `${label}-${Date.now()}-${Math.random().toString(36).slice(2)}@test.local`;
   const { data, error } = await client.auth.signUp({ email, password: "correct horse battery staple" });
   if (error) throw error;
-  return { client, accessToken: data.session!.access_token };
+  return { client, accessToken: data.session!.access_token, userId: data.user!.id };
 }
 
 function buildApp() {
@@ -37,18 +44,27 @@ function buildApp() {
 
 describe("GET /api/patients", () => {
   let app: express.Express;
-  let clinicianA: { client: SupabaseClient; accessToken: string };
-  let clinicianB: { client: SupabaseClient; accessToken: string };
+  let clinicianA: TestClinician;
+  let clinicianB: TestClinician;
+  let insertedPatientIds: string[];
 
   beforeAll(async () => {
     app = buildApp();
     clinicianA = await signUpTestClinician("get-patients-a");
     clinicianB = await signUpTestClinician("get-patients-b");
 
+    insertedPatientIds = [];
     for (let i = 0; i < 3; i++) {
-      const { error } = await clinicianA.client.from("patients").insert({});
+      const { data, error } = await clinicianA.client.from("patients").insert({}).select().single();
       if (error) throw error;
+      insertedPatientIds.push(data.id);
     }
+  });
+
+  afterAll(async () => {
+    // Cascades to delete every patient each user owned - see testCleanup.ts.
+    await deleteTestUser(clinicianA.userId);
+    await deleteTestUser(clinicianB.userId);
   });
 
   it("returns 401 with no Authorization header", async () => {
@@ -84,6 +100,21 @@ describe("GET /api/patients", () => {
     expect(response.body.data).toHaveLength(2);
     expect(response.body.total).toBe(3);
     expect(response.body.limit).toBe(2);
+  });
+
+  it("walks every page with limit=1 and sees each patient exactly once (no repeats, no omissions)", async () => {
+    const seenIds: string[] = [];
+    for (let page = 1; page <= insertedPatientIds.length; page++) {
+      const response = await request(app)
+        .get(`/api/patients?limit=1&page=${page}`)
+        .set("Authorization", `Bearer ${clinicianA.accessToken}`);
+      expect(response.status).toBe(200);
+      expect(response.body.data).toHaveLength(1);
+      seenIds.push(response.body.data[0].id);
+    }
+
+    expect(new Set(seenIds).size).toBe(insertedPatientIds.length);
+    expect(seenIds.sort()).toEqual([...insertedPatientIds].sort());
   });
 
   it("rejects a non-numeric limit with 400", async () => {

@@ -151,6 +151,40 @@ isolation before any schema or data exists:
   (empty) patient list, `401` unauthenticated.
   Temporary `/api/whoami` route from slice 1 removed — this is the
   real endpoint it was standing in for.
+- **Hardening from a pre-merge review pass** (4 findings pasted by the
+  user, each independently verified against real behavior before
+  fixing — one was stale, three were real):
+  - Generated `backend/src/db/database.types.ts` (`supabase gen types
+    typescript --linked`, regenerate after any migration) and typed
+    `createRequestClient` as `SupabaseClient<Database>` — `.from()`
+    calls now get compile-time table/column checking instead of
+    trusting a bare string.
+  - `parsePositiveInt` now also requires `Number.isSafeInteger` — a
+    `page` like `99999999999999999999` previously passed validation
+    (regex + `>= 1`) and produced `from`/`to` as `1e+22`. Tested
+    directly against the real client: it happened to degrade
+    gracefully (`200`, empty data) rather than crashing, but that's
+    incidental behavior of Supabase's HTTP layer, not something
+    validation should rely on. Fixed at the one validation boundary,
+    not duplicated as a second check in the route.
+  - Both RLS/route test files accumulate test users otherwise —
+    confirmed directly (9 auth users, 8 orphaned patient rows already
+    on the local stack before this fix, from repeated runs this
+    session). Added `backend/src/db/testCleanup.ts::deleteTestUser`
+    (admin-API delete, local-stack-only — `clinician_id`'s `on delete
+    cascade` means deleting the user also removes their patients, no
+    separate cleanup needed) and wired `afterAll` into both test
+    files. Confirmed fixed by running the suite twice and checking the
+    count stayed flat rather than growing.
+  - Added a secondary `.order("id", { ascending: false })` after
+    `created_at` in the patients query — Postgres doesn't guarantee
+    stable row order across paginated queries when the sort key has
+    ties. Added a test that walks every page and checks no patient is
+    repeated or omitted — but it doesn't force an actual tie (not
+    reliably achievable via the public signup/insert API), so it
+    verifies general pagination completeness rather than regression-
+    testing the tie-break case specifically. Said so plainly rather
+    than implying the test proves more than it does.
 
 **Remaining:**
 - `POST /api/patients` + rate limiting (slice 4)

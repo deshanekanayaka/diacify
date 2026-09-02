@@ -37,5 +37,5 @@ function parsePositiveInt(value: unknown): number | null | undefined {
   if (value === undefined) return undefined;
   if (typeof value !== "string" || !/^\d+$/.test(value)) return null;
   const parsed = Number(value);
-  return parsed >= 1 ? parsed : null;
+  return Number.isSafeInteger(parsed) && parsed >= 1 ? parsed : null;
 }

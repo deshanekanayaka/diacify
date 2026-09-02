@@ -42,4 +42,14 @@ describe("parsePagination", () => {
     const result = parsePagination({ page: "0" });
     expect(result).toEqual({ ok: false, error: "Invalid value for page parameter" });
   });
+
+  it("rejects a page beyond Number.MAX_SAFE_INTEGER", () => {
+    const result = parsePagination({ page: "99999999999999999999" });
+    expect(result).toEqual({ ok: false, error: "Invalid value for page parameter" });
+  });
+
+  it("rejects a limit beyond Number.MAX_SAFE_INTEGER", () => {
+    const result = parsePagination({ limit: "99999999999999999999" });
+    expect(result).toEqual({ ok: false, error: "Invalid value for limit parameter" });
+  });
 });
