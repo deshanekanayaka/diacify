@@ -5,8 +5,9 @@
 ## Status
 
 In progress. Slice 1 (auth gatekeeper) merged to main (PR #28).
-Slice 2 (patients table + RLS) implemented on
-`feature/patients-table-rls`, not yet merged.
+Slice 2 (patients table + RLS, plus the anon-default-privileges bug
+fix) merged to main (PR #30). Slice 3 (`GET /api/patients`) not yet
+started.
 
 Note: the previous feature, "ML model training and evaluation," is
 complete (PRs #19–#26, see `context/progress.md`) but its "Done" status
