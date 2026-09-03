@@ -185,11 +185,16 @@ Render (ADR-005's original call); the repository-layer and convention-only
 options from ADR-003; Supabase Pro tier ($25/mo — free tier accepted instead,
 knowingly trading away always-on and automated backups).
 
-**Consequences:** RLS fails open, not closed, when a policy is missing or an
-`UPDATE` policy lacks `WITH CHECK` — this is *why* a cross-tenant isolation
-test became mandatory for the first table onward (see ADR-011). Free tier
-means a 7-day inactivity pause and no backups — accepted, revisit if this
-needs to be reliably demoable on demand.
+**Consequences:** Once RLS is *enabled* on a table, Postgres defaults to
+deny when no policy applies to a role/command — verified directly against a
+local test table (an `authenticated` role querying an RLS-enabled table with
+no policy at all gets zero rows, not every row). The real risk is a table
+where RLS was never enabled in the first place, which stays fully open with
+no policy involved — that's why a cross-tenant isolation test became
+mandatory for the first table onward (see ADR-011), rather than trusting a
+correctly-written policy by inspection. Free tier means a 7-day inactivity
+pause and no backups — accepted, revisit if this needs to be reliably
+demoable on demand.
 
 **Full reasoning:** `docs/phase-1-investigation.md` § "Decision D6"
 
@@ -261,7 +266,7 @@ traffic, rather than surfacing as an intermittent 500 on the first request.
 
 ---
 
-## ADR-011 — Patients RLS policy: single `FOR ALL` policy, `USING` + `WITH CHECK` both required
+## ADR-011 — Patients RLS policy: single `FOR ALL` policy, explicit `USING` + `WITH CHECK`
 
 **Status:** Accepted — 2026-09-01
 
@@ -270,11 +275,18 @@ First table (`patients`) needed a concrete policy design, with the mandatory
 cross-tenant isolation test ADR-007 flagged as non-negotiable.
 
 **Decision:** One `FOR ALL TO authenticated` policy on `patients`, with both
-`USING (clinician_id = (SELECT auth.uid()))` and an identical `WITH CHECK`
-clause — `USING` alone would leave `UPDATE` able to reassign a row's
-`clinician_id` to someone else's, since `WITH CHECK` is what governs the
-value a row is allowed to end up with, not just which existing rows are
-visible.
+`USING (clinician_id = (SELECT auth.uid()))` and an explicit, identical
+`WITH CHECK` clause. Verified directly against a local test table that this
+specific policy would have been safe even without the explicit `WITH CHECK`
+— Postgres reuses `USING` as the implicit check on a `FOR ALL` policy when
+`WITH CHECK` is omitted, so an `UPDATE` reassigning `clinician_id` to
+another clinician is rejected either way (`new row violates row-level
+security policy`, confirmed by testing the omitted-clause case directly).
+The explicit clause is written anyway, for two reasons: relying on that
+implicit fallback is easy to get wrong when reading the policy later (this
+project initially documented the wrong mental model for it, corrected after
+verification), and the implicit reuse doesn't carry over if this policy is
+ever split into separate per-command policies.
 
 **Consequences:** Verified with a real test against local Postgres (not
 mocked): two real clinician accounts, clinician A creates a patient,
