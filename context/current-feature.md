@@ -10,8 +10,10 @@ fix) merged to main (PR #30). Slice 3 (`GET /api/patients`, plus
 review hardening and 3 logged bugs) merged to main (PR #32). Slice 4
 (`POST /api/patients` + rate limiting, plus `docs/decisions.md` as
 the project's first ADR log) merged to main (PR #34). Slice 5
-(`visits` table + `POST /api/patients/:id/visits`) implemented on
-`feature/post-patient-visits-endpoint`, not yet merged.
+(`visits` table + `POST /api/patients/:id/visits`) merged to main
+(PR #36). Slice 6 not yet scoped — likely
+`GET /api/patients/:id/visits` (listing a patient's visit history),
+mirroring how `patients` split GET and POST across separate slices.
 
 Note: the previous feature, "ML model training and evaluation," is
 complete (PRs #19–#26, see `context/progress.md`) but its "Done" status

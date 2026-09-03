@@ -4,4 +4,4 @@ Live task state, groomed weekly. One line per task: `- [ ] <task> (<phase/sprint
 
 ## Now
 
-- [ ] `visits` table + first clinical data (backend API design, slice 5)
+- [ ] Scope slice 6 (backend API design) — likely `GET /api/patients/:id/visits`
