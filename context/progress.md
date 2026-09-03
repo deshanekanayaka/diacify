@@ -2,6 +2,7 @@
 
 Completed features/tasks, one line each. Newest first.
 
+- Backend API design, slice 5 — `visits` table (owned transitively through `patients`, join-based RLS not a denormalized `clinician_id`) + `POST /api/patients/:id/visits`, facts-only schema with no ML output columns, plausibility bounds reused from `machine-learning/clinical_fields.py` (PR #36)
 - Backend API design, slice 4 — `POST /api/patients` + per-clinician rolling-window rate limiting, `patients.sex` added as the one clinical attribute the trained model actually uses (verified against `machine-learning/feature_matrix.py`, not guessed), `docs/decisions.md` created as the project's first ADR log (PR #34)
 - Backend API design, slice 3 — `GET /api/patients` (paginated, own rows only) via a request-scoped Supabase client, review hardening (compile-time-typed queries, safe-integer pagination bounds, test-user cleanup, deterministic sort tiebreaker) (PR #32)
 - Backend API design, slice 2 — patients table with RLS-enforced ownership, real cross-tenant isolation test against local Postgres, anon default-privileges bug found via review and fixed at the root (PR #30)
