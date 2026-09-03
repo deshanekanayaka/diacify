@@ -6,6 +6,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { createSupabaseJwks } from "../auth/supabaseJwks.js";
 import { deleteTestUser } from "../db/testCleanup.js";
+import { createRateLimiter } from "../middleware/rateLimit.js";
 import { createRequireAuth } from "../middleware/requireAuth.js";
 import { createPatientsRouter } from "./patients.js";
 
@@ -35,10 +36,15 @@ async function signUpTestClinician(label: string): Promise<TestClinician> {
   return { client, accessToken: data.session!.access_token, userId: data.user!.id };
 }
 
-function buildApp() {
+function buildApp(rateLimit = createRateLimiter({ limit: 20, windowMs: 60_000 })) {
   const app = express();
+  app.use(express.json());
   const requireAuth = createRequireAuth(createSupabaseJwks(supabaseUrl!));
-  app.use("/api/patients", requireAuth, createPatientsRouter(supabaseUrl!, supabasePublishableKey!));
+  app.use(
+    "/api/patients",
+    requireAuth,
+    createPatientsRouter(supabaseUrl!, supabasePublishableKey!, rateLimit),
+  );
   return app;
 }
 
@@ -55,7 +61,11 @@ describe("GET /api/patients", () => {
 
     insertedPatientIds = [];
     for (let i = 0; i < 3; i++) {
-      const { data, error } = await clinicianA.client.from("patients").insert({}).select().single();
+      const { data, error } = await clinicianA.client
+        .from("patients")
+        .insert({ sex: "female" })
+        .select()
+        .single();
       if (error) throw error;
       insertedPatientIds.push(data.id);
     }
@@ -133,5 +143,119 @@ describe("GET /api/patients", () => {
 
     expect(response.status).toBe(400);
     expect(response.body).toEqual({ error: "Invalid value for page parameter" });
+  });
+});
+
+async function ownPatientCount(clinician: TestClinician): Promise<number> {
+  const { count, error } = await clinician.client
+    .from("patients")
+    .select("*", { count: "exact", head: true });
+  if (error) throw error;
+  return count ?? 0;
+}
+
+describe("POST /api/patients", () => {
+  let app: express.Express;
+  let clinicianC: TestClinician;
+  let clinicianD: TestClinician;
+
+  beforeAll(async () => {
+    app = buildApp();
+    clinicianC = await signUpTestClinician("post-patients-c");
+    clinicianD = await signUpTestClinician("post-patients-d");
+  });
+
+  afterAll(async () => {
+    await deleteTestUser(clinicianC.userId);
+    await deleteTestUser(clinicianD.userId);
+  });
+
+  it("returns 401 with no Authorization header", async () => {
+    const response = await request(app).post("/api/patients").send({ sex: "male" });
+    expect(response.status).toBe(401);
+  });
+
+  it("creates a patient owned by the caller and returns it", async () => {
+    const response = await request(app)
+      .post("/api/patients")
+      .set("Authorization", `Bearer ${clinicianC.accessToken}`)
+      .send({ sex: "male" });
+
+    expect(response.status).toBe(201);
+    expect(response.body.data).toMatchObject({ sex: "male", clinician_id: clinicianC.userId });
+    expect(response.body.data.id).toBeDefined();
+  });
+
+  it("rejects a caller-supplied clinician_id with 400 and writes nothing", async () => {
+    const before = await ownPatientCount(clinicianC);
+
+    const response = await request(app)
+      .post("/api/patients")
+      .set("Authorization", `Bearer ${clinicianC.accessToken}`)
+      .send({ sex: "male", clinician_id: clinicianD.userId });
+
+    expect(response.status).toBe(400);
+    expect(await ownPatientCount(clinicianC)).toBe(before);
+  });
+
+  it("rejects an invalid sex value with 400 and writes nothing", async () => {
+    const before = await ownPatientCount(clinicianC);
+
+    const response = await request(app)
+      .post("/api/patients")
+      .set("Authorization", `Bearer ${clinicianC.accessToken}`)
+      .send({ sex: "other" });
+
+    expect(response.status).toBe(400);
+    expect(await ownPatientCount(clinicianC)).toBe(before);
+  });
+
+  it("a created patient is visible to its owner but not to another clinician", async () => {
+    const createResponse = await request(app)
+      .post("/api/patients")
+      .set("Authorization", `Bearer ${clinicianC.accessToken}`)
+      .send({ sex: "female" });
+    const createdId = createResponse.body.data.id;
+
+    const ownerView = await request(app)
+      .get("/api/patients")
+      .set("Authorization", `Bearer ${clinicianC.accessToken}`);
+    expect(ownerView.body.data.some((patient: { id: string }) => patient.id === createdId)).toBe(true);
+
+    const otherView = await request(app)
+      .get("/api/patients")
+      .set("Authorization", `Bearer ${clinicianD.accessToken}`);
+    expect(otherView.body.data.some((patient: { id: string }) => patient.id === createdId)).toBe(false);
+  });
+});
+
+describe("POST /api/patients rate limiting", () => {
+  let app: express.Express;
+  let clinicianE: TestClinician;
+
+  beforeAll(async () => {
+    app = buildApp(createRateLimiter({ limit: 2, windowMs: 60_000 }));
+    clinicianE = await signUpTestClinician("post-patients-e");
+  });
+
+  afterAll(async () => {
+    await deleteTestUser(clinicianE.userId);
+  });
+
+  it("returns 429 once the per-clinician limit is exceeded", async () => {
+    for (let i = 0; i < 2; i++) {
+      const response = await request(app)
+        .post("/api/patients")
+        .set("Authorization", `Bearer ${clinicianE.accessToken}`)
+        .send({ sex: "male" });
+      expect(response.status).toBe(201);
+    }
+
+    const blocked = await request(app)
+      .post("/api/patients")
+      .set("Authorization", `Bearer ${clinicianE.accessToken}`)
+      .send({ sex: "male" });
+
+    expect(blocked.status).toBe(429);
   });
 });

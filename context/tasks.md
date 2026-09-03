@@ -4,4 +4,6 @@ Live task state, groomed weekly. One line per task: `- [ ] <task> (<phase/sprint
 
 ## Now
 
-- [ ] `POST /api/patients` + rate limiting (backend API design, slice 4)
+- [ ] Open PR for `feature/post-patients-endpoint` (slice 4, implemented,
+      awaiting review/merge)
+- [ ] `visits` table + first clinical data (backend API design, slice 5)
