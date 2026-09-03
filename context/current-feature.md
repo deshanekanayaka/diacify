@@ -6,8 +6,10 @@
 
 In progress. Slice 1 (auth gatekeeper) merged to main (PR #28).
 Slice 2 (patients table + RLS, plus the anon-default-privileges bug
-fix) merged to main (PR #30). Slice 3 (`GET /api/patients`)
-implemented on `feature/get-patients-endpoint`, not yet merged.
+fix) merged to main (PR #30). Slice 3 (`GET /api/patients`, plus
+review hardening and 3 logged bugs) merged to main (PR #32). Slice 4
+(`POST /api/patients` + rate limiting) implemented on
+`feature/post-patients-endpoint`, not yet merged.
 
 Note: the previous feature, "ML model training and evaluation," is
 complete (PRs #19–#26, see `context/progress.md`) but its "Done" status
@@ -50,6 +52,27 @@ defense-in-depth, filter/pagination naming, CORS preflight handling,
   implemented as a fail-fast crash on server start instead, so
   `requireAuth` itself has no reachable 500 path once the server is
   running.
+- **`patients` gets exactly one clinical attribute (`sex`), not
+  legacy's three.** Investigated the rebuild's own ML pipeline
+  (`machine-learning/feature_matrix.py`, `model_metadata.json`) rather
+  than guessing at the "undocumented" values flagged in slice 3: `sex`
+  is the only patient-level field the trained model actually consumes;
+  `genetics` was measured at 0.0003 feature importance and dropped;
+  `social_life` was never included. Domain owner's call, made
+  knowingly against the ML evidence: `genetics` stays deferred (not
+  ported) because diabetes family history is clinically meaningful for
+  a clinician to have on record even though this model doesn't use it
+  — worth adding later as its own slice, storing the affected-relative
+  set rather than legacy's ambiguous derived count. `social_life`
+  dropped outright; no case for it in either role.
+- **Slice 4 ships patient identity only, not patient + first visit.**
+  Legacy's `POST /api/patients` created a patient and its first visit
+  (with an ML score) in one transaction. The rebuild currently has no
+  `visits` table at all, so bundling would have folded 3-4 slices of
+  design (visits schema, its RLS policy, a ~13-field Zod schema, a
+  cross-table transaction, the facts-vs-derived-values split from
+  CLAUDE.md §12) into a slice whose actual purpose is proving RLS-on-
+  write and rate limiting. Deferred to a `visits` slice on its own.
 
 ## Implementation plan
 
@@ -186,18 +209,92 @@ isolation before any schema or data exists:
     testing the tie-break case specifically. Said so plainly rather
     than implying the test proves more than it does.
 
+- `POST /api/patients` + rate limiting (slice 4) — new migration
+  `supabase/migrations/20260903183030_add_patient_sex.sql` adds
+  `sex patient_sex not null` (a Postgres enum, not `text` + `CHECK`,
+  so `supabase gen types` turns an invalid value into a compile error
+  at the `.insert()` call rather than a runtime constraint violation).
+  `not null` with no default, safe to add directly since both the
+  local stack and the real project had zero `patients` rows at
+  migration time (checked directly, not assumed).
+  `backend/src/routes/createPatientSchema.ts` — Zod, `.strict()` so an
+  unknown field (in particular a caller-supplied `clinician_id`) is a
+  400 rather than silently dropped; `clinician_id` is never accepted
+  from the request body, it comes from the column's own `auth.uid()`
+  default and slice 2's `WITH CHECK` rejects any row that would land
+  on another clinician (4 tests).
+  `backend/src/middleware/rateLimit.ts::createRateLimiter` — a true
+  rolling window (per-key timestamp list, expired entries dropped on
+  read, not a fixed-bucket reset), keyed on `req.user.id`, clock
+  injectable for tests (4 tests: allows-to-limit, blocks-over-limit,
+  allows-again-after-window-rolls, separate buckets per clinician).
+  Hand-written rather than `express-rate-limit` — its default memory
+  store is a fixed window, so matching the "rolling window" principle
+  from the API-design guide meant writing it anyway. In-memory,
+  per-process: correct for one backend instance, resets on restart,
+  wrong once there's more than one instance — recorded as a real
+  trade-off, not hidden. Threat named: an authenticated client (buggy
+  retry loop, or a stolen token) flooding writes; does not protect
+  against unauthenticated floods, since keying on clinician id
+  requires `requireAuth` to have already run.
+  Mounted at 20 requests/clinician/60s rolling window on `POST
+  /api/patients` only (`backend/src/server.ts`).
+  `backend/src/routes/patients.ts` — `POST /` behind `requireAuth` +
+  the rate limiter: validate → insert via the request-scoped client →
+  `201 { data }`. `express.json({ limit: "10kb" })` mounted globally
+  (first body-parsing need in the app); a dedicated error handler
+  turns a malformed-JSON parse failure into `{ error }` JSON instead
+  of Express's default HTML error page.
+  `backend/src/routes/patients.test.ts` (7 new tests, real local
+  Postgres + supertest): 401 unauthenticated, 201 with the row owned
+  by the caller, caller-supplied `clinician_id` → 400 + nothing
+  written, invalid `sex` → 400 + nothing written, a created patient
+  visible to its owner via `GET` but not to a second clinician
+  (cross-tenant isolation re-proven on the write path per D6), 429
+  once a low test limit is exceeded.
+  Existing `patients.rls.test.ts` and `patients.test.ts` fixture
+  inserts updated from `insert({})` to `insert({ sex: ... })` since
+  `sex` is now required.
+  **Verified against the real Supabase project**: pushed the
+  migration (`supabase db push --linked`), confirmed
+  `supabase gen types typescript --linked` matches the local-generated
+  types exactly on the `patients`/`patient_sex` shape. Real project
+  requires email confirmation (unlike the local stack), so a live test
+  user had to be created through the dashboard's "Add user → Auto
+  Confirm User" rather than signed up inline — got a real access token
+  via the password-grant endpoint, then hit the running server for
+  real: `401` unauthenticated, `201` with a real row, `400` for
+  invalid `sex` and for a caller-supplied `clinician_id`, the created
+  row visible via a real `GET`, and a real `429` (with `Retry-After:
+  60`) after 20 writes in the rolling window. Cleaned up the test rows
+  afterward via the clinician's own token (RLS-scoped delete) —
+  `supabase db advisors --linked` re-run afterward, same two
+  pre-existing findings as slice 3, nothing new. Two throwaway auth
+  users from this verification are still sitting in the real project
+  (`diacify.slice4.verify+test@gmail.com`, unconfirmed; and the
+  dashboard-created one) — not cleaned up, since deleting a user needs
+  the `service_role` key or dashboard access, which this session
+  deliberately doesn't hold. Harmless (no patient data attached, both
+  already deleted), but worth a manual dashboard cleanup.
+  Pre-existing `qs`/`body-parser` moderate advisories (transitive via
+  `express`) confirmed unrelated to this slice — same 3 findings exist
+  on `main` before this branch's `zod` addition.
+
 **Remaining:**
-- `POST /api/patients` + rate limiting (slice 4)
-- Everything past that (visits, appointments, analytics, ported
-  ML-predict endpoint) — not yet planned in detail
+- `visits` table + first clinical data (its own slice — see decisions
+  made, above)
+- Everything past that (appointments, analytics, ported ML-predict
+  endpoint) — not yet planned in detail
 
 ## Notes
 
 - `req.user` is still read via a cast to `AuthenticatedRequest` rather
-  than Express global type-augmentation. Slice 3 added the real second
-  call site this was waiting on (`patients.ts`) — deliberately kept as
-  a cast anyway for now, since two call sites is still a small, direct
-  cost; revisit if a third shows up in slice 4.
+  than Express global type-augmentation. Slice 4 added a third call
+  site (`rateLimit.ts`) past the threshold slice 3's note named —
+  flagged here rather than silently refactored mid-slice, since
+  switching to global augmentation is a small but real design choice
+  (touches every future route file); worth 30 seconds of discussion at
+  the start of slice 5, not decided unilaterally here.
 - `getKey` is a parameter to `createRequireAuth`, not hardcoded to
   Supabase's JWKS endpoint — production wiring will pass
   `createRemoteJWKSet(supabaseJwksUrl)`, tests pass
@@ -222,12 +319,10 @@ isolation before any schema or data exists:
   isolation) and adds a second hard problem to a slice meant to prove
   one. Revisit as its own slice if a human-readable identifier turns
   out to matter for the real UI.
-- Left `sex`, `social_life`, `genetics` off the `patients` table for
-  now — legacy had them, but their exact valid values (especially
-  `social_life`'s and what `genetics`' 0–4 range means) aren't
-  documented anywhere read so far, and guessing would mean inventing
-  domain behavior. Deferred to whenever patient creation (a real Zod
-  schema) is actually designed, rather than guessed here.
+- The slice-3 note about `sex`/`social_life`/`genetics`' valid values
+  being undocumented was wrong — they're fully specified in
+  `machine-learning/clinical_fields.py` (the rebuild's own ML code,
+  not legacy's). Resolved in slice 4: see "Decisions made", above.
 - Two pre-existing findings surfaced by `supabase db advisors
   --linked`, unrelated to this migration (not fixed — flagged, not
   silently patched, since they predate this slice): a Supabase-managed
