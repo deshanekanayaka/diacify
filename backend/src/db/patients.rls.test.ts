@@ -49,7 +49,11 @@ describe("patients row level security", () => {
     clinicianB = await signUpTestClinician("clinician-b");
     anon = createClient(supabaseUrl!, supabasePublishableKey!);
 
-    const { data, error } = await clinicianA.client.from("patients").insert({}).select().single();
+    const { data, error } = await clinicianA.client
+      .from("patients")
+      .insert({ sex: "male" })
+      .select()
+      .single();
     if (error) throw error;
     patientOwnedByA = data.id as string;
   });

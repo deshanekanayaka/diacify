@@ -1,7 +1,8 @@
-import { Router } from "express";
+import { Router, type RequestHandler } from "express";
 
 import { createRequestClient } from "../db/requestClient.js";
 import type { AuthenticatedRequest } from "../middleware/requireAuth.js";
+import { createPatientSchema } from "./createPatientSchema.js";
 import { parsePagination } from "./pagination.js";
 
 /**
@@ -10,7 +11,11 @@ import { parsePagination } from "./pagination.js";
  * (built from the caller's own verified JWT) can only ever see rows
  * Postgres already decided belong to them.
  */
-export function createPatientsRouter(supabaseUrl: string, supabasePublishableKey: string): Router {
+export function createPatientsRouter(
+  supabaseUrl: string,
+  supabasePublishableKey: string,
+  createPatientRateLimit: RequestHandler,
+): Router {
   const router = Router();
 
   router.get("/", async (req, res) => {
@@ -39,6 +44,26 @@ export function createPatientsRouter(supabaseUrl: string, supabasePublishableKey
     }
 
     res.status(200).json({ data, page, limit, total: count });
+  });
+
+  router.post("/", createPatientRateLimit, async (req, res) => {
+    const parsed = createPatientSchema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: "Invalid patient data" });
+      return;
+    }
+
+    const { accessToken } = (req as AuthenticatedRequest).user!;
+    const client = createRequestClient(supabaseUrl, supabasePublishableKey, accessToken);
+
+    const { data, error } = await client.from("patients").insert(parsed.data).select().single();
+
+    if (error) {
+      res.status(500).json({ error: "Something went wrong. Please try again." });
+      return;
+    }
+
+    res.status(201).json({ data });
   });
 
   return router;
