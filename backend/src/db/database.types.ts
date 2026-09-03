@@ -55,6 +55,68 @@ export type Database = {
         }
         Relationships: []
       }
+      visits: {
+        Row: {
+          age: number
+          bmi: number
+          cholesterol: number | null
+          created_at: string
+          diastolic: number
+          hba1c: number
+          hdl: number | null
+          id: string
+          ldl: number | null
+          patient_id: string
+          rbs: number | null
+          systolic: number
+          triglycerides: number | null
+          visit_date: string
+          vldl: number | null
+        }
+        Insert: {
+          age: number
+          bmi: number
+          cholesterol?: number | null
+          created_at?: string
+          diastolic: number
+          hba1c: number
+          hdl?: number | null
+          id?: string
+          ldl?: number | null
+          patient_id: string
+          rbs?: number | null
+          systolic: number
+          triglycerides?: number | null
+          visit_date?: string
+          vldl?: number | null
+        }
+        Update: {
+          age?: number
+          bmi?: number
+          cholesterol?: number | null
+          created_at?: string
+          diastolic?: number
+          hba1c?: number
+          hdl?: number | null
+          id?: string
+          ldl?: number | null
+          patient_id?: string
+          rbs?: number | null
+          systolic?: number
+          triglycerides?: number | null
+          visit_date?: string
+          vldl?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "visits_patient_id_fkey"
+            columns: ["patient_id"]
+            isOneToOne: false
+            referencedRelation: "patients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never

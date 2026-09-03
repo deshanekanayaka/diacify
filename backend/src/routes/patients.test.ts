@@ -43,7 +43,12 @@ function buildApp(rateLimit = createRateLimiter({ limit: 20, windowMs: 60_000 })
   app.use(
     "/api/patients",
     requireAuth,
-    createPatientsRouter(supabaseUrl!, supabasePublishableKey!, rateLimit),
+    createPatientsRouter({
+      supabaseUrl: supabaseUrl!,
+      supabasePublishableKey: supabasePublishableKey!,
+      createPatientRateLimit: rateLimit,
+      createVisitRateLimit: createRateLimiter({ limit: 20, windowMs: 60_000 }),
+    }),
   );
   return app;
 }

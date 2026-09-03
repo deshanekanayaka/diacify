@@ -8,16 +8,25 @@ import { createRequireAuth } from "./middleware/requireAuth.js";
 import { createPatientsRouter } from "./routes/patients.js";
 
 // 20 writes per clinician per rolling minute - generous for a human
-// entering patients by hand, tight enough to stop a runaway client loop
-// or a stolen token from flooding writes.
+// entering patients (or visits) by hand, tight enough to stop a runaway
+// client loop or a stolen token from flooding writes. Separate limiter
+// instances per route: creating a patient and adding a visit are
+// different actions, so they get independent budgets rather than
+// competing for one shared count.
 const CREATE_PATIENT_LIMIT = 20;
 const CREATE_PATIENT_WINDOW_MS = 60_000;
+const CREATE_VISIT_LIMIT = 20;
+const CREATE_VISIT_WINDOW_MS = 60_000;
 
 const env = loadEnv();
 const requireAuth = createRequireAuth(createSupabaseJwks(env.supabaseUrl));
 const createPatientRateLimit = createRateLimiter({
   limit: CREATE_PATIENT_LIMIT,
   windowMs: CREATE_PATIENT_WINDOW_MS,
+});
+const createVisitRateLimit = createRateLimiter({
+  limit: CREATE_VISIT_LIMIT,
+  windowMs: CREATE_VISIT_WINDOW_MS,
 });
 
 const app = express();
@@ -30,7 +39,12 @@ app.get("/health", (_req, res) => {
 app.use(
   "/api/patients",
   requireAuth,
-  createPatientsRouter(env.supabaseUrl, env.supabasePublishableKey, createPatientRateLimit),
+  createPatientsRouter({
+    supabaseUrl: env.supabaseUrl,
+    supabasePublishableKey: env.supabasePublishableKey,
+    createPatientRateLimit,
+    createVisitRateLimit,
+  }),
 );
 
 // express.json() rejects malformed JSON bodies by calling next(err) -
