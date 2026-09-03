@@ -442,3 +442,158 @@ Map entries are evicted once idle to avoid unbounded growth, though a
 clinician who makes exactly one request and never returns still leaves a
 small, permanent entry — accepted as negligible at Diacify's per-clinic
 scale rather than solved with a background sweep.
+
+---
+
+## ADR-017 — `visits` ownership: join-based RLS policy, not a denormalized `clinician_id`
+
+**Status:** Accepted — 2026-09-03
+
+**Context:** `visits` is the first table owned only transitively — a visit
+belongs to a patient, not directly to a clinician. Checked legacy's own
+schema before assuming a precedent either way: legacy scoped `visits`
+through `patients` too (it denormalized `clerk_id` only onto `appointments`,
+a different table with a different reason).
+
+**Decision:** One `FOR ALL` policy using `EXISTS (SELECT 1 FROM patients p
+WHERE p.id = visits.patient_id AND p.clinician_id = auth.uid())` for both
+`USING` and `WITH CHECK`. No `clinician_id` column on `visits`.
+
+**Rejected:** A denormalized `visits.clinician_id` column with a flat
+equality policy — this only secures the *read* path. On write, a clinician
+can satisfy `WITH CHECK (clinician_id = auth.uid())` with their own id while
+still pointing `patient_id` at another clinician's patient, because a
+foreign key constraint only verifies the referenced row exists, not who owns
+it — it doesn't consult RLS. Closing that gap would require the join check
+anyway, at which point the denormalized column adds drift risk (two places
+ownership could disagree) for no remaining benefit.
+
+**Consequences:** Verified directly — no recursion risk, since `patients`'
+own policy references only `auth.uid()`, never `visits` (the standard
+Supabase footgun with cross-table policies). Performance is a non-issue at
+per-clinic data volumes: `p.id` is the primary key, so the `EXISTS` is an
+index lookup per row. The mandatory cross-tenant test for this slice had to
+include the case a denormalized design would have missed: clinician A must
+fail to *create* a visit against clinician B's patient, not just fail to
+read one — this is what `visits.test.ts`'s "404 for another clinician's real
+patient" test actually proves.
+
+---
+
+## ADR-018 — `visits` holds clinical facts only, no ML output columns
+
+**Status:** Accepted — 2026-09-03
+
+**Context:** Legacy's `visits` row combines raw measurements
+(`bp_systolic`, `hba1c`, etc.) with model output (`risk_score`,
+`risk_category`, `top_factors`, `confidence_low/medium/high`) on one row.
+`CLAUDE.md` §12: "Keep facts and judgements conceptually separate... do not
+combine them because it's convenient." There is no Node-side ML inference
+yet (ADR-001's porting work hasn't started), so there's nothing to populate
+score columns with even if they existed.
+
+**Decision:** `visits` gets clinical measurement columns only. A future
+table (referencing `visits.id`) will hold model output once ML serving is
+ported, rather than growing `visits`' shape now.
+
+**Rejected:** Reserving nullable score columns now, with `null` standing in
+for legacy's `'pending'` state — reintroduces the exact fact/judgement
+violation `CLAUDE.md` warns against, for columns nothing will write to for
+at least one more slice. This is the cleanest case for the facts/judgements
+principle so far in the project: there's no disagreement to arbitrate, since
+the judgement side doesn't exist in the codebase at all yet.
+
+**Consequences:** A dashboard view joining current-visit-plus-score will
+need a second table once it exists — accepted, not treated as premature
+optimization to avoid.
+
+---
+
+## ADR-019 — `visits` clinical fields: model-relevant set plus cholesterol/VLDL; plausibility bounds reuse existing constants
+
+**Status:** Accepted — 2026-09-03
+
+**Context:** Legacy's `visits` has 8 clinical measurement columns beyond
+`age`/`bp`/`bmi`/`hba1c`. Checked which ones the rebuild's trained model
+actually uses (`machine-learning/assemble.py`, `features.py`): `rbs`,
+`trig`, `hdl`, `ldl` feed the model directly or via a derived ratio;
+`cholesterol` and `vldl` are cleaned/imputed by the training pipeline but
+never reach `FEATURE_NAMES` — same "measured, no signal" shape as ADR-014's
+`genetics`.
+
+**Decision:** All 6 nullable lab columns from legacy are kept
+(`rbs`, `cholesterol`, `triglycerides`, `hdl`, `ldl`, `vldl`), unlike
+ADR-014's `genetics`/`social_life`, which were dropped. Validation bounds:
+`MIN_PLAUSIBLE_BMI`/`MAX_PLAUSIBLE_BMI`/`MIN_PLAUSIBLE_RBS`/the 30mmHg BP
+floor are the exact constants already in `machine-learning/clinical_fields.py`,
+reused rather than reinvented. Every upper bound (BP, HbA1c, age, lipids)
+is new — `clinical_fields.py` only ever clips or corrects historical CSV
+rows, it never rejects on an upper bound, because its job is salvaging old
+data, not validating live entry.
+
+**Rejected:** Dropping `cholesterol`/`vldl` for model-relevance-only parity
+with ADR-014 — the domain owner's call was that a lipid panel is routine,
+cheap, standard-of-care clinical data worth having on file independent of
+this specific model, unlike `genetics` (requires actively asking about
+family history) or `social_life` (no clinical case in either role).
+
+**Consequences:** The new upper bounds are explicitly flagged as invented
+(generous, "reject only what's essentially impossible" ceilings) rather than
+clinically derived, so they don't carry more authority than they've earned.
+`multipleOf` added to every numeric field, matching each column's declared
+decimal scale (`numeric(5,1)` → 0.1, `numeric(_,2)` → 0.01) — without it, a
+value with more decimal precision than the column can store (e.g.
+`systolic: 138.76`) passes validation and gets silently rounded by Postgres
+on insert; caught via code review, verified the failure mode is real before
+fixing.
+
+---
+
+## ADR-020 — `visit_date`: caller-supplied, separate from `created_at`, future dates rejected with skew tolerance
+
+**Status:** Accepted — 2026-09-03
+
+**Context:** Legacy has `visit_date DATE NOT NULL` distinct from
+`created_at TIMESTAMP`. Whether the rebuild keeps that distinction or
+collapses to one server-generated timestamp.
+
+**Decision:** `visit_date` stays caller-supplied (defaults to
+`current_date` when omitted), separate from `created_at`. Rejected if more
+than one day in the future.
+
+**Rejected:** Collapsing to `created_at` only — `visit_date` is clinical
+time (when the observation happened), `created_at` is system time (when the
+row was written); collapsing them makes backdating impossible (a clinician
+doing Wednesday paperwork for Monday's appointment) and would corrupt any
+future trend feature, which needs to order by clinical time. No lower bound
+on `visit_date` — any floor picked would be invented domain behavior with no
+evidence behind it; historical backfill is plausible.
+
+**Consequences:** The one-day future tolerance is deliberate, not sloppy —
+validating a clinician's local date against the server's UTC date would
+reject legitimate same-day entries for anyone ahead of UTC, which includes
+Diacify's own clinical context (Erbil, UTC+3).
+
+---
+
+## ADR-021 — `createPatientsRouter` takes one options object, not four positional parameters
+
+**Status:** Accepted — 2026-09-03
+
+**Context:** Adding the visits route's own rate limiter as a fourth
+positional constructor argument to `createPatientsRouter` triggered
+`CLAUDE.md`'s own rule: "More than three arguments is a design smell."
+Caught via code review, applying the project's own standard to code written
+in the same slice.
+
+**Decision:** `createPatientsRouter({ supabaseUrl, supabasePublishableKey,
+createPatientRateLimit, createVisitRateLimit })` — one options object.
+
+**Rejected:** Leaving it positional — two same-typed `RequestHandler`
+arguments next to each other is exactly the kind of signature where a caller
+can silently swap arguments in the wrong order with no compiler error;
+already true with two, and would only get worse with a fifth route's rate
+limiter.
+
+**Consequences:** `server.ts` and both test files' `buildApp` helpers
+updated to the keyed-argument call shape.

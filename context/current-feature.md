@@ -10,7 +10,8 @@ fix) merged to main (PR #30). Slice 3 (`GET /api/patients`, plus
 review hardening and 3 logged bugs) merged to main (PR #32). Slice 4
 (`POST /api/patients` + rate limiting, plus `docs/decisions.md` as
 the project's first ADR log) merged to main (PR #34). Slice 5
-(`visits` table + first clinical data) not yet started.
+(`visits` table + `POST /api/patients/:id/visits`) implemented on
+`feature/post-patient-visits-endpoint`, not yet merged.
 
 Note: the previous feature, "ML model training and evaluation," is
 complete (PRs #19–#26, see `context/progress.md`) but its "Done" status
@@ -74,6 +75,52 @@ defense-in-depth, filter/pagination naming, CORS preflight handling,
   cross-table transaction, the facts-vs-derived-values split from
   CLAUDE.md §12) into a slice whose actual purpose is proving RLS-on-
   write and rate limiting. Deferred to a `visits` slice on its own.
+- **`visits` holds clinical facts only — no `risk_score`/`risk_category`/
+  `top_factors` columns**, unlike legacy which combined raw
+  measurements and model output on one row. There's no Node-side ML
+  inference yet (that's still ADR-001's unstarted work), so there's
+  nothing to populate those columns with; reserving them now would be
+  exactly the facts-vs-judgements violation CLAUDE.md §12 warns
+  against. A future scoring table will reference `visits.id` instead.
+- **Ownership scoping via a join, not a denormalized `clinician_id`
+  column on `visits`.** Checked legacy's own schema before assuming a
+  precedent either way — legacy actually scoped `visits` through
+  `patients` too (it only denormalized `clerk_id` onto `appointments`,
+  a different table). A flat `visits.clinician_id` would only secure
+  the *read* path: a clinician could still satisfy `WITH CHECK
+  (clinician_id = auth.uid())` while pointing `patient_id` at another
+  clinician's patient, since the FK constraint only checks the row
+  exists, not who owns it. The join-based policy
+  (`EXISTS (SELECT 1 FROM patients WHERE patients.id = visits.patient_id
+  AND patients.clinician_id = auth.uid())`) closes both paths with one
+  expression, and encodes the real domain rule directly: "you may only
+  add a visit to a patient you own."
+- **`cholesterol`/`vldl` included as nullable, unlike slice 4's
+  `genetics`/`social_life`.** Same "measured, model doesn't use it"
+  shape as slice 4's decision, resolved the other way: a lipid panel
+  is routine, cheap, standard-of-care clinical data a clinician may
+  reasonably want on file, unlike `genetics` (requires actively asking
+  about family history) or `social_life` (no clinical case either
+  way). Domain owner's call.
+- **`visit_date` is caller-supplied, separate from `created_at`,
+  defaulting to today.** They're different facts — clinical time
+  (`visit_date`) vs. write time (`created_at`). Backdating is a real
+  workflow (paperwork entered after the fact for an earlier
+  appointment). Future dates are rejected (a visit already happened; a
+  future one is a scheduled `appointment`, a different entity), with
+  one day of tolerance for timezone skew — validating a clinician's
+  local date against the server's UTC date would reject legitimate
+  same-day entries for anyone ahead of UTC, which includes Diacify's
+  own clinical context (Erbil, UTC+3).
+- **Clinical plausibility bounds reuse `machine-learning/clinical_fields.py`'s
+  own constants** (BMI 10–70, RBS ≥30, BP ≥30mmHg) where they exist,
+  rather than inventing new ones — so training-data cleaning and
+  real-time entry agree on the same floor. Upper bounds (BP, HbA1c,
+  age, lipids) have no existing project precedent — `clinical_fields.py`
+  only ever clips/corrects historical CSV rows, it never rejects —
+  so those are new, deliberately generous "reject only what's
+  essentially impossible" ceilings, stated as such rather than implied
+  to be clinically derived.
 
 ## Implementation plan
 
@@ -88,6 +135,10 @@ isolation before any schema or data exists:
    paginated/filtered)
 4. First write endpoint — `POST /api/patients`, with rate limiting
    added (rolling window, keyed on clinician id)
+5. First transitively-owned table — `visits` (owned via `patients`,
+   not a direct `clinician_id` column), proven with the same
+   cross-tenant isolation discipline as slice 2, extended to cover the
+   write path a denormalized column would have missed
 
 **Done:**
 - Auth gatekeeper — `backend/src/middleware/requireAuth.ts`,
@@ -281,11 +332,64 @@ isolation before any schema or data exists:
   `express`) confirmed unrelated to this slice — same 3 findings exist
   on `main` before this branch's `zod` addition.
 
+- `visits` table + `POST /api/patients/:id/visits` (slice 5) — new
+  migration `supabase/migrations/20260903214427_create_visits_table.sql`
+  creates `visits` (`id uuid`, `patient_id uuid references patients(id)
+  on delete cascade`, `visit_date date default current_date`, `age`,
+  `systolic`/`diastolic`, `bmi`, `hba1c` all `not null`; `rbs`,
+  `cholesterol`, `triglycerides`, `hdl`, `ldl`, `vldl` nullable), one
+  join-based `for all` RLS policy (see "Decisions made" above for why
+  not a denormalized `clinician_id`), one composite index
+  `(patient_id, visit_date desc)` — legacy's second, redundant
+  `patient_id`-only index dropped (the composite index's leading
+  column already serves that lookup via the leftmost-prefix rule; a
+  code-review finding, verified before accepting).
+  `backend/src/routes/createVisitSchema.ts::createVisitSchema` — Zod,
+  `.strict()`, clock-injectable for the future-date rule. `multipleOf`
+  on every numeric field matching its column's declared decimal scale
+  (another code-review finding: without it, excess precision like
+  `systolic: 138.76` passed validation and got silently rounded by
+  Postgres on insert instead of rejected) (20 tests).
+  `backend/src/routes/patients.ts` — `POST /:id/visits` behind
+  `requireAuth` + its own rate-limiter instance (same 20/60s pattern
+  as slice 4's `ADR-016`, independent budget from creating a patient).
+  Validates `:id` as a UUID before querying (malformed → 400,
+  cheaply, no DB round trip); a real but unowned/nonexistent patient
+  → 404 (mapped from Postgres's `42501` RLS-violation code — confirmed
+  directly against local Postgres that a nonexistent `patient_id`
+  surfaces as `42501`, not a foreign-key violation, since RLS's
+  `WITH CHECK` is evaluated before the FK constraint gets a chance to
+  run; an initial extra branch for the FK-violation code was dead code
+  and removed after that check).
+  `createPatientsRouter` refactored from 4 positional parameters to
+  one options object (another code-review finding — CLAUDE.md's own
+  "more than three arguments is a design smell" rule, caught by
+  applying it to my own code).
+  `backend/src/routes/visits.test.ts` (7 tests, real local Postgres +
+  supertest): 401 unauthenticated, 201 creating a visit for the
+  caller's own patient, 404 for a nonexistent patient, **404 for
+  another clinician's real patient** (the case a denormalized
+  `clinician_id` column would have missed — the test that actually
+  earns the join-policy design), 400 for a malformed patient id, 400
+  for an out-of-range value with nothing written, 429 over the limit.
+  **Verified against the real Supabase project**: migration pushed,
+  types regenerated and confirmed matching the local shape, `anon`
+  confirmed absent from `visits`' grants (ADR-012 holding
+  automatically for a new table). Real `401`/`201`/`404`/`400`/`429`
+  from the running server against a live confirmed test user. The
+  cross-tenant-404 case specifically was *not* re-run against the real
+  project (would have required setting up a second confirmed dashboard
+  user for a case the local suite already proves against real
+  Postgres) — a deliberate scope call, stated rather than silently
+  skipped. Test data cleaned up afterward via the clinician's own
+  token; `patients`/`visits` both confirmed empty again.
+  `supabase db advisors --linked` re-run clean, same two pre-existing
+  findings as prior slices.
+
 **Remaining:**
-- `visits` table + first clinical data (its own slice — see decisions
-  made, above)
-- Everything past that (appointments, analytics, ported ML-predict
-  endpoint) — not yet planned in detail
+- Everything past `visits` (listing a patient's visit history,
+  appointments, analytics, ported ML-predict endpoint) — not yet
+  planned in detail
 
 ## Notes
 
