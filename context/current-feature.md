@@ -544,9 +544,25 @@ isolation before any schema or data exists:
   documented read precision (ADR-028), not designed around.
   Verified against a running server; `supabase db advisors --local
   --type security` clean; test users cleaned up (0 remaining).
-  **Not** pushed to the hosted Supabase project — this session has no
-  confirmed real-project user, same deliberate scope call as slices 6-7.
-  That push and a `gen types --linked` check remain outstanding.
+  **Verified against the hosted Supabase project too**, unlike slices
+  6-7. Ran the before/after deliberately: with the migration unpushed,
+  `POST /api/visits/:id/predict` returned a real `500` against hosted
+  while every other route still worked — the endpoint computed correctly
+  and failed only on the write, confirming the diagnosis rather than
+  assuming it. After the push (run by the domain owner; the CLI write is
+  outside this session's permissions), the same visit returned `200`
+  with probabilities identical to scikit-learn, three calls left exactly
+  one row, and a nonexistent visit returned `404`.
+  `gen types --linked` differs from the local-generated file by 26 lines
+  — all of them PostgREST version metadata and cosmetic parenthesisation
+  in generic helpers, **zero schema differences** — so the hosted shape
+  matches what the code was compiled against. The linked output is now
+  the committed one, matching the convention slice 3 set.
+  `supabase db advisors --linked --type security`: three findings, all
+  pre-existing and unrelated (`rls_auto_enable` ×2 lints, leaked-password
+  protection off). `anon` has no grant on `risk_assessments` on hosted.
+  Hosted test data deleted afterwards through the clinician's own token;
+  the cascade to visits and assessments confirmed.
 
 **Remaining:**
 - Reading assessments back (`GET`) — deliberately not built with no

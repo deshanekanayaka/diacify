@@ -869,3 +869,10 @@ probabilities against freshly computed ones.
 (ADR-012 holding automatically); `supabase db advisors --local --type security`
 clean; three real requests against a running server leaving exactly one stored
 row.
+
+Also verified against the hosted project, before and after the migration was
+applied: with it unpushed the endpoint returned a real 500 while every other
+route worked, isolating the failure to the write; after it, the same visit
+returned 200 with scikit-learn-identical probabilities and three calls left one
+row. `gen types --linked` shows zero schema differences from the local-generated
+file, and `db advisors --linked` reports only the pre-existing findings.
