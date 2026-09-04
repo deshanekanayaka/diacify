@@ -205,9 +205,10 @@ describe("POST /api/visits/:id/predict", () => {
       .select()
       .eq("visit_id", visitId);
     expect(rows).toHaveLength(1);
-    // The upsert rewrites the row on conflict, so created_at has to be left
-    // out of the payload - otherwise a re-score would keep moving the
-    // timestamp and the record would misreport when the judgement was made.
+    // created_at records when the judgement was first made, so a re-score
+    // must not move it. The append-only grants make that structural rather
+    // than a matter of writing the insert carefully, but it is the property
+    // that actually matters, so it stays pinned independently of mechanism.
     expect(rows![0]!.created_at).toBe(first!.created_at);
   });
 

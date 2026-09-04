@@ -824,7 +824,10 @@ nowhere to live. Legacy kept `risk_score`/`risk_category` as nullable columns on
 the visit row, plus a fourth `pending` category.
 
 **Decision:** A `risk_assessments` table, append-only, `unique (visit_id,
-model_version)`. Named for the domain type the code already uses
+model_version)`. Append-only is enforced by privilege — `select` and `insert`
+only, with `update`/`delete` revoked — after a review found the original
+migration granting all four while calling the table append-only in its own
+comment (see `BUGS.md`). Named for the domain type the code already uses
 (`RiskAssessment`, `assessRisk`) rather than introducing "prediction" as a
 second word for the same concept at the database boundary. Probabilities stored
 as `double precision`; `risk_score` as `numeric(5, 2)`. RLS by a single `EXISTS`

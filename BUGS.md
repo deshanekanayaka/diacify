@@ -5,6 +5,82 @@ prevent the same class of bug going forward. Newest first.
 
 ---
 
+## `risk_assessments` was documented as append-only but granted `update` and `delete`
+
+**Found:** 2026-09-04, via a CodeRabbit review comment on PR #41
+(`feature/persist-risk-assessments`).
+
+**What happened:**
+
+The migration creating `risk_assessments` describes the table as
+append-only, in its own comment, in ADR-028, and in the commit message.
+It then wrote:
+
+```sql
+create policy "clinicians manage risk assessments for their own patients"
+  on risk_assessments
+  for all
+  to authenticated
+  ...
+
+grant select, insert, update, delete on risk_assessments to authenticated;
+```
+
+`for all` plus a full grant means a clinician could `UPDATE` a stored
+assessment's `risk_category`, or `DELETE` it outright. RLS held on the
+dimension it was tested for — clinician B genuinely could not touch
+clinician A's rows — so the cross-tenant tests all passed. What nothing
+tested, or prevented, was the *owner* rewriting their own.
+
+That matters more here than table-level tidiness. The entire argument for
+storing assessments per model version is that a row records what a
+particular model concluded. If the row is editable, it records what
+someone last decided it should say, and ADR-028's claim that "retraining
+adds rows instead of erasing them" is undercut by a `delete` grant that
+erases them on request.
+
+The route made the same mistake in code. `.upsert(..., { onConflict })` is
+`ON CONFLICT DO UPDATE` — so the retry path rewrote the existing row on
+every repeat call. It wrote identical values, because scoring is
+deterministic, so nothing observable went wrong; but the mechanism was an
+update, which is what append-only forbids. The `created_at` test appeared
+to cover this and did not: it proved the timestamp survived, not that the
+row was left alone.
+
+**Root cause:** the append-only property was expressed as prose in
+comments rather than as a privilege. Nothing in the schema disagreed with
+the sentence, so nothing caught it.
+
+**Fix:** a second, forward-only migration
+(`20260904231426_risk_assessments_append_only.sql`) replaces the `for all`
+policy with separate `for select` and `for insert` policies and revokes
+`update, delete` from `authenticated` — both gates closed, the same
+defence-in-depth ADR-012 established. The route now does a plain `insert`
+and treats a `23505` unique violation as success: a collision means the
+visit was already scored by this model, and since the row can no longer
+be edited, it necessarily holds the values we just computed, so no read
+is needed to return them.
+
+**Verification:** the two cross-tenant tests changed shape and that is the
+tell — with the privilege revoked, another clinician's `UPDATE`/`DELETE`
+is refused outright rather than silently filtered to zero rows. New tests
+cover the owning clinician being refused both. Confirmed against a running
+server: `PATCH` and `DELETE` on an assessment by its own owner both return
+`403`, while three `predict` calls still return `200` and leave one row.
+
+Also verified rather than assumed: deleting a patient still cascades to
+its assessments without the `delete` privilege, because a foreign-key
+cascade runs as a referential-integrity action and does not consult the
+caller's grants. That assumption was load-bearing for the fix, so it has
+its own test.
+
+**Prevention:** when a property is stated in a comment, ask what enforces
+it. "Append-only" is a privilege, not a description — the same lesson as
+the `anon` grant bug below, where a table documented as closed to `anon`
+was open because nothing had actually revoked it.
+
+---
+
 ## Pagination had no deterministic tiebreaker, risking repeated or skipped rows across pages
 
 **Found:** 2026-09-02, via a CodeRabbit review comment on PR for

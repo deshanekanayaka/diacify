@@ -124,14 +124,14 @@ describe("risk_assessments row level security", () => {
     expect(assessments).toHaveLength(1);
   });
 
-  it("blocks another clinician's UPDATE", async () => {
-    const { data, error } = await clinicianB.client
+  it("refuses an UPDATE from the owning clinician - the record is append-only", async () => {
+    // Not an RLS filter but a missing privilege: a stored assessment is what
+    // a given model concluded, so there is no legitimate edit to it.
+    const { error } = await clinicianA.client
       .from("risk_assessments")
       .update({ risk_category: "low" })
-      .eq("id", assessmentOwnedByA)
-      .select();
-    expect(error).toBeNull();
-    expect(data).toHaveLength(0);
+      .eq("id", assessmentOwnedByA);
+    expect(error).not.toBeNull();
 
     const { data: unchanged } = await clinicianA.client
       .from("risk_assessments")
@@ -141,18 +141,70 @@ describe("risk_assessments row level security", () => {
     expect(unchanged!.risk_category).toBe("high");
   });
 
-  it("blocks another clinician's DELETE", async () => {
-    const { error } = await clinicianB.client
+  it("refuses a DELETE from the owning clinician", async () => {
+    const { error } = await clinicianA.client
       .from("risk_assessments")
       .delete()
       .eq("id", assessmentOwnedByA);
-    expect(error).toBeNull();
+    expect(error).not.toBeNull();
 
     const { data: stillThere } = await clinicianA.client
       .from("risk_assessments")
       .select()
       .eq("id", assessmentOwnedByA);
     expect(stillThere).toHaveLength(1);
+  });
+
+  it("refuses an UPDATE or DELETE from another clinician too", async () => {
+    const { error: updateError } = await clinicianB.client
+      .from("risk_assessments")
+      .update({ risk_category: "low" })
+      .eq("id", assessmentOwnedByA);
+    expect(updateError).not.toBeNull();
+
+    const { error: deleteError } = await clinicianB.client
+      .from("risk_assessments")
+      .delete()
+      .eq("id", assessmentOwnedByA);
+    expect(deleteError).not.toBeNull();
+
+    const { data: stillThere } = await clinicianA.client
+      .from("risk_assessments")
+      .select()
+      .eq("id", assessmentOwnedByA);
+    expect(stillThere).toHaveLength(1);
+  });
+
+  it("still removes assessments when the patient is deleted", async () => {
+    // Revoking DELETE must not break the cascade: a clinician deleting a
+    // patient has to take that patient's assessments with it. Cascades run
+    // as a referential-integrity action, not as the caller's own DELETE.
+    const { data: patient } = await clinicianA.client
+      .from("patients")
+      .insert({ sex: "female" })
+      .select()
+      .single();
+    const { data: visit } = await clinicianA.client
+      .from("visits")
+      .insert({ patient_id: patient!.id, age: 61, systolic: 120, diastolic: 78, bmi: 24, hba1c: 5.2 })
+      .select()
+      .single();
+    const { error: insertError } = await clinicianA.client
+      .from("risk_assessments")
+      .insert({ ...ASSESSMENT, visit_id: visit!.id });
+    expect(insertError).toBeNull();
+
+    const { error: deleteError } = await clinicianA.client
+      .from("patients")
+      .delete()
+      .eq("id", patient!.id);
+    expect(deleteError).toBeNull();
+
+    const { data: orphans } = await clinicianA.client
+      .from("risk_assessments")
+      .select()
+      .eq("visit_id", visit!.id);
+    expect(orphans).toHaveLength(0);
   });
 
   it("refuses a second assessment from the same model version for one visit", async () => {

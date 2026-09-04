@@ -7,6 +7,10 @@ import { INTERNAL_ERROR_BODY, isUuid } from "./http.js";
 
 const VISIT_NOT_FOUND_BODY = { error: "Visit not found" } as const;
 
+// Postgres unique-violation. Here it means this visit has already been
+// scored by this model version, which is a repeat rather than a failure.
+const UNIQUE_VIOLATION = "23505";
+
 export interface CreateVisitPredictionsRouterOptions {
   supabaseUrl: string;
   supabasePublishableKey: string;
@@ -86,14 +90,18 @@ export function createVisitPredictionsRouter({
 
     const assessment = assessRisk(model, visit, visit.patients.sex);
 
-    // A re-score under the same model can only reproduce the same numbers,
-    // so a collision is a repeat, not a conflict - and the caller still
-    // wants its answer back rather than an error.
+    // A plain insert, not an upsert: assessments are append-only, and an
+    // upsert is an ON CONFLICT DO UPDATE, which is exactly the rewrite the
+    // table now forbids. A collision means this visit was already scored by
+    // this model - and since scoring is deterministic and the stored row
+    // cannot have been edited since, it necessarily holds these same values.
+    // So the caller still gets its answer, and no read is needed to fetch
+    // what we just computed.
     const { error: saveError } = await client
       .from("risk_assessments")
-      .upsert(toStoredAssessment(visit.id, assessment), { onConflict: "visit_id,model_version" });
+      .insert(toStoredAssessment(visit.id, assessment));
 
-    if (saveError) {
+    if (saveError && saveError.code !== UNIQUE_VIOLATION) {
       res.status(500).json(INTERNAL_ERROR_BODY);
       return;
     }
