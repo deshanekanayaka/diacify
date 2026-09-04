@@ -88,6 +88,63 @@ export function createPatientsRouter({
     res.status(201).json({ data });
   });
 
+  router.get("/:id/visits", async (req, res) => {
+    const patientId = req.params.id;
+    if (!patientId || !UUID_PATTERN.test(patientId)) {
+      res.status(400).json({ error: "Invalid patient id" });
+      return;
+    }
+
+    const pagination = parsePagination(req.query);
+    if (!pagination.ok) {
+      res.status(400).json({ error: pagination.error });
+      return;
+    }
+    const { limit, page } = pagination.params;
+    const from = (page - 1) * limit;
+    const to = from + limit - 1;
+
+    const { accessToken } = (req as AuthenticatedRequest).user!;
+    const client = createRequestClient(supabaseUrl, supabasePublishableKey, accessToken);
+
+    // RLS behaves differently on read than on write: an unowned patient
+    // makes the visits SELECT return zero rows rather than the 42501 the
+    // POST path can map to a 404. Without this lookup, "not your patient"
+    // and "your patient, no visits yet" would be the same response.
+    const { data: patient, error: patientError } = await client
+      .from("patients")
+      .select("id")
+      .eq("id", patientId)
+      .maybeSingle();
+
+    if (patientError) {
+      res.status(500).json({ error: "Something went wrong. Please try again." });
+      return;
+    }
+    if (!patient) {
+      res.status(404).json(PATIENT_NOT_FOUND_BODY);
+      return;
+    }
+
+    // visit_date is only a date, so same-day visits tie; created_at then id
+    // make the order total, which is what keeps pagination stable.
+    const { data, error, count } = await client
+      .from("visits")
+      .select("*", { count: "exact" })
+      .eq("patient_id", patientId)
+      .order("visit_date", { ascending: false })
+      .order("created_at", { ascending: false })
+      .order("id", { ascending: false })
+      .range(from, to);
+
+    if (error) {
+      res.status(500).json({ error: "Something went wrong. Please try again." });
+      return;
+    }
+
+    res.status(200).json({ data, page, limit, total: count });
+  });
+
   router.post("/:id/visits", createVisitRateLimit, async (req, res) => {
     const patientId = req.params.id;
     if (!patientId || !UUID_PATTERN.test(patientId)) {
