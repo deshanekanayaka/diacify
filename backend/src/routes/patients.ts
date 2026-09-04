@@ -1,11 +1,10 @@
 import { Router, type RequestHandler } from "express";
 
 import { createRequestClient } from "../db/requestClient.js";
+import { INTERNAL_ERROR_BODY, isUuid } from "./http.js";
 import { createPatientSchema } from "./createPatientSchema.js";
 import { createVisitSchema } from "./createVisitSchema.js";
 import { parsePagination } from "./pagination.js";
-
-const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 // The Postgres error code surfaced by PostgREST when an insert is
 // rejected because the referenced patient isn't visible/owned by the
@@ -17,9 +16,6 @@ const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{
 // WITH CHECK is evaluated before the FK constraint gets a chance to run.
 const RLS_VIOLATION = "42501";
 const PATIENT_NOT_FOUND_BODY = { error: "Patient not found" } as const;
-// Deliberately opaque: a client can't act on the specifics, and the
-// specifics are exactly what we don't want leaking out of a 500.
-const INTERNAL_ERROR_BODY = { error: "Something went wrong. Please try again." } as const;
 
 export interface CreatePatientsRouterOptions {
   supabaseUrl: string;
@@ -92,7 +88,7 @@ export function createPatientsRouter({
 
   router.get("/:id/visits", async (req, res) => {
     const patientId = req.params.id;
-    if (!patientId || !UUID_PATTERN.test(patientId)) {
+    if (!isUuid(patientId)) {
       res.status(400).json({ error: "Invalid patient id" });
       return;
     }
@@ -149,7 +145,7 @@ export function createPatientsRouter({
 
   router.post("/:id/visits", createVisitRateLimit, async (req, res) => {
     const patientId = req.params.id;
-    if (!patientId || !UUID_PATTERN.test(patientId)) {
+    if (!isUuid(patientId)) {
       res.status(400).json({ error: "Invalid patient id" });
       return;
     }

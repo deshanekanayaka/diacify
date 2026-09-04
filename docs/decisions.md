@@ -698,3 +698,115 @@ declaration is load-bearing rather than inert: a probe assigning
 `req.user!.id` to a `number` fails typecheck with "Type 'string' is not
 assignable to type 'number'" — an unloaded declaration would instead have
 errored with "Property 'user' does not exist."
+
+---
+
+## ADR-025 — ML inference transport: exported JSON forest, traversed in the backend
+
+**Status:** Accepted — 2026-09-04. Closes the question ADR-001 deferred.
+
+**Context:** ADR-001 chose one application — inference in Node, training offline
+in Python — but left *how* the model crosses the language boundary explicitly
+unresolved, calling for "a quick spike before committing." Nothing had bridged
+it: the trained model is a Python pickle, and the rebuild had no serving code on
+either side. ADR-001's stated verification plan ("the same fixtures
+`machine-learning/tests/test_model.py` already uses") turned out not to exist —
+that file's four tests are all training-side; the serving fixtures it referred
+to were legacy's, and legacy is not in this repository.
+
+**Decision:** `machine-learning/serving_export.py` flattens the fitted forest
+into JSON — per-node children, split feature, threshold and leaf distributions,
+plus feature order, class order and the training-time medians. `backend/src/ml/`
+walks it. The artifact is **committed** (unlike the `.pkl`, which stays
+gitignored) and carries a content-derived version string.
+
+Inference compares features as **float32** (`Math.fround`), because
+scikit-learn casts `X` to float32 before comparing against a split threshold.
+
+**Rejected:** ONNX (`skl2onnx` + `onnxruntime-node`) — 296 MB of
+platform-specific native binary for one shallow forest, and an opaque artifact,
+which is the one thing in this system nobody could then explain. `m2cgen`,
+which transpiles a model to self-contained JavaScript and was the most
+attractive option on paper — last released April 2022, Python ≤3.10, against
+this project's Python 3.11 / scikit-learn 1.8. `ml2json` as a runtime
+dependency — it proved the export works and is actively maintained against
+exactly our scikit-learn version, but its format is a Python round-trip
+envelope that has to be transformed for JavaScript anyway, so reading
+scikit-learn's `tree_` arrays directly is strictly simpler. Keeping a Python
+inference service — the fallback ADR-001 named, unnecessary once parity was
+demonstrated.
+
+**Consequences:** Bit-exact parity with scikit-learn, verified on all 662
+dataset rows *and* on 500 rows constructed to sit inside the float32/float64
+disagreement window. That second set is the finding that justified the spike:
+**the real dataset passes with or without `Math.fround`**, so a fixture built
+only from real data would have gone green while shipping a fault that
+misroutes near-threshold values and can return a different risk category. Five
+of those 500 rows change category when the cast is removed — confirmed by
+removing it. Inference costs ~3 µs, so the model's cost is noise next to the
+database round trip.
+
+Retraining now has a second obligation: regenerate `parityFixture.json`, or the
+backend's tests compare against the previous model's answers. The fixture
+carries the model version and a test asserts the pairing, so a stale fixture
+fails loudly rather than silently.
+
+**Full reasoning:** the spike is reproducible from `machine-learning/
+parity_fixture.py`; `backend/src/ml/forest.ts` carries the float32 rationale.
+
+---
+
+## ADR-026 — The prediction response carries no `top_factors`
+
+**Status:** Accepted — 2026-09-04
+
+**Context:** Legacy's `/predict` returned `top_factors`: the model's top three
+**global** feature importances — the same three names for every patient, not a
+per-patient explanation. `docs/phase-1-investigation.md` records that the
+frontend presented them without that caveat.
+
+**Decision:** Omit the field. Global feature importances describe the *model*,
+not a patient, and they already live in `models/model_metadata.json`.
+
+**Rejected:** Porting it as-is for parity — shipping a known-misleading
+feature to match legacy. Per-patient SHAP explanations, which would be the
+real fix — SHAP is Python-only, so adopting it would mean reversing ADR-001
+for a field with no consumer yet (there is no frontend).
+
+**Consequences:** If a UI later wants "what drives this model," it should be
+served as model documentation, not as part of an individual's result. Revisit
+the per-patient version only with an actual clinical requirement behind it.
+
+---
+
+## ADR-027 — `POST /api/visits/:id/predict` scores a stored visit and persists nothing
+
+**Status:** Accepted — 2026-09-04
+
+**Context:** ADR-018 established that model output gets its own table
+referencing `visits.id`, once inference exists. Inference now exists. The open
+questions were what the endpoint takes as input and whether this slice also
+builds that table.
+
+**Decision:** Score a visit already on file, addressed by its own id at
+`/api/visits/:id/predict`. Compute only — nothing is written. `POST`, not
+`GET`.
+
+**Rejected:** Accepting a loose measurements payload — that is a stateless
+calculator; reading a stored visit means the measurements were already
+validated on write and that RLS decides whether this caller may score them.
+Nesting under `/api/patients/:id/visits/:visitId/predict` — the visit id is
+unique and ADR-017's join policy already scopes it, so the patient id would be
+decoration. Building the scores table in this slice — the same reasoning
+ADR-015 used to refuse bundling patient + first visit: this slice's one hard
+problem is inference, and a table, its RLS policy and a write path are the
+next one. `GET`, despite the computation being pure and deterministic — the
+method would have to change to `POST` when persistence lands, breaking a
+published contract for a slice's worth of REST tidiness.
+
+**Consequences:** Calling it twice is safe and returns the same answer, since
+nothing is stored and the model is fixed. No rate limiter, following the read
+routes' precedent (ADR-016 named a *write* flood as its threat) — worth
+revisiting when this starts writing. Until the scores table exists, a
+clinician-facing UI would have to score on demand rather than read a stored
+history, which is exactly the gap the next slice closes.

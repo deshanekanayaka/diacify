@@ -10,11 +10,16 @@ from feature_matrix import FEATURE_NAMES
 from hyperparameter_search import PARAM_GRID, search_hyperparameters
 from model import evaluate_model
 from persistence import ModelPackage, build_metadata, save_metadata, save_model_package
+from serving_export import build_serving_model, save_serving_model
 from split import prepare_train_test_data
 
 _DATASET_PATH = Path(__file__).parent / "data" / "erbil-diabetes-dataset.csv"
 _MODEL_PATH = Path(__file__).parent / "models" / "random_forest_model.pkl"
 _METADATA_PATH = Path(__file__).parent / "models" / "model_metadata.json"
+# Deliberately written into the backend rather than models/: this is the one
+# training output the running application consumes, so it ships with the code
+# that reads it instead of requiring the ML directory at deploy time.
+_SERVING_MODEL_PATH = Path(__file__).parent.parent / "backend" / "src" / "ml" / "model.json"
 
 
 def train_and_evaluate(
@@ -72,12 +77,16 @@ def main() -> None:
 
     package, metadata = train_and_evaluate(rows)
 
+    serving = build_serving_model(package)
+
     save_model_package(package, _MODEL_PATH)
     save_metadata(metadata, _METADATA_PATH)
+    save_serving_model(serving, _SERVING_MODEL_PATH)
 
     print()
     print(f"Model saved:    {_MODEL_PATH}")
     print(f"Metadata saved: {_METADATA_PATH}")
+    print(f"Serving model:  {_SERVING_MODEL_PATH} ({serving['version']})")
     print()
     print(f"Test accuracy:     {metadata['test_accuracy'] * 100:.2f}%")
     print(

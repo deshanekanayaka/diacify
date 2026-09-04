@@ -28,8 +28,12 @@ above it.
 | 12 | `feature_importance.py` | Rank features by trained importance | `rank_feature_importance` |
 | 13 | `bias_audit.py` | Check performance by sex and age subgroup | `audit_bias` |
 | 14 | `persistence.py` | Save the model, medians, and training metadata | `ModelPackage`, `save_model_package`, `load_model_package`, `build_metadata`, `save_metadata` |
+| 15 | `serving_export.py` | Flatten the model into the JSON the backend serves from | `SERVING_MEDIAN_FIELDS`, `build_serving_model`, `save_serving_model` |
 
-`train.py` runs all 14 in sequence — see below.
+`train.py` runs all 15 in sequence — see below.
+
+`parity_fixture.py` sits beside them as tooling rather than pipeline: it
+regenerates the fixture the backend's traversal is tested against.
 
 ## Running the pipeline
 
@@ -39,15 +43,26 @@ python3 train.py
 ```
 
 Trains on `data/erbil-diabetes-dataset.csv`, prints a summary, and
-writes two artifacts to `models/`:
+writes three artifacts:
 
-- `random_forest_model.pkl` — the trained model, feature order, and
-  imputation medians, bundled together (gitignored — binary, rebuilt
-  from source)
-- `model_metadata.json` — a human-readable record of the run: dataset
-  size, CV/test accuracy, per-class metrics, feature importances, bias
-  audit, and the exact clinical thresholds used (committed — this is
-  the audit trail)
+- `models/random_forest_model.pkl` — the trained model, feature order,
+  and imputation medians, bundled together (gitignored — binary,
+  rebuilt from source)
+- `models/model_metadata.json` — a human-readable record of the run:
+  dataset size, CV/test accuracy, per-class metrics, feature
+  importances, bias audit, and the exact clinical thresholds used
+  (committed — this is the audit trail)
+- `../backend/src/ml/model.json` — the same forest as plain JSON, with
+  the medians and feature order the backend needs to predict with it
+  (committed — unlike the pickle, the running application reads this,
+  so it ships with the code that reads it)
+
+After retraining, regenerate the backend's parity fixture too, or its
+tests will be comparing against the previous model's answers:
+
+```bash
+python3 parity_fixture.py
+```
 
 ## Tests
 

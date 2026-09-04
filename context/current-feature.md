@@ -11,8 +11,10 @@ review hardening and 3 logged bugs) merged to main (PR #32). Slice 4
 (`POST /api/patients` + rate limiting, plus `docs/decisions.md` as
 the project's first ADR log) merged to main (PR #34). Slice 5
 (`visits` table + `POST /api/patients/:id/visits`) merged to main
-(PR #36). Slice 6 (`GET /api/patients/:id/visits`) implemented on
-`feature/get-patient-visits-endpoint`, not yet merged.
+(PR #36). Slice 6 (`GET /api/patients/:id/visits`) merged to main
+(PR #38). Slice 7 (ML predict endpoint — the first Node-side inference,
+closing ADR-001's deferred transport question) implemented on
+`feature/ml-predict-endpoint`, not yet merged.
 
 ## Goals
 
@@ -138,6 +140,28 @@ defense-in-depth, filter/pagination naming, CORS preflight handling,
   carries a budget" is a defensible alternative, but it would be a
   change to ADR-016's scope, not a slice-6 detail.
 
+- **ML inference runs in Node against an exported JSON forest, not
+  ONNX, a transpiler, or a Python service** (ADR-025). ADR-001 chose one
+  application but deferred *how* the model crosses the boundary, asking
+  for a spike first; the spike ran and the answer was yes. The decisive
+  detail is that scikit-learn compares features as float32, so the
+  traversal must too (`Math.fround`) — and the real dataset passes
+  either way, so only deliberately-constructed near-threshold rows
+  reveal the difference. Also found: ADR-001's stated verification
+  fixtures didn't exist (that file's tests are all training-side), so
+  the parity fixture had to be built rather than reused.
+- **`top_factors` is not ported** (ADR-026). Global feature importances
+  describe the model, not a patient, and already live in
+  `model_metadata.json`; legacy returned them per-prediction, which is
+  what let the UI imply personalised explanation. SHAP would be the real
+  fix and is Python-only — not worth reversing ADR-001 for a field with
+  no consumer yet.
+- **The predict endpoint scores a stored visit and writes nothing**
+  (ADR-027). Reading a visit back means RLS decides who may score it,
+  and the measurements were already validated on write. The scores table
+  ADR-018 anticipated is the next slice, on ADR-015's precedent of not
+  folding a second hard problem into a slice with one job.
+
 ## Implementation plan
 
 Vertical slices, smallest defensible thing first — auth proven in
@@ -158,6 +182,9 @@ isolation before any schema or data exists:
 6. First read of a transitively-owned table —
    `GET /api/patients/:id/visits`, where RLS's read/write asymmetry
    forces an explicit 404 decision that the write path got for free
+7. First ML inference in the backend — `POST /api/visits/:id/predict`,
+   compute-only, proving the trained Python model can be served from
+   Node with bit-exact parity before anything stores what it produces
 
 **Done:**
 - Auth gatekeeper — `backend/src/middleware/requireAuth.ts`,
@@ -446,9 +473,57 @@ isolation before any schema or data exists:
   sibling `PATIENT_NOT_FOUND_BODY` was already a named constant — now
   `INTERNAL_ERROR_BODY`.
 
+- ML predict endpoint (slice 7) — **no migration**; the whole slice is
+  the train/serve bridge plus one route.
+  `machine-learning/serving_export.py::build_serving_model` flattens the
+  fitted forest into JSON (per-node children/feature/threshold/leaf
+  distributions, feature order, class order, training medians) with a
+  content-derived version string — which also surfaced the chosen
+  hyperparameters (`max_depth=10`, `min_samples_split=0.01`,
+  `max_features=1.0`, `criterion=gini`), recorded nowhere before. Only
+  the 9 medians the serving feature vector reads are exported; chol,
+  vldl and genetics are imputed in training but never reach
+  `FEATURE_NAMES`. `train.py` now writes `backend/src/ml/model.json`
+  (254 KB, committed — unlike the pickle, the running app reads it).
+  `machine-learning/parity_fixture.py` generates
+  `backend/src/ml/parityFixture.json`: 662 real dataset rows plus 500
+  rows constructed to sit inside the float32/float64 disagreement window
+  around a split threshold.
+  `backend/src/ml/` — `servingModel.ts` (Zod schema validating the
+  structure the traversal relies on, incl. child-index bounds; loaded
+  once at startup per ADR-010), `forest.ts` (18-line traversal,
+  `Math.fround` load-bearing), `features.ts` (vector building, `??` not
+  `||` so a measured 0 stays a measurement, ratio-median fallback when
+  HDL can't divide), `riskAssessment.ts` (score and category computed
+  independently), `riskCategory.ts` (the domain's three categories, in
+  the model's output order).
+  `backend/src/routes/visitPredictions.ts` — `POST /:id/predict` mounted
+  at `/api/visits`, one query embedding `patients(sex)` under RLS, 400 /
+  404 / 200. `http.ts` extracted first as a pure refactor (`isUuid`,
+  `INTERNAL_ERROR_BODY` were private to `patients.ts`).
+  **34 new tests** (115 total): forest parity on both fixture sets,
+  schema rejection cases, feature building, the score/category
+  independence regression (two patients, identical score, different
+  categories), and 7 route tests against real local Postgres including
+  the cross-tenant 404.
+  **Verified beyond the suite**: removing `Math.fround` fails *only* the
+  near-threshold test while all 662 real rows still pass — proving both
+  that the guard works and that real data alone would have missed it.
+  Against a real running server on the local stack: real 401/400/404, a
+  real cross-tenant 404 (second clinician against the first's visit),
+  and probabilities identical to scikit-learn digit for digit
+  (`0.5706819409429325` medium / `0.4293180590570676` high on a
+  borderline profile). **Not** verified against the hosted Supabase
+  project — no migration to push and no confirmed real-project test user
+  available to this session; a deliberate scope call, same as slice 6.
+  Test users cleaned up afterwards (0 remaining locally).
+
 **Remaining:**
-- Everything past reading visits (appointments, analytics, ported
-  ML-predict endpoint) — not yet planned in detail
+- Persisting predictions — the scores table ADR-018 anticipated,
+  referencing `visits.id`. The natural next slice now that inference
+  exists and ADR-027 deliberately left it out.
+- Everything past that (appointments, analytics) — not yet planned in
+  detail
 - `visit_date` from/to filtering on `GET /api/patients/:id/visits`
   — a real clinical use case, deliberately deferred on slice 3's
   precedent of not adding query surface before a caller needs it
