@@ -597,3 +597,66 @@ limiter.
 
 **Consequences:** `server.ts` and both test files' `buildApp` helpers
 updated to the keyed-argument call shape.
+
+---
+
+## ADR-022 — `GET /api/patients/:id/visits`: explicit patient lookup for 404, not an ambiguous empty list
+
+**Status:** Accepted — 2026-09-04
+
+**Context:** RLS behaves asymmetrically across read and write. On the write
+path, `POST /api/patients/:id/visits` gets a `42501` from a `WITH CHECK`
+violation and maps it to 404 (ADR-017). On the read path, a `SELECT` under
+the same policy simply returns zero rows and no error — so the naive
+one-query implementation cannot distinguish "your patient, no visits yet"
+from "not your patient."
+
+**Decision:** Look the patient up first via the same request-scoped client
+(`select("id").eq("id", patientId).maybeSingle()`); a missing row returns
+`404 { error: "Patient not found" }`, reusing the constant the POST path
+already returns. Only then query `visits`.
+
+**Rejected:** Always returning `200 { data: [] }` — one round trip, but it
+makes a nonexistent patient indistinguishable from an empty history, so a UI
+would render a blank visit list for a patient that isn't there, and the same
+URL would answer 404 to `POST` and 200 to `GET` for the identical bad id.
+Also rejected a single PostgREST embedded query (`patients` with nested
+`visits`) — one round trip and it does disambiguate, but pagination and
+`count` over an embedded resource are awkward enough to obscure what the
+query does.
+
+**Consequences:** Two round trips per read, both primary-key or
+index-covered. No information leak: because the lookup runs under RLS,
+"doesn't exist" and "isn't yours" produce a byte-identical 404, the same
+property the POST path already has. Verified against a running server —
+clinician A requesting clinician B's real patient gets 404, not an empty
+list.
+
+---
+
+## ADR-023 — Visit history ordering: `visit_date desc, created_at desc, id desc`
+
+**Status:** Accepted — 2026-09-04
+
+**Context:** `visits` carries two time columns with different meanings
+(ADR-020): `visit_date` (clinical time, caller-supplied, backdatable) and
+`created_at` (write time). A visit history has to pick one to order by. The
+slice-3 review already established that an ordering whose sort key can tie
+produces unstable pagination — rows repeated or omitted across pages.
+
+**Decision:** Order by `visit_date desc`, then `created_at desc`, then
+`id desc`. Clinical order is what a clinician reads a history in; the
+secondary keys make the ordering total.
+
+**Rejected:** `visit_date desc` alone — it matches the
+`(patient_id, visit_date desc)` index exactly, but `visit_date` is a `date`,
+so two visits on the same day tie, reintroducing precisely the pagination
+bug slice 3 fixed. Also rejected ordering by `created_at` alone: it is
+total already, but it sorts a backdated visit as if it happened on the day
+the paperwork was typed, which is wrong on a clinical timeline.
+
+**Consequences:** Ties cost a small sort step on top of the index scan, over
+the tied rows only. This tie is directly testable, unlike slice 3's
+`created_at` tie — `visit_date` is caller-supplied, so a test can force two
+same-day visits and assert the entry-order tie-break, which
+`visits.test.ts` now does.

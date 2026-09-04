@@ -11,9 +11,8 @@ review hardening and 3 logged bugs) merged to main (PR #32). Slice 4
 (`POST /api/patients` + rate limiting, plus `docs/decisions.md` as
 the project's first ADR log) merged to main (PR #34). Slice 5
 (`visits` table + `POST /api/patients/:id/visits`) merged to main
-(PR #36). Slice 6 not yet scoped — likely
-`GET /api/patients/:id/visits` (listing a patient's visit history),
-mirroring how `patients` split GET and POST across separate slices.
+(PR #36). Slice 6 (`GET /api/patients/:id/visits`) implemented on
+`feature/get-patient-visits-endpoint`, not yet merged.
 
 ## Goals
 
@@ -117,6 +116,27 @@ defense-in-depth, filter/pagination naming, CORS preflight handling,
   so those are new, deliberately generous "reject only what's
   essentially impossible" ceilings, stated as such rather than implied
   to be clinically derived.
+- **Reading a patient's visits does an explicit patient lookup first,
+  rather than returning an ambiguous empty list** (ADR-022). RLS is
+  asymmetric across read and write: the `POST` path gets a `42501` it
+  can map to 404, but a `SELECT` under the same policy just returns
+  zero rows. Without the lookup, "not your patient" and "your patient,
+  no visits yet" would be the same response, and the same URL would
+  answer 404 to `POST` and 200 to `GET` for an identical bad id. Costs
+  a second round trip; leaks nothing, since the lookup itself runs
+  under RLS.
+- **Visit history orders by `visit_date desc, created_at desc, id
+  desc`** (ADR-023). Clinical order is what a clinician reads in, but
+  `visit_date` is a `date` — same-day visits tie, which is the exact
+  shape of the pagination-instability bug slice 3 fixed. The secondary
+  keys make the order total. Unlike slice 3's tie, this one is
+  directly testable, because `visit_date` is caller-supplied.
+- **No rate limiter on the read path.** ADR-016's named threat is a
+  write flood; reads are RLS-scoped, index-covered, and create
+  nothing. `GET /api/patients` set this precedent — stated explicitly
+  here rather than omitted silently, since "every authenticated route
+  carries a budget" is a defensible alternative, but it would be a
+  change to ADR-016's scope, not a slice-6 detail.
 
 ## Implementation plan
 
@@ -135,6 +155,9 @@ isolation before any schema or data exists:
    not a direct `clinician_id` column), proven with the same
    cross-tenant isolation discipline as slice 2, extended to cover the
    write path a denormalized column would have missed
+6. First read of a transitively-owned table —
+   `GET /api/patients/:id/visits`, where RLS's read/write asymmetry
+   forces an explicit 404 decision that the write path got for free
 
 **Done:**
 - Auth gatekeeper — `backend/src/middleware/requireAuth.ts`,
@@ -382,10 +405,53 @@ isolation before any schema or data exists:
   `supabase db advisors --linked` re-run clean, same two pre-existing
   findings as prior slices.
 
+- `GET /api/patients/:id/visits` (slice 6) — **no migration**: slice
+  5's composite `(patient_id, visit_date desc)` index already serves
+  this query, so the whole slice is one route handler and its tests.
+  `backend/src/routes/patients.ts` — `router.get("/:id/visits")`
+  behind `requireAuth`: validate `:id` as a UUID (400, no DB round
+  trip), reuse `parsePagination` unchanged, look the patient up under
+  RLS (404 if absent — see ADR-022), then query `visits` ordered
+  `visit_date desc, created_at desc, id desc` (ADR-023). Response
+  `{ data, page, limit, total }`, matching `GET /api/patients`.
+  `.maybeSingle()` rather than `.single()` on the lookup — a
+  primary-key match can't return more than one row, and zero rows is
+  the expected 404 case, not an error.
+  `backend/src/routes/visits.test.ts` (8 new tests, real local
+  Postgres + supertest): 401 unauthenticated, visits returned newest
+  `visit_date` first (seeded deliberately out of chronological order,
+  so a passing test can't just be reflecting insertion order), **200
+  with an empty list for an owned patient with no visits** and **404
+  for another clinician's real patient** (the pair that earns
+  ADR-022 — under the rejected design both would have been the same
+  response), 404 for a nonexistent patient, 400 for a malformed id,
+  pagination walking every visit with none repeated or omitted, and
+  same-day visits ordered by entry order (ADR-023's tie-break, forced
+  directly — unlike slice 3, where the tie wasn't reliably
+  reproducible).
+  **Verified against the real running server** (`npx tsx
+  src/server.ts` + `curl`, not just supertest), pointed at the local
+  stack: real `401`/`400`/`404`/`200`, correct `visit_date` ordering
+  with the same-day tie broken by `created_at`, `total: 3` with page 2
+  of `limit=2` returning the remaining 1 row, and the cross-tenant
+  case re-run for real — clinician A got `404 {"error":"Patient not
+  found"}` for clinician B's real patient. **Not** verified against
+  the hosted Supabase project, unlike prior slices: this slice ships
+  no migration (nothing to push, no generated types to re-check) and
+  no confirmed real-project test user is available to this session.
+  A deliberate scope call, stated rather than silently skipped.
+  Test users cleaned up afterward (`0` auth users remaining locally).
+  Review-found cleanup, committed separately as a pure refactor: the
+  generic 500 body was repeated inline at five call sites while its
+  sibling `PATIENT_NOT_FOUND_BODY` was already a named constant — now
+  `INTERNAL_ERROR_BODY`.
+
 **Remaining:**
-- Everything past `visits` (listing a patient's visit history,
-  appointments, analytics, ported ML-predict endpoint) — not yet
-  planned in detail
+- Everything past reading visits (appointments, analytics, ported
+  ML-predict endpoint) — not yet planned in detail
+- `visit_date` from/to filtering on `GET /api/patients/:id/visits`
+  — a real clinical use case, deliberately deferred on slice 3's
+  precedent of not adding query surface before a caller needs it
 
 ## Notes
 
