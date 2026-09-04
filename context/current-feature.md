@@ -13,8 +13,8 @@ the project's first ADR log) merged to main (PR #34). Slice 5
 (`visits` table + `POST /api/patients/:id/visits`) merged to main
 (PR #36). Slice 6 (`GET /api/patients/:id/visits`) merged to main
 (PR #38). Slice 7 (ML predict endpoint — the first Node-side inference,
-closing ADR-001's deferred transport question) implemented on
-`feature/ml-predict-endpoint`, not yet merged.
+closing ADR-001's deferred transport question) merged to main
+(PR #39).
 
 ## Goals
 
