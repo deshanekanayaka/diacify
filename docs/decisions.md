@@ -810,3 +810,62 @@ routes' precedent (ADR-016 named a *write* flood as its threat) — worth
 revisiting when this starts writing. Until the scores table exists, a
 clinician-facing UI would have to score on demand rather than read a stored
 history, which is exactly the gap the next slice closes.
+
+---
+
+## ADR-028 — Risk assessments are append-only, one row per (visit, model version)
+
+**Status:** Accepted — 2026-09-04
+
+**Context:** ADR-018 decided that model output gets its own table referencing
+`visits.id` rather than columns on `visits`, and ADR-027 deferred building it so
+the inference slice had one job. Inference now exists, so predictions had
+nowhere to live. Legacy kept `risk_score`/`risk_category` as nullable columns on
+the visit row, plus a fourth `pending` category.
+
+**Decision:** A `risk_assessments` table, append-only, `unique (visit_id,
+model_version)`. Named for the domain type the code already uses
+(`RiskAssessment`, `assessRisk`) rather than introducing "prediction" as a
+second word for the same concept at the database boundary. Probabilities stored
+as `double precision`; `risk_score` as `numeric(5, 2)`. RLS by a single `EXISTS`
+joining `visits` and `patients` — the project's first three-level ownership
+chain. The predict endpoint became the writer and gained a rate limiter.
+
+**Rejected:** One overwritten row per visit (legacy's shape) — simpler to read,
+but a re-score erases what the previous model concluded, which reduces the
+stored `model_version` to "the latest one" and makes "did the retrain move
+anyone between risk categories" unanswerable. Append-only with no uniqueness —
+records every time anyone asked, which a retry loop inflates with identical rows
+to answer a question nobody has. Auto-scoring on visit creation — a real
+clinical want, deferred on ADR-015's precedent rather than bundled here.
+
+**Consequences:** `pending` no longer exists as a domain state, and not because
+it was dropped: legacy needed it because the ML service was a separate process
+that could be unreachable when a visit was saved. ADR-001 moved inference
+in-process, which removed that failure mode — the absence of a row now carries
+the meaning. This is a domain state deleted as a second-order effect of an
+architecture decision, only visible a slice later.
+
+Idempotency is structural rather than coded: scoring is deterministic, so the
+unique constraint absorbs a retry. `created_at` is kept out of the upsert
+payload, since `ON CONFLICT` rewrites the row and would otherwise keep moving
+the timestamp until the record misreported when the judgement was made.
+
+**A precision finding, recorded rather than smoothed over:** the test asserting
+that a stored probability matches the returned one was initially passing
+vacuously, because the visit it seeded scores an unambiguous 0/0/1 and those
+round-trip at any precision. Re-seeded with a borderline visit it failed.
+PostgREST renders `float8` as text at 15 significant digits, so a value read
+back over the API differs from the computed one in the 16th. Checked directly in
+Postgres (`probability_medium = 0.5706819409429325::float8` is true), so storage
+is bit-exact and only the text rendering is lossy. At ~1e-16 on a probability,
+with `risk_score` and `risk_category` stored in their own columns and nothing
+recomputed from the read-back value, this is documented as a read precision
+rather than designed around. Worth knowing before anyone tries to diff stored
+probabilities against freshly computed ones.
+
+**Verified:** 8 RLS tests against local Postgres including the cross-tenant
+*write* a read-only policy would miss; `anon` has no grant on the new table
+(ADR-012 holding automatically); `supabase db advisors --local --type security`
+clean; three real requests against a running server leaving exactly one stored
+row.
