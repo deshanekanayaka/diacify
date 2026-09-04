@@ -13,12 +13,6 @@ the project's first ADR log) merged to main (PR #34). Slice 5
 (`visits` table + `POST /api/patients/:id/visits`) implemented on
 `feature/post-patient-visits-endpoint`, not yet merged.
 
-Note: the previous feature, "ML model training and evaluation," is
-complete (PRs #19–#26, see `context/progress.md`) but its "Done" status
-update lives on an unmerged branch (`docs/archive-ml-model-training`)
-that hadn't reached `main` when this feature branched. Reconcile the
-two when that branch merges.
-
 ## Goals
 
 Design and build Diacify's backend API from scratch (no backend code
