@@ -455,13 +455,12 @@ isolation before any schema or data exists:
 
 ## Notes
 
-- `req.user` is still read via a cast to `AuthenticatedRequest` rather
-  than Express global type-augmentation. Slice 4 added a third call
-  site (`rateLimit.ts`) past the threshold slice 3's note named —
-  flagged here rather than silently refactored mid-slice, since
-  switching to global augmentation is a small but real design choice
-  (touches every future route file); worth 30 seconds of discussion at
-  the start of slice 5, not decided unilaterally here.
+- `req.user` is now declared on Express's own `Request` type
+  (`backend/src/types/express.d.ts`, ADR-024) — resolved after slice 6,
+  having been flagged as a threshold question since slice 4. Call sites
+  read `req.user!` with no cast; `AuthenticatedRequest` is deleted. The
+  `!` stays on purpose: `user` is genuinely optional on a request that
+  skipped `requireAuth`, so this removed a lie, not a risk.
 - `getKey` is a parameter to `createRequireAuth`, not hardcoded to
   Supabase's JWKS endpoint — production wiring will pass
   `createRemoteJWKSet(supabaseJwksUrl)`, tests pass

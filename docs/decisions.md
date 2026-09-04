@@ -660,3 +660,41 @@ the tied rows only. This tie is directly testable, unlike slice 3's
 `created_at` tie — `visit_date` is caller-supplied, so a test can force two
 same-day visits and assert the entry-order tie-break, which
 `visits.test.ts` now does.
+
+---
+
+## ADR-024 — `req.user` declared on Express's `Request`, not a parallel `AuthenticatedRequest` cast
+
+**Status:** Accepted — 2026-09-04
+
+**Context:** `requireAuth` attaches a clinician identity to the request, but
+`user` is Diacify's invention — Express's `Request` type has never heard of
+it. Every reader therefore cast first: `(req as AuthenticatedRequest).user!`,
+at eight call sites across `patients.ts`, `rateLimit.ts` and two test files.
+Flagged as a threshold question since slice 4 and deliberately left
+undecided until the count justified touching every route file.
+
+**Decision:** Declare `user` on Express's own `Request` via global
+augmentation (`backend/src/types/express.d.ts`). Call sites become
+`req.user!`. `AuthenticatedRequest` deleted.
+
+**Rejected:** Keeping the cast — it is a per-call-site assertion that the
+request is a type other than the one the compiler believes, repeated eight
+times, and the first question any new reader asks about the file. Also
+rejected a `requireUser(req)` helper that throws a named error when auth
+hasn't run: on Express 4 (this project is on 4.22) a throw inside an `async`
+handler is not caught, so the promise rejects, nothing responds, and the
+request hangs until the client times out — strictly worse than the status
+quo. That option becomes viable on Express 5, which auto-forwards rejected
+handler promises.
+
+**Consequences:** Honest about what it does *not* buy: `user` stays optional
+— a request that skipped `requireAuth` genuinely has none — so handlers
+still assert `req.user!`. This removes a lie, not a risk. What actually
+prevents an unauthenticated handler reading `req.user` is `requireAuth`
+being mounted once on the whole router (`server.ts`), so a new route
+inherits auth by default and only a new *router* could miss it. Verified the
+declaration is load-bearing rather than inert: a probe assigning
+`req.user!.id` to a `number` fails typecheck with "Type 'string' is not
+assignable to type 'number'" — an unloaded declaration would instead have
+errored with "Property 'user' does not exist."
