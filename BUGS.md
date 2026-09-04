@@ -5,6 +5,60 @@ prevent the same class of bug going forward. Newest first.
 
 ---
 
+## `authenticated` held TRUNCATE on every table, which RLS does not filter
+
+**Found:** 2026-09-04, while verifying the append-only fix below on the
+hosted project — the grant query run as a check surfaced it.
+
+**What happened:**
+
+`authenticated` held `TRUNCATE`, `REFERENCES`, `TRIGGER` and `MAINTAIN`
+on `patients`, `visits` and `risk_assessments`. No migration ever granted
+them; they come from Supabase's project-level default privileges
+(`pg_default_acl`, `authenticated=Dxtm/postgres`).
+
+`TRUNCATE` is the dangerous one. Normal writes pass two gates — the table
+grant, then the RLS policy filtering to the caller's own rows. `TRUNCATE`
+passes only the first, because it empties the table rather than operating
+on rows, so there is nothing for a row policy to filter. Concretely: a
+clinician running `DELETE FROM patients` deletes only their own patients,
+as designed. The same clinician running `TRUNCATE patients` would delete
+every clinician's, plus all visits and assessments by cascade.
+
+**Root cause:** ADR-012 discovered this class of bug — Supabase's default
+privileges granting more than the migration intended — and fixed it for
+`anon` only. `authenticated` was never checked, so the same defaults sat
+there unexamined.
+
+**Not exploitable as found:** PostgREST does not expose `TRUNCATE` over the
+REST API, and `authenticated` is `NOLOGIN` (confirmed in `pg_roles`), so
+nobody connects as it directly — it is only reached via `SET ROLE` from
+PostgREST's own connection. So this was a least-privilege violation with
+no live path to it, not an open door. Recorded that way rather than
+overstated.
+
+**Fix:** `20260904233344_revoke_authenticated_default_extras.sql` — revoke
+everything from `authenticated` on the three tables, grant back exactly
+the DML each needs, and revoke the default privilege so future tables
+start closed. Written declaratively (revoke all, grant back) rather than
+naming the four privileges to remove, so the end state survives Supabase
+changing its defaults.
+
+**Verification:** the migration asserts its own end state in a `DO` block
+and fails if any non-DML privilege remains — confirmed load-bearing by
+granting `TRUNCATE` back and watching it fire. A probe table created
+afterwards came back with no grants to `anon` or `authenticated` at all,
+confirming the fail-closed default. All 134 tests pass unchanged, which is
+what shows `TRIGGER` and `REFERENCES` were never actually used. Applied and
+re-verified on the hosted project, where the default ACL for future tables
+is now `{postgres, service_role}` only.
+
+**Prevention:** when a platform grants privileges you did not ask for,
+enumerate what a role actually holds rather than assuming your own
+migration is the whole story — twice now that assumption has been wrong.
+
+---
+
 ## `risk_assessments` was documented as append-only but granted `update` and `delete`
 
 **Found:** 2026-09-04, via a CodeRabbit review comment on PR #41
@@ -85,8 +139,8 @@ both policies are `for select` / `for insert`; a real `PATCH` and `DELETE`
 by the owning clinician each return `403`, while three `predict` calls
 return `200` and leave one row.
 
-**A related finding, surfaced by that check and deliberately not fixed
-here:** `authenticated` also holds `TRUNCATE`, `TRIGGER` and `REFERENCES`
+**A related finding, surfaced by that check and fixed separately (see the
+entry above):** `authenticated` also holds `TRUNCATE`, `TRIGGER` and `REFERENCES`
 on all three tables, from Supabase's project-level default privileges
 rather than from any migration. `TRUNCATE` is the one that matters — RLS
 does not filter it, so it would be a cross-tenant wipe with no second
