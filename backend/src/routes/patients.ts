@@ -18,6 +18,9 @@ const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{
 // WITH CHECK is evaluated before the FK constraint gets a chance to run.
 const RLS_VIOLATION = "42501";
 const PATIENT_NOT_FOUND_BODY = { error: "Patient not found" } as const;
+// Deliberately opaque: a client can't act on the specifics, and the
+// specifics are exactly what we don't want leaking out of a 500.
+const INTERNAL_ERROR_BODY = { error: "Something went wrong. Please try again." } as const;
 
 export interface CreatePatientsRouterOptions {
   supabaseUrl: string;
@@ -61,7 +64,7 @@ export function createPatientsRouter({
       .range(from, to);
 
     if (error) {
-      res.status(500).json({ error: "Something went wrong. Please try again." });
+      res.status(500).json(INTERNAL_ERROR_BODY);
       return;
     }
 
@@ -81,7 +84,7 @@ export function createPatientsRouter({
     const { data, error } = await client.from("patients").insert(parsed.data).select().single();
 
     if (error) {
-      res.status(500).json({ error: "Something went wrong. Please try again." });
+      res.status(500).json(INTERNAL_ERROR_BODY);
       return;
     }
 
@@ -118,7 +121,7 @@ export function createPatientsRouter({
       .maybeSingle();
 
     if (patientError) {
-      res.status(500).json({ error: "Something went wrong. Please try again." });
+      res.status(500).json(INTERNAL_ERROR_BODY);
       return;
     }
     if (!patient) {
@@ -138,7 +141,7 @@ export function createPatientsRouter({
       .range(from, to);
 
     if (error) {
-      res.status(500).json({ error: "Something went wrong. Please try again." });
+      res.status(500).json(INTERNAL_ERROR_BODY);
       return;
     }
 
@@ -172,7 +175,7 @@ export function createPatientsRouter({
         res.status(404).json(PATIENT_NOT_FOUND_BODY);
         return;
       }
-      res.status(500).json({ error: "Something went wrong. Please try again." });
+      res.status(500).json(INTERNAL_ERROR_BODY);
       return;
     }
 
