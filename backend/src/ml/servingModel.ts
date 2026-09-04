@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 
 import { z } from "zod";
 
+import { SUPPORTED_FEATURE_NAMES } from "./features.js";
 import { RISK_CATEGORIES } from "./riskCategory.js";
 
 const LEAF = -1;
@@ -33,7 +34,16 @@ const treeSchema = z.object({
 const servingModelSchema = z
   .object({
     version: z.string().min(1),
-    featureNames: z.array(z.string()).min(1),
+    // Every name must be one buildFeatureVector can actually produce, and no
+    // name may repeat: a duplicate would fill two vector slots with the same
+    // value while silently dropping whichever feature it displaced.
+    featureNames: z
+      .array(z.enum(SUPPORTED_FEATURE_NAMES))
+      .min(1)
+      .refine(
+        (names) => new Set(names).size === names.length,
+        "featureNames must not repeat a feature",
+      ),
     // Pinned to the domain's own categories, in order: a model whose classes
     // disagree is one whose probability columns would be read as the wrong
     // risk levels, which is worse than refusing to start.
@@ -64,13 +74,25 @@ const servingModelSchema = z
         const left = tree.left[node]!;
         const right = tree.right[node]!;
         const isLeaf = left === LEAF;
-        // Children are always later nodes, so 0 (the root) is out of range
-        // too - and this rules out any negative index other than the -1
-        // that marks a leaf, which is what keeps the traversal's lookups safe.
+        // A child is always a later node - verified against the exported
+        // forest, where no branch points at itself or backwards. Requiring it
+        // rather than merely bounding the index is what makes the traversal
+        // provably terminate: a malformed artifact cannot describe a cycle.
+        // It also rules out every negative index except the -1 marking a leaf.
         const childrenInRange =
-          left > 0 && right > 0 && left < nodeCount && right < nodeCount;
+          left > node && right > node && left < nodeCount && right < nodeCount;
         if (!isLeaf && !childrenInRange) {
           ctx.addIssue({ code: "custom", message: `tree ${index} node ${node} has a child out of range` });
+          return;
+        }
+        // Leaves carry scikit-learn's -2 placeholder here, so only a branch's
+        // split feature has to index into the feature vector.
+        const feature = tree.feature[node]!;
+        if (!isLeaf && (feature < 0 || feature >= model.featureNames.length)) {
+          ctx.addIssue({
+            code: "custom",
+            message: `tree ${index} node ${node} splits on a feature out of range`,
+          });
           return;
         }
         if (isLeaf && tree.value[node]!.length !== model.classes.length) {

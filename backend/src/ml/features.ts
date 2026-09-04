@@ -25,6 +25,31 @@ export interface VisitMeasurements {
 const HYPERTENSION_SYSTOLIC_MMHG = 140;
 const HYPERTENSION_DIASTOLIC_MMHG = 90;
 
+/**
+ * The features this builder can produce, and therefore the only names a
+ * serving model may ask for. servingModel.ts validates against this list, so
+ * a model naming anything else is rejected when it loads rather than throwing
+ * on the first prediction. The Record type below is keyed by this union, so
+ * the two cannot drift apart without a compile error.
+ */
+export const SUPPORTED_FEATURE_NAMES = [
+  "hba1c",
+  "age",
+  "sex_encoded",
+  "bmi",
+  "systolic",
+  "diastolic",
+  "rbs",
+  "tg_hdl_ratio",
+  "ldl_hdl_ratio",
+  "trig",
+  "hdl",
+  "hypertension_flag",
+  "age_bmi_interaction",
+] as const;
+
+export type SupportedFeatureName = (typeof SUPPORTED_FEATURE_NAMES)[number];
+
 const MALE_ENCODED = 1;
 const FEMALE_ENCODED = 0;
 
@@ -54,7 +79,7 @@ export function buildFeatureVector(
   const ldl = visit.ldl ?? medians.ldl;
   const canDivideByHdl = hdl > 0;
 
-  const values: Record<string, number> = {
+  const values: Record<SupportedFeatureName, number> = {
     hba1c: visit.hba1c,
     age: visit.age,
     sex_encoded: sex === "male" ? MALE_ENCODED : FEMALE_ENCODED,
@@ -74,11 +99,5 @@ export function buildFeatureVector(
     age_bmi_interaction: visit.age * visit.bmi,
   };
 
-  return model.featureNames.map((name) => {
-    const value = values[name];
-    if (value === undefined) {
-      throw new Error(`Serving model expects a feature this build step does not produce: ${name}`);
-    }
-    return value;
-  });
+  return model.featureNames.map((name) => values[name]);
 }

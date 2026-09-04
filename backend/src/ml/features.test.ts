@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 
-import { buildFeatureVector, type VisitMeasurements } from "./features.js";
+import {
+  buildFeatureVector,
+  type SupportedFeatureName,
+  type VisitMeasurements,
+} from "./features.js";
 import { loadServingModel } from "./servingModel.js";
 
 const model = loadServingModel(new URL("./model.json", import.meta.url));
@@ -18,7 +22,7 @@ const COMPLETE: VisitMeasurements = {
 };
 
 /** Reads one named feature out of a vector ordered by the model's own feature list. */
-function featureOf(vector: number[], name: string): number {
+function featureOf(vector: number[], name: SupportedFeatureName): number {
   return vector[model.featureNames.indexOf(name)]!;
 }
 
