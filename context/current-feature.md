@@ -563,6 +563,17 @@ isolation before any schema or data exists:
   protection off). `anon` has no grant on `risk_assessments` on hosted.
   Hosted test data deleted afterwards through the clinician's own token;
   the cascade to visits and assessments confirmed.
+  **Append-only bug found in review and fixed** (`BUGS.md`): the table was
+  documented as append-only in three places while granting `update` and
+  `delete`, and the route's `upsert` was an `ON CONFLICT DO UPDATE` — it
+  wrote identical values, so nothing observable broke, but the mechanism
+  was the rewrite the contract forbids. Second forward-only migration
+  splits the policy into `for select`/`for insert` and revokes both
+  privileges; the route now inserts plainly and treats `23505` as success.
+  Verified on hosted: owner `PATCH`/`DELETE` both `403`, predict still
+  `200` and idempotent, patient-delete cascade still removes assessments
+  (that assumption has its own test, since revoking `delete` must not
+  break it).
 
 **Remaining:**
 - Reading assessments back (`GET`) — deliberately not built with no

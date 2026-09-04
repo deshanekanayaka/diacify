@@ -79,6 +79,22 @@ it. "Append-only" is a privilege, not a description — the same lesson as
 the `anon` grant bug below, where a table documented as closed to `anon`
 was open because nothing had actually revoked it.
 
+**Verified on the hosted project** after pushing: `authenticated` holds
+`INSERT, SELECT` on `risk_assessments` and no longer `UPDATE`/`DELETE`;
+both policies are `for select` / `for insert`; a real `PATCH` and `DELETE`
+by the owning clinician each return `403`, while three `predict` calls
+return `200` and leave one row.
+
+**A related finding, surfaced by that check and deliberately not fixed
+here:** `authenticated` also holds `TRUNCATE`, `TRIGGER` and `REFERENCES`
+on all three tables, from Supabase's project-level default privileges
+rather than from any migration. `TRUNCATE` is the one that matters — RLS
+does not filter it, so it would be a cross-tenant wipe with no second
+gate. PostgREST does not expose `TRUNCATE` and `authenticated` is not a
+loginable role, so there is no known path to it today. It is the same
+class as the `anon` bug below, whose fix revoked only `anon`'s defaults.
+Logged as a task rather than folded into this slice.
+
 ---
 
 ## Pagination had no deterministic tiebreaker, risking repeated or skipped rows across pages
