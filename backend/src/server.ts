@@ -5,7 +5,9 @@ import { createSupabaseJwks } from "./auth/supabaseJwks.js";
 import { loadEnv } from "./config/env.js";
 import { createRateLimiter } from "./middleware/rateLimit.js";
 import { createRequireAuth } from "./middleware/requireAuth.js";
+import { loadDefaultServingModel } from "./ml/servingModel.js";
 import { createPatientsRouter } from "./routes/patients.js";
+import { createVisitPredictionsRouter } from "./routes/visitPredictions.js";
 
 // 20 writes per clinician per rolling minute - generous for a human
 // entering patients (or visits) by hand, tight enough to stop a runaway
@@ -19,6 +21,9 @@ const CREATE_VISIT_LIMIT = 20;
 const CREATE_VISIT_WINDOW_MS = 60_000;
 
 const env = loadEnv();
+// Read once at startup: a malformed artifact should stop the process here,
+// not surface as a failed prediction on someone's first real request.
+const servingModel = loadDefaultServingModel();
 const requireAuth = createRequireAuth(createSupabaseJwks(env.supabaseUrl));
 const createPatientRateLimit = createRateLimiter({
   limit: CREATE_PATIENT_LIMIT,
@@ -44,6 +49,16 @@ app.use(
     supabasePublishableKey: env.supabasePublishableKey,
     createPatientRateLimit,
     createVisitRateLimit,
+  }),
+);
+
+app.use(
+  "/api/visits",
+  requireAuth,
+  createVisitPredictionsRouter({
+    supabaseUrl: env.supabaseUrl,
+    supabasePublishableKey: env.supabasePublishableKey,
+    model: servingModel,
   }),
 );
 

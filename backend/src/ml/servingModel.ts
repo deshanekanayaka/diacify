@@ -64,7 +64,11 @@ const servingModelSchema = z
         const left = tree.left[node]!;
         const right = tree.right[node]!;
         const isLeaf = left === LEAF;
-        const childrenInRange = left < nodeCount && right < nodeCount;
+        // Children are always later nodes, so 0 (the root) is out of range
+        // too - and this rules out any negative index other than the -1
+        // that marks a leaf, which is what keeps the traversal's lookups safe.
+        const childrenInRange =
+          left > 0 && right > 0 && left < nodeCount && right < nodeCount;
         if (!isLeaf && !childrenInRange) {
           ctx.addIssue({ code: "custom", message: `tree ${index} node ${node} has a child out of range` });
           return;
@@ -95,4 +99,14 @@ export function loadServingModel(source: URL): ServingModel {
     throw new Error(`Invalid serving model at ${source.pathname}: ${parsed.error.message}`);
   }
   return parsed.data;
+}
+
+// Resolved from this module rather than the caller so the artifact's location
+// stays an implementation detail of the module that owns it. Note the build
+// copies model.json into dist alongside the compiled file.
+const DEFAULT_MODEL_SOURCE = new URL("./model.json", import.meta.url);
+
+/** Loads the model committed alongside this code. Call once, at startup. */
+export function loadDefaultServingModel(): ServingModel {
+  return loadServingModel(DEFAULT_MODEL_SOURCE);
 }
