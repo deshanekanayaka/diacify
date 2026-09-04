@@ -10,7 +10,7 @@ import {
   type KeyLike,
 } from "jose";
 
-import { createRequireAuth, type AuthenticatedRequest } from "./requireAuth.js";
+import { createRequireAuth } from "./requireAuth.js";
 
 async function buildSignedToken(
   privateKey: KeyLike,
@@ -29,8 +29,7 @@ async function buildSignedToken(
 async function buildApp(getKey: JWTVerifyGetKey) {
   const app = express();
   app.get("/protected", createRequireAuth(getKey), (req, res) => {
-    const authedReq = req as AuthenticatedRequest;
-    res.status(200).json({ userId: authedReq.user?.id, accessToken: authedReq.user?.accessToken });
+    res.status(200).json({ userId: req.user?.id, accessToken: req.user?.accessToken });
   });
   return app;
 }

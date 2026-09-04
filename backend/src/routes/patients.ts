@@ -1,7 +1,6 @@
 import { Router, type RequestHandler } from "express";
 
 import { createRequestClient } from "../db/requestClient.js";
-import type { AuthenticatedRequest } from "../middleware/requireAuth.js";
 import { createPatientSchema } from "./createPatientSchema.js";
 import { createVisitSchema } from "./createVisitSchema.js";
 import { parsePagination } from "./pagination.js";
@@ -18,6 +17,9 @@ const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{
 // WITH CHECK is evaluated before the FK constraint gets a chance to run.
 const RLS_VIOLATION = "42501";
 const PATIENT_NOT_FOUND_BODY = { error: "Patient not found" } as const;
+// Deliberately opaque: a client can't act on the specifics, and the
+// specifics are exactly what we don't want leaking out of a 500.
+const INTERNAL_ERROR_BODY = { error: "Something went wrong. Please try again." } as const;
 
 export interface CreatePatientsRouterOptions {
   supabaseUrl: string;
@@ -50,7 +52,7 @@ export function createPatientsRouter({
     const from = (page - 1) * limit;
     const to = from + limit - 1;
 
-    const { accessToken } = (req as AuthenticatedRequest).user!;
+    const { accessToken } = req.user!;
     const client = createRequestClient(supabaseUrl, supabasePublishableKey, accessToken);
 
     const { data, error, count } = await client
@@ -61,7 +63,7 @@ export function createPatientsRouter({
       .range(from, to);
 
     if (error) {
-      res.status(500).json({ error: "Something went wrong. Please try again." });
+      res.status(500).json(INTERNAL_ERROR_BODY);
       return;
     }
 
@@ -75,17 +77,74 @@ export function createPatientsRouter({
       return;
     }
 
-    const { accessToken } = (req as AuthenticatedRequest).user!;
+    const { accessToken } = req.user!;
     const client = createRequestClient(supabaseUrl, supabasePublishableKey, accessToken);
 
     const { data, error } = await client.from("patients").insert(parsed.data).select().single();
 
     if (error) {
-      res.status(500).json({ error: "Something went wrong. Please try again." });
+      res.status(500).json(INTERNAL_ERROR_BODY);
       return;
     }
 
     res.status(201).json({ data });
+  });
+
+  router.get("/:id/visits", async (req, res) => {
+    const patientId = req.params.id;
+    if (!patientId || !UUID_PATTERN.test(patientId)) {
+      res.status(400).json({ error: "Invalid patient id" });
+      return;
+    }
+
+    const pagination = parsePagination(req.query);
+    if (!pagination.ok) {
+      res.status(400).json({ error: pagination.error });
+      return;
+    }
+    const { limit, page } = pagination.params;
+    const from = (page - 1) * limit;
+    const to = from + limit - 1;
+
+    const { accessToken } = req.user!;
+    const client = createRequestClient(supabaseUrl, supabasePublishableKey, accessToken);
+
+    // RLS behaves differently on read than on write: an unowned patient
+    // makes the visits SELECT return zero rows rather than the 42501 the
+    // POST path can map to a 404. Without this lookup, "not your patient"
+    // and "your patient, no visits yet" would be the same response.
+    const { data: patient, error: patientError } = await client
+      .from("patients")
+      .select("id")
+      .eq("id", patientId)
+      .maybeSingle();
+
+    if (patientError) {
+      res.status(500).json(INTERNAL_ERROR_BODY);
+      return;
+    }
+    if (!patient) {
+      res.status(404).json(PATIENT_NOT_FOUND_BODY);
+      return;
+    }
+
+    // visit_date is only a date, so same-day visits tie; created_at then id
+    // make the order total, which is what keeps pagination stable.
+    const { data, error, count } = await client
+      .from("visits")
+      .select("*", { count: "exact" })
+      .eq("patient_id", patientId)
+      .order("visit_date", { ascending: false })
+      .order("created_at", { ascending: false })
+      .order("id", { ascending: false })
+      .range(from, to);
+
+    if (error) {
+      res.status(500).json(INTERNAL_ERROR_BODY);
+      return;
+    }
+
+    res.status(200).json({ data, page, limit, total: count });
   });
 
   router.post("/:id/visits", createVisitRateLimit, async (req, res) => {
@@ -101,7 +160,7 @@ export function createPatientsRouter({
       return;
     }
 
-    const { accessToken } = (req as AuthenticatedRequest).user!;
+    const { accessToken } = req.user!;
     const client = createRequestClient(supabaseUrl, supabasePublishableKey, accessToken);
 
     const { data, error } = await client
@@ -115,7 +174,7 @@ export function createPatientsRouter({
         res.status(404).json(PATIENT_NOT_FOUND_BODY);
         return;
       }
-      res.status(500).json({ error: "Something went wrong. Please try again." });
+      res.status(500).json(INTERNAL_ERROR_BODY);
       return;
     }
 

@@ -55,6 +55,27 @@ function buildApp(visitRateLimit = createRateLimiter({ limit: 20, windowMs: 60_0
 
 const validVisit = { age: 54, systolic: 138, diastolic: 88, bmi: 27.4, hba1c: 6.1 };
 
+/** Inserts a visit directly (not through the route under test) for read-path fixtures. */
+async function seedVisit(
+  client: SupabaseClient,
+  patientId: string,
+  visitDate: string,
+): Promise<string> {
+  const { data, error } = await client
+    .from("visits")
+    .insert({ ...validVisit, patient_id: patientId, visit_date: visitDate })
+    .select()
+    .single();
+  if (error) throw error;
+  return data.id as string;
+}
+
+async function createPatient(client: SupabaseClient): Promise<string> {
+  const { data, error } = await client.from("patients").insert({ sex: "male" }).select().single();
+  if (error) throw error;
+  return data.id as string;
+}
+
 describe("POST /api/patients/:id/visits", () => {
   let app: express.Express;
   let clinicianA: TestClinician;
@@ -151,6 +172,126 @@ describe("POST /api/patients/:id/visits", () => {
       .select("*", { count: "exact", head: true })
       .eq("patient_id", patientOwnedByA);
     expect(after).toBe(before);
+  });
+});
+
+describe("GET /api/patients/:id/visits", () => {
+  let app: express.Express;
+  let clinicianD: TestClinician;
+  let clinicianE: TestClinician;
+  let patientWithVisits: string;
+  let patientWithNoVisits: string;
+  let patientWithSameDayVisits: string;
+  let patientOwnedByE: string;
+  let sameDayVisitIds: string[];
+
+  beforeAll(async () => {
+    app = buildApp();
+    clinicianD = await signUpTestClinician("get-visits-d");
+    clinicianE = await signUpTestClinician("get-visits-e");
+
+    patientWithVisits = await createPatient(clinicianD.client);
+    patientWithNoVisits = await createPatient(clinicianD.client);
+    patientWithSameDayVisits = await createPatient(clinicianD.client);
+    patientOwnedByE = await createPatient(clinicianE.client);
+
+    // Seeded out of chronological order so a passing ordering test can't
+    // just be reflecting insertion order.
+    await seedVisit(clinicianD.client, patientWithVisits, "2026-02-10");
+    await seedVisit(clinicianD.client, patientWithVisits, "2026-03-10");
+    await seedVisit(clinicianD.client, patientWithVisits, "2026-01-10");
+
+    sameDayVisitIds = [
+      await seedVisit(clinicianD.client, patientWithSameDayVisits, "2026-04-01"),
+      await seedVisit(clinicianD.client, patientWithSameDayVisits, "2026-04-01"),
+    ];
+  });
+
+  afterAll(async () => {
+    await deleteTestUser(clinicianD.userId);
+    await deleteTestUser(clinicianE.userId);
+  });
+
+  it("returns 401 with no Authorization header", async () => {
+    const response = await request(app).get(`/api/patients/${patientWithVisits}/visits`);
+    expect(response.status).toBe(401);
+  });
+
+  it("returns the patient's visits newest visit_date first", async () => {
+    const response = await request(app)
+      .get(`/api/patients/${patientWithVisits}/visits`)
+      .set("Authorization", `Bearer ${clinicianD.accessToken}`);
+
+    expect(response.status).toBe(200);
+    expect(response.body.total).toBe(3);
+    expect(response.body.data.map((visit: { visit_date: string }) => visit.visit_date)).toEqual([
+      "2026-03-10",
+      "2026-02-10",
+      "2026-01-10",
+    ]);
+  });
+
+  it("returns an empty list, not an error, for an owned patient with no visits", async () => {
+    const response = await request(app)
+      .get(`/api/patients/${patientWithNoVisits}/visits`)
+      .set("Authorization", `Bearer ${clinicianD.accessToken}`);
+
+    expect(response.status).toBe(200);
+    expect(response.body.data).toEqual([]);
+    expect(response.body.total).toBe(0);
+  });
+
+  it("returns 404 for another clinician's real patient (not an empty list)", async () => {
+    const response = await request(app)
+      .get(`/api/patients/${patientOwnedByE}/visits`)
+      .set("Authorization", `Bearer ${clinicianD.accessToken}`);
+
+    expect(response.status).toBe(404);
+  });
+
+  it("returns 404 for a patient id that doesn't exist", async () => {
+    const response = await request(app)
+      .get("/api/patients/00000000-0000-0000-0000-000000000000/visits")
+      .set("Authorization", `Bearer ${clinicianD.accessToken}`);
+
+    expect(response.status).toBe(404);
+  });
+
+  it("returns 400 for a malformed patient id", async () => {
+    const response = await request(app)
+      .get("/api/patients/not-a-uuid/visits")
+      .set("Authorization", `Bearer ${clinicianD.accessToken}`);
+
+    expect(response.status).toBe(400);
+  });
+
+  it("paginates without repeating or omitting a visit", async () => {
+    const seen: string[] = [];
+    for (let page = 1; page <= 2; page++) {
+      const response = await request(app)
+        .get(`/api/patients/${patientWithVisits}/visits`)
+        .query({ limit: 2, page })
+        .set("Authorization", `Bearer ${clinicianD.accessToken}`);
+
+      expect(response.status).toBe(200);
+      expect(response.body.total).toBe(3);
+      seen.push(...response.body.data.map((visit: { id: string }) => visit.id));
+    }
+
+    expect(seen).toHaveLength(3);
+    expect(new Set(seen).size).toBe(3);
+  });
+
+  it("orders visits sharing a visit_date by entry order, newest first", async () => {
+    const response = await request(app)
+      .get(`/api/patients/${patientWithSameDayVisits}/visits`)
+      .set("Authorization", `Bearer ${clinicianD.accessToken}`);
+
+    expect(response.status).toBe(200);
+    expect(response.body.data.map((visit: { id: string }) => visit.id)).toEqual([
+      sameDayVisitIds[1],
+      sameDayVisitIds[0],
+    ]);
   });
 });
 

@@ -1,11 +1,6 @@
 import type { NextFunction, Request, Response } from "express";
 import { errors as joseErrors, jwtVerify, type JWTVerifyGetKey } from "jose";
 
-/** A request carrying the clinician identity resolved from a verified JWT. */
-export interface AuthenticatedRequest extends Request {
-  user?: { id: string; accessToken: string };
-}
-
 const UNAUTHORIZED_BODY = { error: "Missing or invalid authorization token" } as const;
 const SERVICE_UNAVAILABLE_BODY = { error: "Something went wrong. Please try again." } as const;
 
@@ -36,7 +31,7 @@ export function createRequireAuth(getKey: JWTVerifyGetKey) {
         res.status(401).json(UNAUTHORIZED_BODY);
         return;
       }
-      (req as AuthenticatedRequest).user = { id: payload.sub, accessToken: token };
+      req.user = { id: payload.sub, accessToken: token };
       next();
     } catch (error) {
       if (error instanceof joseErrors.JOSEError) {

@@ -4,4 +4,5 @@ Live task state, groomed weekly. One line per task: `- [ ] <task> (<phase/sprint
 
 ## Now
 
-- [ ] `visits` table + first clinical data (backend API design, slice 5)
+- [ ] Open PR for slice 6 (`GET /api/patients/:id/visits` + the `req.user` augmentation) and merge to main
+- [ ] Scope slice 7 (backend API design) — candidates: `visit_date` filtering, appointments, or the Node-side ML predict endpoint (ADR-001)
