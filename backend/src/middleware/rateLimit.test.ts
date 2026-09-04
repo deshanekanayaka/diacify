@@ -2,13 +2,12 @@ import express from "express";
 import request from "supertest";
 import { describe, expect, it } from "vitest";
 
-import type { AuthenticatedRequest } from "./requireAuth.js";
 import { createRateLimiter } from "./rateLimit.js";
 
 function buildApp(limiter: express.RequestHandler, userId: string) {
   const app = express();
   app.use((req, _res, next) => {
-    (req as AuthenticatedRequest).user = { id: userId, accessToken: "irrelevant" };
+    req.user = { id: userId, accessToken: "irrelevant" };
     next();
   });
   app.use(limiter);

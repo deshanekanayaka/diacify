@@ -1,7 +1,6 @@
 import { Router, type RequestHandler } from "express";
 
 import { createRequestClient } from "../db/requestClient.js";
-import type { AuthenticatedRequest } from "../middleware/requireAuth.js";
 import { createPatientSchema } from "./createPatientSchema.js";
 import { createVisitSchema } from "./createVisitSchema.js";
 import { parsePagination } from "./pagination.js";
@@ -53,7 +52,7 @@ export function createPatientsRouter({
     const from = (page - 1) * limit;
     const to = from + limit - 1;
 
-    const { accessToken } = (req as AuthenticatedRequest).user!;
+    const { accessToken } = req.user!;
     const client = createRequestClient(supabaseUrl, supabasePublishableKey, accessToken);
 
     const { data, error, count } = await client
@@ -78,7 +77,7 @@ export function createPatientsRouter({
       return;
     }
 
-    const { accessToken } = (req as AuthenticatedRequest).user!;
+    const { accessToken } = req.user!;
     const client = createRequestClient(supabaseUrl, supabasePublishableKey, accessToken);
 
     const { data, error } = await client.from("patients").insert(parsed.data).select().single();
@@ -107,7 +106,7 @@ export function createPatientsRouter({
     const from = (page - 1) * limit;
     const to = from + limit - 1;
 
-    const { accessToken } = (req as AuthenticatedRequest).user!;
+    const { accessToken } = req.user!;
     const client = createRequestClient(supabaseUrl, supabasePublishableKey, accessToken);
 
     // RLS behaves differently on read than on write: an unowned patient
@@ -161,7 +160,7 @@ export function createPatientsRouter({
       return;
     }
 
-    const { accessToken } = (req as AuthenticatedRequest).user!;
+    const { accessToken } = req.user!;
     const client = createRequestClient(supabaseUrl, supabasePublishableKey, accessToken);
 
     const { data, error } = await client

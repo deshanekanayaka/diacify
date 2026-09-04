@@ -1,7 +1,5 @@
 import type { NextFunction, Request, Response } from "express";
 
-import type { AuthenticatedRequest } from "./requireAuth.js";
-
 const TOO_MANY_REQUESTS_BODY = { error: "Too many requests. Please try again shortly." } as const;
 
 export interface RateLimiterOptions {
@@ -29,7 +27,7 @@ export function createRateLimiter({ limit, windowMs, now = Date.now }: RateLimit
   const requestTimestampsByKey = new Map<string, number[]>();
 
   return function rateLimit(req: Request, res: Response, next: NextFunction): void {
-    const key = (req as AuthenticatedRequest).user!.id;
+    const key = req.user!.id;
     const currentTime = now();
     const windowStart = currentTime - windowMs;
 
