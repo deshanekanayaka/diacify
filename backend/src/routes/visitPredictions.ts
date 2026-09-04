@@ -1,16 +1,35 @@
-import { Router } from "express";
+import { Router, type RequestHandler } from "express";
 
 import { createRequestClient } from "../db/requestClient.js";
-import { assessRisk } from "../ml/riskAssessment.js";
+import { assessRisk, type RiskAssessment } from "../ml/riskAssessment.js";
 import type { ServingModel } from "../ml/servingModel.js";
 import { INTERNAL_ERROR_BODY, isUuid } from "./http.js";
 
 const VISIT_NOT_FOUND_BODY = { error: "Visit not found" } as const;
 
+// Postgres unique-violation. Here it means this visit has already been
+// scored by this model version, which is a repeat rather than a failure.
+const UNIQUE_VIOLATION = "23505";
+
 export interface CreateVisitPredictionsRouterOptions {
   supabaseUrl: string;
   supabasePublishableKey: string;
   model: ServingModel;
+  predictRateLimit: RequestHandler;
+}
+
+/** Flattens an assessment into the row shape risk_assessments stores. */
+function toStoredAssessment(visitId: string, assessment: RiskAssessment) {
+  return {
+    visit_id: visitId,
+    model_version: assessment.model_version,
+    probability_low: assessment.probabilities.low,
+    probability_medium: assessment.probabilities.medium,
+    probability_high: assessment.probabilities.high,
+    risk_score: assessment.risk_score,
+    risk_category: assessment.risk_category,
+    low_confidence: assessment.low_confidence,
+  };
 }
 
 /**
@@ -20,18 +39,20 @@ export interface CreateVisitPredictionsRouterOptions {
  * body: the measurements were validated when they were written, and reading
  * them back means RLS decides whether this caller may score them at all.
  *
- * Computes only - nothing is written. The assessment is deterministic for a
- * given visit and model, so calling it twice is safe and returns the same
- * answer.
+ * The assessment is stored, keyed by visit and model version. Because
+ * scoring is deterministic, calling this repeatedly for the same visit is
+ * idempotent by construction - the unique constraint absorbs the repeat
+ * rather than accumulating rows.
  */
 export function createVisitPredictionsRouter({
   supabaseUrl,
   supabasePublishableKey,
   model,
+  predictRateLimit,
 }: CreateVisitPredictionsRouterOptions): Router {
   const router = Router();
 
-  router.post("/:id/predict", async (req, res) => {
+  router.post("/:id/predict", predictRateLimit, async (req, res) => {
     const visitId = req.params.id;
     if (!isUuid(visitId)) {
       res.status(400).json({ error: "Invalid visit id" });
@@ -68,6 +89,23 @@ export function createVisitPredictionsRouter({
     }
 
     const assessment = assessRisk(model, visit, visit.patients.sex);
+
+    // A plain insert, not an upsert: assessments are append-only, and an
+    // upsert is an ON CONFLICT DO UPDATE, which is exactly the rewrite the
+    // table now forbids. A collision means this visit was already scored by
+    // this model - and since scoring is deterministic and the stored row
+    // cannot have been edited since, it necessarily holds these same values.
+    // So the caller still gets its answer, and no read is needed to fetch
+    // what we just computed.
+    const { error: saveError } = await client
+      .from("risk_assessments")
+      .insert(toStoredAssessment(visit.id, assessment));
+
+    if (saveError && saveError.code !== UNIQUE_VIOLATION) {
+      res.status(500).json(INTERNAL_ERROR_BODY);
+      return;
+    }
+
     res.status(200).json({ data: { visit_id: visit.id, ...assessment } });
   });
 

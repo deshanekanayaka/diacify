@@ -14,7 +14,8 @@ the project's first ADR log) merged to main (PR #34). Slice 5
 (PR #36). Slice 6 (`GET /api/patients/:id/visits`) merged to main
 (PR #38). Slice 7 (ML predict endpoint — the first Node-side inference,
 closing ADR-001's deferred transport question) merged to main
-(PR #39).
+(PR #39). Slice 8 (persisting risk assessments) implemented on
+`feature/persist-risk-assessments`, not yet merged.
 
 ## Goals
 
@@ -185,6 +186,8 @@ isolation before any schema or data exists:
 7. First ML inference in the backend — `POST /api/visits/:id/predict`,
    compute-only, proving the trained Python model can be served from
    Node with bit-exact parity before anything stores what it produces
+8. First stored judgement — `risk_assessments`, append-only per model
+   version, and the project's first three-level ownership chain
 
 **Done:**
 - Auth gatekeeper — `backend/src/middleware/requireAuth.ts`,
@@ -518,10 +521,65 @@ isolation before any schema or data exists:
   available to this session; a deliberate scope call, same as slice 6.
   Test users cleaned up afterwards (0 remaining locally).
 
+- Persisting risk assessments (slice 8) — migration
+  `20260904221405_create_risk_assessments_table.sql`: new `risk_category`
+  enum, `risk_assessments` append-only with `unique (visit_id,
+  model_version)`, probabilities as `double precision` (a scaled
+  `numeric` would round away slice 7's float64 exactness), one `for all`
+  RLS policy joining `visits` and `patients` — the first three-level
+  ownership chain. No extra index: the unique constraint's index leads
+  with `visit_id`.
+  `backend/src/routes/visitPredictions.ts` — the predict route now
+  upserts what it computes and carries a rate limiter, its `POST` having
+  become accurate.
+  `backend/src/db/riskAssessments.rls.test.ts` (8 tests) + 4 new route
+  tests (132 total), including clinician B being refused a *write*
+  pointing at clinician A's visit, one row surviving three calls, and
+  `created_at` unmoved by a re-score.
+  **A vacuous test caught and fixed**: the stored-probability assertion
+  seeded a visit scoring 0/0/1, which round-trips at any precision. With
+  a borderline visit it failed — PostgREST renders `float8` at 15
+  significant digits. Confirmed in Postgres that storage is bit-exact
+  and only the text rendering is lossy, so it is asserted as a
+  documented read precision (ADR-028), not designed around.
+  Verified against a running server; `supabase db advisors --local
+  --type security` clean; test users cleaned up (0 remaining).
+  **Verified against the hosted Supabase project too**, unlike slices
+  6-7. Ran the before/after deliberately: with the migration unpushed,
+  `POST /api/visits/:id/predict` returned a real `500` against hosted
+  while every other route still worked — the endpoint computed correctly
+  and failed only on the write, confirming the diagnosis rather than
+  assuming it. After the push (run by the domain owner; the CLI write is
+  outside this session's permissions), the same visit returned `200`
+  with probabilities identical to scikit-learn, three calls left exactly
+  one row, and a nonexistent visit returned `404`.
+  `gen types --linked` differs from the local-generated file by 26 lines
+  — all of them PostgREST version metadata and cosmetic parenthesisation
+  in generic helpers, **zero schema differences** — so the hosted shape
+  matches what the code was compiled against. The linked output is now
+  the committed one, matching the convention slice 3 set.
+  `supabase db advisors --linked --type security`: three findings, all
+  pre-existing and unrelated (`rls_auto_enable` ×2 lints, leaked-password
+  protection off). `anon` has no grant on `risk_assessments` on hosted.
+  Hosted test data deleted afterwards through the clinician's own token;
+  the cascade to visits and assessments confirmed.
+  **Append-only bug found in review and fixed** (`BUGS.md`): the table was
+  documented as append-only in three places while granting `update` and
+  `delete`, and the route's `upsert` was an `ON CONFLICT DO UPDATE` — it
+  wrote identical values, so nothing observable broke, but the mechanism
+  was the rewrite the contract forbids. Second forward-only migration
+  splits the policy into `for select`/`for insert` and revokes both
+  privileges; the route now inserts plainly and treats `23505` as success.
+  Verified on hosted: owner `PATCH`/`DELETE` both `403`, predict still
+  `200` and idempotent, patient-delete cascade still removes assessments
+  (that assumption has its own test, since revoking `delete` must not
+  break it).
+
 **Remaining:**
-- Persisting predictions — the scores table ADR-018 anticipated,
-  referencing `visits.id`. The natural next slice now that inference
-  exists and ADR-027 deliberately left it out.
+- Reading assessments back (`GET`) — deliberately not built with no
+  consumer, same precedent as deferring `visit_date` filtering
+- Auto-scoring on visit creation — a real clinical want, deferred from
+  slice 8 rather than bundled
 - Everything past that (appointments, analytics) — not yet planned in
   detail
 - `visit_date` from/to filtering on `GET /api/patients/:id/visits`

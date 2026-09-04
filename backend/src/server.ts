@@ -19,6 +19,10 @@ const CREATE_PATIENT_LIMIT = 20;
 const CREATE_PATIENT_WINDOW_MS = 60_000;
 const CREATE_VISIT_LIMIT = 20;
 const CREATE_VISIT_WINDOW_MS = 60_000;
+// Predicting is now a write too (it stores the assessment), so it carries
+// the same budget as the other writes rather than none.
+const PREDICT_LIMIT = 20;
+const PREDICT_WINDOW_MS = 60_000;
 
 const env = loadEnv();
 // Read once at startup: a malformed artifact should stop the process here,
@@ -32,6 +36,10 @@ const createPatientRateLimit = createRateLimiter({
 const createVisitRateLimit = createRateLimiter({
   limit: CREATE_VISIT_LIMIT,
   windowMs: CREATE_VISIT_WINDOW_MS,
+});
+const predictRateLimit = createRateLimiter({
+  limit: PREDICT_LIMIT,
+  windowMs: PREDICT_WINDOW_MS,
 });
 
 const app = express();
@@ -59,6 +67,7 @@ app.use(
     supabaseUrl: env.supabaseUrl,
     supabasePublishableKey: env.supabasePublishableKey,
     model: servingModel,
+    predictRateLimit,
   }),
 );
 
