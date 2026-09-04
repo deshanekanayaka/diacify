@@ -55,6 +55,53 @@ export type Database = {
         }
         Relationships: []
       }
+      risk_assessments: {
+        Row: {
+          created_at: string
+          id: string
+          low_confidence: boolean
+          model_version: string
+          probability_high: number
+          probability_low: number
+          probability_medium: number
+          risk_category: Database["public"]["Enums"]["risk_category"]
+          risk_score: number
+          visit_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          low_confidence: boolean
+          model_version: string
+          probability_high: number
+          probability_low: number
+          probability_medium: number
+          risk_category: Database["public"]["Enums"]["risk_category"]
+          risk_score: number
+          visit_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          low_confidence?: boolean
+          model_version?: string
+          probability_high?: number
+          probability_low?: number
+          probability_medium?: number
+          risk_category?: Database["public"]["Enums"]["risk_category"]
+          risk_score?: number
+          visit_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "risk_assessments_visit_id_fkey"
+            columns: ["visit_id"]
+            isOneToOne: false
+            referencedRelation: "visits"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       visits: {
         Row: {
           age: number
@@ -126,6 +173,7 @@ export type Database = {
     }
     Enums: {
       patient_sex: "male" | "female"
+      risk_category: "low" | "medium" | "high"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -257,6 +305,7 @@ export const Constants = {
   public: {
     Enums: {
       patient_sex: ["male", "female"],
+      risk_category: ["low", "medium", "high"],
     },
   },
 } as const
