@@ -1,35 +1,18 @@
 import { Router, type RequestHandler } from "express";
 
+import { recordAssessment } from "../db/riskAssessments.js";
 import { createRequestClient } from "../db/requestClient.js";
-import { assessRisk, type RiskAssessment } from "../ml/riskAssessment.js";
+import { assessRisk } from "../ml/riskAssessment.js";
 import type { ServingModel } from "../ml/servingModel.js";
 import { INTERNAL_ERROR_BODY, isUuid } from "./http.js";
 
 const VISIT_NOT_FOUND_BODY = { error: "Visit not found" } as const;
-
-// Postgres unique-violation. Here it means this visit has already been
-// scored by this model version, which is a repeat rather than a failure.
-const UNIQUE_VIOLATION = "23505";
 
 export interface CreateVisitPredictionsRouterOptions {
   supabaseUrl: string;
   supabasePublishableKey: string;
   model: ServingModel;
   predictRateLimit: RequestHandler;
-}
-
-/** Flattens an assessment into the row shape risk_assessments stores. */
-function toStoredAssessment(visitId: string, assessment: RiskAssessment) {
-  return {
-    visit_id: visitId,
-    model_version: assessment.model_version,
-    probability_low: assessment.probabilities.low,
-    probability_medium: assessment.probabilities.medium,
-    probability_high: assessment.probabilities.high,
-    risk_score: assessment.risk_score,
-    risk_category: assessment.risk_category,
-    low_confidence: assessment.low_confidence,
-  };
 }
 
 /**
@@ -90,18 +73,11 @@ export function createVisitPredictionsRouter({
 
     const assessment = assessRisk(model, visit, visit.patients.sex);
 
-    // A plain insert, not an upsert: assessments are append-only, and an
-    // upsert is an ON CONFLICT DO UPDATE, which is exactly the rewrite the
-    // table now forbids. A collision means this visit was already scored by
-    // this model - and since scoring is deterministic and the stored row
-    // cannot have been edited since, it necessarily holds these same values.
-    // So the caller still gets its answer, and no read is needed to fetch
-    // what we just computed.
-    const { error: saveError } = await client
-      .from("risk_assessments")
-      .insert(toStoredAssessment(visit.id, assessment));
-
-    if (saveError && saveError.code !== UNIQUE_VIOLATION) {
+    // Storing is this route's whole purpose, so failing to store is a
+    // failure of the request - unlike visit creation, where the clinical
+    // fact stands on its own and the assessment is an addition to it.
+    const stored = await recordAssessment(client, visit.id, assessment);
+    if (!stored) {
       res.status(500).json(INTERNAL_ERROR_BODY);
       return;
     }
