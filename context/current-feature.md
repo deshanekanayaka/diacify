@@ -14,8 +14,15 @@ the project's first ADR log) merged to main (PR #34). Slice 5
 (PR #36). Slice 6 (`GET /api/patients/:id/visits`) merged to main
 (PR #38). Slice 7 (ML predict endpoint — the first Node-side inference,
 closing ADR-001's deferred transport question) merged to main
-(PR #39). Slice 8 (persisting risk assessments) implemented on
-`feature/persist-risk-assessments`, not yet merged.
+(PR #39). Slice 8 (`risk_assessments`, append-only per model version,
+plus the append-only enforcement bug found in review) merged to main
+(PR #41). Slice 9 (each visit's latest assessment carried inline on the
+visit history) merged to main (PR #45).
+
+Two pieces of adjacent work landed alongside: least-privilege table
+grants (PR #42, ADR-029) and CI (PR #43, ADR-030), which now gates every
+pull request on lint, typecheck, tests and build against a real Supabase
+stack.
 
 ## Goals
 
