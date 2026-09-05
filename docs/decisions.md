@@ -879,3 +879,84 @@ route worked, isolating the failure to the write; after it, the same visit
 returned 200 with scikit-learn-identical probabilities and three calls left one
 row. `gen types --linked` shows zero schema differences from the local-generated
 file, and `db advisors --linked` reports only the pre-existing findings.
+
+
+---
+
+## ADR-029 — `authenticated` holds only the DML each table needs; future tables start closed
+
+**Status:** Accepted — 2026-09-04
+
+**Context:** Verifying ADR-028's append-only fix on the hosted project surfaced
+that `authenticated` also held `TRUNCATE`, `REFERENCES`, `TRIGGER` and
+`MAINTAIN` on all three tables. No migration granted them: they come from
+Supabase's project-level default privileges, visible in `pg_default_acl` as
+`authenticated=Dxtm/postgres` for tables created in `public` by `postgres`,
+which is how migrations run. ADR-012 found and fixed exactly this for `anon`
+and stopped there.
+
+`TRUNCATE` is the one that matters. Every other write passes two gates — the
+table grant, then the RLS policy deciding which rows the caller may touch.
+`TRUNCATE` passes only the first, because it does not operate on rows, so one
+statement would empty a table across every clinician with no second gate. No
+route to it exists today: PostgREST does not expose `TRUNCATE`, and
+`authenticated` is `NOLOGIN` (verified in `pg_roles`), so nobody connects as it
+directly. The absence of a route is not the same as the hole being closed.
+
+**Decision:** Revoke everything from `authenticated` on `patients`, `visits`
+and `risk_assessments`, then grant back exactly the DML each needs
+(`select, insert, update, delete`; `select, insert` for `risk_assessments`).
+Revoke the default privilege itself so future tables start closed. The
+migration then asserts its own end state in a `DO` block and fails if any
+non-DML privilege remains.
+
+**Rejected:** Subtracting the four privileges by name — shorter, but describes
+what to remove rather than what should be true, so it would not survive
+Supabase adding a default later. Leaving it, on the grounds that nothing can
+reach `TRUNCATE` today — that is defence by accident of routing, and ADR-012
+already settled that this project wants both gates closed. Also left alone
+deliberately: `service_role` keeps its full defaults, being the trusted
+server-side key that bypasses RLS by design.
+
+**Threat addressed:** a cross-tenant data wipe — one `TRUNCATE` deleting every
+clinician's rows, not just the caller's — should any path to issuing SQL as
+`authenticated` ever appear (a `SECURITY DEFINER` RPC, direct database access).
+
+**Consequences:** New tables now grant nothing to `authenticated` by default, so
+a migration that forgets to grant fails closed with no access rather than
+silently over-granting — the safer failure direction, verified by creating a
+probe table and confirming it came back with no grants at all. The full test
+suite passing unchanged is what shows `TRIGGER` and `REFERENCES` were never
+actually used. Verified on both databases; on hosted the default ACL for future
+tables is now `{postgres, service_role}` only.
+
+**On testing this:** the assertion lives in the migration rather than the test
+suite because the app's tests reach Postgres through PostgREST, which does not
+expose `information_schema`, and adding a direct `pg` driver purely for a
+privilege check was not worth the dependency. Being in the migration means it
+runs against every database the migration touches, including hosted, and was
+confirmed load-bearing by granting `TRUNCATE` back and watching it fire.
+
+**Amended 2026-09-05 — the first assertion had a blind spot.** It read
+`information_schema.role_table_grants` and listed `MAINTAIN` among the
+privileges it looked for, but that view implements the SQL standard and
+`MAINTAIN` is a Postgres 17 addition outside it, so the view never reports it.
+Demonstrated rather than inferred: `service_role` holds `MAINTAIN` (visible via
+`aclexplode`) while the same view reports only seven privilege kinds, none of
+them `MAINTAIN`; and granting `MAINTAIN` to `authenticated` on a local database
+left the original assertion passing silently while the replacement caught it.
+
+The grants themselves were never wrong — `REVOKE ALL` acts on the real ACL, not
+on `information_schema`, so `MAINTAIN` was already gone. Only the check was
+wrong, which is the worse place for it: an assertion is what you trust instead
+of looking.
+
+Replaced (migration `20260905105810`) with a check reading `pg_class.relacl`
+through `aclexplode`, and inverted from a blocklist to a subset test:
+`authenticated` must hold nothing beyond the intended set per table, rather
+than must-not-hold a list someone remembered to write. That catches `MAINTAIN`
+and anything a future Postgres adds, and it mirrors how the grants themselves
+are written. A second block asserts `anon` holds nothing at all, per ADR-012.
+Caveat worth knowing: `relacl` is `NULL` for a table with no explicit grants
+and `aclexplode(NULL)` yields no rows, so such a table passes trivially — which
+is the correct outcome, but is a pass by absence rather than by check.
