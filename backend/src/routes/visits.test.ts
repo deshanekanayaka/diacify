@@ -70,6 +70,34 @@ async function seedVisit(
   return data.id as string;
 }
 
+/**
+ * Inserts a risk assessment directly, so a read test can set up a scored
+ * visit without depending on the predict route. `createdAt` is explicit
+ * because "latest" is decided by it, and a test that relied on insertion
+ * timing would be proving very little.
+ */
+async function seedAssessment(
+  client: SupabaseClient,
+  visitId: string,
+  modelVersion: string,
+  createdAt: string,
+  category: "low" | "medium" | "high",
+  score: number,
+): Promise<void> {
+  const { error } = await client.from("risk_assessments").insert({
+    visit_id: visitId,
+    model_version: modelVersion,
+    created_at: createdAt,
+    probability_low: 0.2,
+    probability_medium: 0.3,
+    probability_high: 0.5,
+    risk_score: score,
+    risk_category: category,
+    low_confidence: false,
+  });
+  if (error) throw error;
+}
+
 async function createPatient(client: SupabaseClient): Promise<string> {
   const { data, error } = await client.from("patients").insert({ sex: "male" }).select().single();
   if (error) throw error;
@@ -184,6 +212,9 @@ describe("GET /api/patients/:id/visits", () => {
   let patientWithSameDayVisits: string;
   let patientOwnedByE: string;
   let sameDayVisitIds: string[];
+  let patientWithScores: string;
+  let scoredTwiceVisitId: string;
+  let neverScoredVisitId: string;
 
   beforeAll(async () => {
     app = buildApp();
@@ -205,11 +236,82 @@ describe("GET /api/patients/:id/visits", () => {
       await seedVisit(clinicianD.client, patientWithSameDayVisits, "2026-04-01"),
       await seedVisit(clinicianD.client, patientWithSameDayVisits, "2026-04-01"),
     ];
+
+    patientWithScores = await createPatient(clinicianD.client);
+    scoredTwiceVisitId = await seedVisit(clinicianD.client, patientWithScores, "2026-05-02");
+    neverScoredVisitId = await seedVisit(clinicianD.client, patientWithScores, "2026-05-01");
+
+    // The same visit, scored by an older model and then by a retrained one.
+    await seedAssessment(
+      clinicianD.client, scoredTwiceVisitId, "rf-oldmodel001",
+      "2026-05-02T09:00:00Z", "low", 12.5,
+    );
+    await seedAssessment(
+      clinicianD.client, scoredTwiceVisitId, "rf-newmodel002",
+      "2026-06-20T09:00:00Z", "high", 88.25,
+    );
   });
 
   afterAll(async () => {
     await deleteTestUser(clinicianD.userId);
     await deleteTestUser(clinicianE.userId);
+  });
+
+  it("carries the visit's latest risk assessment inline", async () => {
+    const response = await request(app)
+      .get(`/api/patients/${patientWithScores}/visits`)
+      .set("Authorization", `Bearer ${clinicianD.accessToken}`);
+
+    expect(response.status).toBe(200);
+    const scored = response.body.data.find(
+      (visit: { id: string }) => visit.id === scoredTwiceVisitId,
+    );
+    expect(scored.risk_assessment).toEqual({
+      model_version: "rf-newmodel002",
+      risk_score: 88.25,
+      risk_category: "high",
+      low_confidence: false,
+      created_at: "2026-06-20T09:00:00+00:00",
+    });
+  });
+
+  it("returns only the newest model version's verdict, not a stale one", async () => {
+    // The test that earns ADR-028's append-only design: the older model
+    // called this visit low risk, and that row is still on file. A reader
+    // must see the retrained model's answer, never both and never the old.
+    const response = await request(app)
+      .get(`/api/patients/${patientWithScores}/visits`)
+      .set("Authorization", `Bearer ${clinicianD.accessToken}`);
+
+    const scored = response.body.data.find(
+      (visit: { id: string }) => visit.id === scoredTwiceVisitId,
+    );
+    expect(scored.risk_assessment.model_version).toBe("rf-newmodel002");
+    expect(scored.risk_assessment.risk_category).not.toBe("low");
+    expect(Array.isArray(scored.risk_assessment)).toBe(false);
+  });
+
+  it("reports null for a visit that has never been scored", async () => {
+    // Absence is how "not yet assessed" is expressed - ADR-028 retired
+    // legacy's fourth 'pending' category rather than porting it.
+    const response = await request(app)
+      .get(`/api/patients/${patientWithScores}/visits`)
+      .set("Authorization", `Bearer ${clinicianD.accessToken}`);
+
+    const unscored = response.body.data.find(
+      (visit: { id: string }) => visit.id === neverScoredVisitId,
+    );
+    expect(unscored.risk_assessment).toBeNull();
+  });
+
+  it("does not expose the raw embedded array shape", async () => {
+    const response = await request(app)
+      .get(`/api/patients/${patientWithScores}/visits`)
+      .set("Authorization", `Bearer ${clinicianD.accessToken}`);
+
+    for (const visit of response.body.data) {
+      expect(visit).not.toHaveProperty("risk_assessments");
+    }
   });
 
   it("returns 401 with no Authorization header", async () => {

@@ -188,6 +188,9 @@ isolation before any schema or data exists:
    Node with bit-exact parity before anything stores what it produces
 8. First stored judgement — `risk_assessments`, append-only per model
    version, and the project's first three-level ownership chain
+9. First read of a stored judgement — the visit history carries each
+   visit's latest assessment, making the data written in slice 8
+   reachable without recomputing it
 
 **Done:**
 - Auth gatekeeper — `backend/src/middleware/requireAuth.ts`,
