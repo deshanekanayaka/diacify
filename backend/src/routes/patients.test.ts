@@ -6,6 +6,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { createSupabaseJwks } from "../auth/supabaseJwks.js";
 import { deleteTestUser } from "../db/testCleanup.js";
+import { loadDefaultServingModel } from "../ml/servingModel.js";
 import { createRateLimiter } from "../middleware/rateLimit.js";
 import { createRequireAuth } from "../middleware/requireAuth.js";
 import { createPatientsRouter } from "./patients.js";
@@ -21,6 +22,8 @@ if (!supabaseUrl || !supabasePublishableKey) {
       "Run `supabase start` and point these at the local stack (see backend/.env.test.example).",
   );
 }
+
+const servingModel = loadDefaultServingModel();
 
 interface TestClinician {
   client: SupabaseClient;
@@ -48,6 +51,7 @@ function buildApp(rateLimit = createRateLimiter({ limit: 20, windowMs: 60_000 })
       supabasePublishableKey: supabasePublishableKey!,
       createPatientRateLimit: rateLimit,
       createVisitRateLimit: createRateLimiter({ limit: 20, windowMs: 60_000 }),
+      model: servingModel,
     }),
   );
   return app;

@@ -187,6 +187,8 @@ isolation before any schema or data exists:
 9. First read of a stored judgement — the visit history carries each
    visit's latest assessment, making the data written in slice 8
    reachable without recomputing it
+10. Fact and judgement in one request — visit creation scores what it
+    records, without binding the clinical write to the model succeeding
 
 **Done:**
 - Auth gatekeeper — `backend/src/middleware/requireAuth.ts`,
