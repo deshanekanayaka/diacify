@@ -960,3 +960,52 @@ are written. A second block asserts `anon` holds nothing at all, per ADR-012.
 Caveat worth knowing: `relacl` is `NULL` for a table with no explicit grants
 and `aclexplode(NULL)` yields no rows, so such a table passes trivially — which
 is the correct outcome, but is a pass by absence rather than by check.
+
+
+---
+
+## ADR-030 — CI runs the real database, not a mocked one
+
+**Status:** Accepted — 2026-09-05
+
+**Context:** `CLAUDE.md` §14 has required CI to enforce lint, typecheck, tests
+and build on every pull request since the project began, and it had never been
+set up. Every check through slices 1-8 ran because someone chose to run it. The
+three security defects in `BUGS.md` were all found by review rather than by
+tests, and none of them would have been caught by a run that skipped the
+database.
+
+Five of the fifteen backend test files need a real Postgres: they sign up
+genuine clinician accounts through GoTrue and prove RLS isolation against real
+policies. Those are the expensive ones to run and the only ones that could have
+caught an over-granted privilege or a policy that filtered reads but not writes.
+
+**Decision:** One workflow, two jobs (backend, machine-learning), no matrix and
+no conditional steps. The backend job runs `supabase start` and executes the
+whole suite against the real local stack. Credentials are read back from
+`supabase status -o json` rather than hardcoded or stored as repository
+secrets — the CLI's local-dev credentials are fixed and non-secret, so CI needs
+no secrets at all.
+
+**Rejected:** Running only the pure unit tests and skipping anything
+database-backed — roughly a minute faster per run, and it would have passed
+green through all three of the defects this project has actually had. Mocking
+Postgres — a mock encodes what we believe the policy does, which is precisely
+the belief that was wrong each time. A plain `postgres` service container
+without the Supabase stack — the tests need GoTrue to mint real JWTs, so it
+would not work without rewriting how they authenticate.
+
+**Consequences:** Runs cost a minute or two of stack startup. In exchange,
+`supabase start` applies every migration to an empty database, so a broken
+migration — including the grant assertions from ADR-029 — fails the run before
+a single test executes. Migration validity is now checked on every pull request
+rather than whenever someone remembers to run `db reset`.
+
+Node is pinned to 22 and Python to 3.11 in the workflow rather than in the
+repository; if that becomes a source of drift, an `engines` field or `.nvmrc`
+is the fix.
+
+**What this does not solve:** CI verifies what the tests assert. The pattern
+behind all three `BUGS.md` entries — a property claimed in a comment that
+nothing enforces — is only addressed where an assertion exists to run. CI makes
+the existing checks unskippable; it does not invent new ones.
