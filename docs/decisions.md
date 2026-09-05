@@ -1009,3 +1009,58 @@ is the fix.
 behind all three `BUGS.md` entries — a property claimed in a comment that
 nothing enforces — is only addressed where an assertion exists to run. CI makes
 the existing checks unskippable; it does not invent new ones.
+
+
+---
+
+## ADR-031 — The visit history carries each visit's latest assessment inline
+
+**Status:** Accepted — 2026-09-05
+
+**Context:** Slice 8 stored risk assessments and slice 7 computed them, but no
+route read one back. The only way to see a score was to `POST /predict` again —
+using a write endpoint, rate-limited as a write, to perform a read. Worse, once
+a model is retrained, re-scoring returns the *new* model's verdict, so the
+stored record of what an earlier model concluded was unreachable exactly when
+it became interesting. The data went in and could not come out.
+
+**Decision:** `GET /api/patients/:id/visits` gains a `risk_assessment` field on
+each visit — `model_version`, `risk_score`, `risk_category`, `low_confidence`,
+`created_at` — or `null` when that visit has never been scored. One round trip:
+the `risk_assessments` embed is ordered `created_at desc` and limited to 1,
+which PostgREST applies per parent row.
+
+**Rejected:** A separate `GET /api/visits/:id/assessments` returning a visit's
+full scoring history — smaller and it mirrors slice 6 almost exactly, but it
+answers a question nobody has: a clinician opening a patient wants the current
+risk beside each visit, not three models' opinions about one of them. It stays
+available if a "why did this score change" view ever earns itself. Returning
+assessments as a parallel map keyed by visit id — avoids touching the visit
+objects, but makes every consumer perform a join by hand. Fetching assessments
+in a second query and stitching them in code — explicit, but a round trip for
+something PostgREST already does correctly. A database view with `DISTINCT ON` —
+would work, but a view's RLS behaviour depends on `security_invoker`, and a view
+that silently bypassed RLS is precisely the class of defect `BUGS.md` already
+records twice.
+
+**Consequences:** The response exposes a single nullable object, not the array
+PostgREST actually returns. An array of at most one is an artifact of how the
+data was fetched; a caller should not have to know it. Four tests cover this and
+all four fail if the reshaping is removed — verified by removing it.
+
+`null` is how "not yet assessed" is expressed, which is ADR-028's retirement of
+legacy's fourth `pending` category showing up in the API for the first time.
+
+Probabilities are deliberately absent: a list wants the verdict, and three
+floats per row would treble the payload to say the same thing. `POST /predict`
+still returns them.
+
+No migration and no new index — the unique constraint's index leads with
+`visit_id`, and ordering a handful of per-visit rows by `created_at` is a
+trivial sort. Verified that pagination and `count: exact` are unaffected by the
+embed: a three-visit patient paged `0-1/3` then `2-2/3` correctly.
+
+**Verified against a running server:** a visit scored by the current model and
+by an older superseded one returns the current verdict (`medium`, 71.47,
+`rf-098c19d0afc9`), not the superseded `low` — which is the test that earns
+ADR-028's append-only design.

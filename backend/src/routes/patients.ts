@@ -17,6 +17,26 @@ import { parsePagination } from "./pagination.js";
 const RLS_VIOLATION = "42501";
 const PATIENT_NOT_FOUND_BODY = { error: "Patient not found" } as const;
 
+// The verdict, not the working: a history list wants the category and score
+// beside each visit, and the three raw probabilities would trebl the payload
+// to say the same thing. POST /predict still returns them.
+const LATEST_ASSESSMENT_FIELDS =
+  "model_version, risk_score, risk_category, low_confidence, created_at";
+
+/**
+ * Reshapes one embedded visit row for the response.
+ *
+ * PostgREST returns an embedded resource as an array even when limited to
+ * one row. That is an artifact of how the data was fetched, not something a
+ * caller should have to know, so it becomes a single nullable field - null
+ * meaning this visit has never been scored (ADR-028 retired legacy's
+ * separate "pending" state in favour of absence).
+ */
+function toVisitWithLatestAssessment<T extends { risk_assessments: unknown[] }>(row: T) {
+  const { risk_assessments: assessments, ...visit } = row;
+  return { ...visit, risk_assessment: assessments[0] ?? null };
+}
+
 export interface CreatePatientsRouterOptions {
   supabaseUrl: string;
   supabasePublishableKey: string;
@@ -126,13 +146,20 @@ export function createPatientsRouter({
 
     // visit_date is only a date, so same-day visits tie; created_at then id
     // make the order total, which is what keeps pagination stable.
+    //
+    // The embed is ordered and limited against risk_assessments itself, which
+    // PostgREST applies per parent row - so each visit brings back only its
+    // most recent assessment, in the same round trip, and a visit scored by
+    // an older model version shows the retrained verdict rather than both.
     const { data, error, count } = await client
       .from("visits")
-      .select("*", { count: "exact" })
+      .select(`*, risk_assessments(${LATEST_ASSESSMENT_FIELDS})`, { count: "exact" })
       .eq("patient_id", patientId)
       .order("visit_date", { ascending: false })
       .order("created_at", { ascending: false })
       .order("id", { ascending: false })
+      .order("created_at", { ascending: false, referencedTable: "risk_assessments" })
+      .limit(1, { referencedTable: "risk_assessments" })
       .range(from, to);
 
     if (error) {
@@ -140,7 +167,7 @@ export function createPatientsRouter({
       return;
     }
 
-    res.status(200).json({ data, page, limit, total: count });
+    res.status(200).json({ data: data.map(toVisitWithLatestAssessment), page, limit, total: count });
   });
 
   router.post("/:id/visits", createVisitRateLimit, async (req, res) => {
