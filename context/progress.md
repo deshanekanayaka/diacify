@@ -2,6 +2,7 @@
 
 Completed features/tasks, one line each. Newest first.
 
+- CI — GitHub Actions running lint/typecheck/test/build on the backend against a real `supabase start` stack, plus ruff and pytest for the ML pipeline; no repository secrets needed, and a broken migration now fails a PR before any test runs (ADR-030)
 - Least-privilege table grants — revoked TRUNCATE/TRIGGER/REFERENCES/MAINTAIN from `authenticated` (Supabase project defaults, never granted by a migration; TRUNCATE is unfiltered by RLS so it was a cross-tenant wipe with one gate), future tables now start closed, migration asserts its own end state (ADR-029)
 - Backend API design, slice 8 — `risk_assessments`: predictions stored append-only per model version so a retrain adds rather than erases (ADR-028), first three-level RLS ownership chain, `pending` retired as a state ADR-001 had already made unreachable
 - Backend API design, slice 7 — ML predict endpoint: the trained forest exported to JSON and traversed in Node with bit-exact scikit-learn parity (ADR-025, incl. the float32 comparison the real dataset can't reveal), `POST /api/visits/:id/predict` scoring a stored visit and persisting nothing (ADR-027), `top_factors` deliberately not ported (ADR-026) (PR #39)

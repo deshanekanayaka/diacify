@@ -1,0 +1,113 @@
+# CLAUDE.md §14: lint, typecheck, tests and build on every pull request.
+#
+# Deliberately one file and two jobs, with no matrix, no conditional steps and
+# no reusable workflows - "keep CI simple and predictable" matters more here
+# than shaving minutes off a run that happens a few times a day.
+#
+# The backend job starts the real local Supabase stack rather than mocking the
+# database. Five test files sign up genuine clinician accounts and exercise RLS
+# against real Postgres, and those are the tests that have actually caught
+# things: every security defect found so far (BUGS.md) lived in the database
+# layer, where a mock would have agreed with the bug. Booting the stack costs
+# a minute or two per run and buys the only coverage that would have caught
+# them.
+#
+# `supabase start` applies every migration to an empty database, so a migration
+# that fails - including the grant assertions in 20260905105810 - fails the
+# run before any test executes.
+
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+# A new push supersedes an in-flight run for the same ref.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  backend:
+    name: Backend (lint, typecheck, test, build)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      - name: Start Supabase (applies all migrations to an empty database)
+        run: supabase start
+
+      # Read back from the running stack rather than hardcoding: these are the
+      # CLI's fixed local-dev credentials, not secrets (see
+      # backend/.env.test.example), but deriving them keeps this correct if the
+      # CLI ever changes them.
+      - name: Write backend/.env.test from the running stack
+        run: |
+          supabase status -o json > status.json
+          {
+            echo "SUPABASE_URL=$(jq -r .API_URL status.json)"
+            echo "SUPABASE_PUBLISHABLE_KEY=$(jq -r .PUBLISHABLE_KEY status.json)"
+            echo "SUPABASE_SECRET_KEY=$(jq -r .SECRET_KEY status.json)"
+          } > backend/.env.test
+          rm status.json
+
+      - name: Install dependencies
+        working-directory: backend
+        run: npm ci
+
+      - name: Lint
+        working-directory: backend
+        run: npm run lint
+
+      - name: Typecheck
+        working-directory: backend
+        run: npm run typecheck
+
+      - name: Test
+        working-directory: backend
+        run: npm test
+
+      - name: Build
+        working-directory: backend
+        run: npm run build
+
+  machine-learning:
+    name: ML (lint, test)
+    runs-on: ubuntu-latest
+    # Runs from machine-learning/, whose modules import each other flatly
+    # (`from persistence import ...`), so the working directory is what puts
+    # them on the path.
+    defaults:
+      run:
+        working-directory: machine-learning
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: machine-learning/requirements-dev.txt
+
+      - name: Install dependencies
+        run: pip install -r requirements-dev.txt
+
+      - name: Lint
+        run: ruff check .
+
+      - name: Test
+        run: python -m pytest -q
