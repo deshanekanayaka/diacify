@@ -6,6 +6,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { createSupabaseJwks } from "../auth/supabaseJwks.js";
 import { deleteTestUser } from "../db/testCleanup.js";
+import { loadDefaultServingModel } from "../ml/servingModel.js";
 import { createRateLimiter } from "../middleware/rateLimit.js";
 import { createRequireAuth } from "../middleware/requireAuth.js";
 import { createPatientsRouter } from "./patients.js";
@@ -21,6 +22,8 @@ if (!supabaseUrl || !supabasePublishableKey) {
       "Run `supabase start` and point these at the local stack (see backend/.env.test.example).",
   );
 }
+
+const servingModel = loadDefaultServingModel();
 
 interface TestClinician {
   client: SupabaseClient;
@@ -48,6 +51,7 @@ function buildApp(visitRateLimit = createRateLimiter({ limit: 20, windowMs: 60_0
       supabasePublishableKey: supabasePublishableKey!,
       createPatientRateLimit: createRateLimiter({ limit: 20, windowMs: 60_000 }),
       createVisitRateLimit: visitRateLimit,
+      model: servingModel,
     }),
   );
   return app;
@@ -136,6 +140,57 @@ describe("POST /api/patients/:id/visits", () => {
   afterAll(async () => {
     await deleteTestUser(clinicianA.userId);
     await deleteTestUser(clinicianB.userId);
+  });
+
+  it("scores the visit it just created", async () => {
+    const response = await request(app)
+      .post(`/api/patients/${patientOwnedByA}/visits`)
+      .set("Authorization", `Bearer ${clinicianA.accessToken}`)
+      .send(validVisit);
+
+    expect(response.status).toBe(201);
+    const assessment = response.body.data.risk_assessment;
+    expect(assessment).not.toBeNull();
+    expect(["low", "medium", "high"]).toContain(assessment.risk_category);
+    expect(assessment.model_version).toMatch(/^rf-/);
+    expect(assessment.risk_score).toBeGreaterThanOrEqual(0);
+    expect(assessment.risk_score).toBeLessThanOrEqual(100);
+    expect(typeof assessment.low_confidence).toBe("boolean");
+    expect(typeof assessment.created_at).toBe("string");
+  });
+
+  it("stores that assessment rather than only returning it", async () => {
+    const response = await request(app)
+      .post(`/api/patients/${patientOwnedByA}/visits`)
+      .set("Authorization", `Bearer ${clinicianA.accessToken}`)
+      .send(validVisit);
+
+    const { data: rows } = await clinicianA.client
+      .from("risk_assessments")
+      .select()
+      .eq("visit_id", response.body.data.id);
+
+    expect(rows).toHaveLength(1);
+    expect(rows![0]!.risk_category).toBe(response.body.data.risk_assessment.risk_category);
+  });
+
+  it("reports the same assessment the visit history then shows", async () => {
+    // The two endpoints reach the assessment by different routes - one from
+    // the value it just computed, one through a PostgREST embed - so they
+    // are worth pinning against each other rather than each against itself.
+    const created = await request(app)
+      .post(`/api/patients/${patientOwnedByA}/visits`)
+      .set("Authorization", `Bearer ${clinicianA.accessToken}`)
+      .send(validVisit);
+
+    const history = await request(app)
+      .get(`/api/patients/${patientOwnedByA}/visits`)
+      .set("Authorization", `Bearer ${clinicianA.accessToken}`);
+
+    const fromHistory = history.body.data.find(
+      (visit: { id: string }) => visit.id === created.body.data.id,
+    );
+    expect(fromHistory.risk_assessment).toEqual(created.body.data.risk_assessment);
   });
 
   it("returns 401 with no Authorization header", async () => {

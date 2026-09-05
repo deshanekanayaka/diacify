@@ -1064,3 +1064,53 @@ embed: a three-visit patient paged `0-1/3` then `2-2/3` correctly.
 by an older superseded one returns the current verdict (`medium`, 71.47,
 `rf-098c19d0afc9`), not the superseded `low` — which is the test that earns
 ADR-028's append-only design.
+
+
+---
+
+## ADR-032 — Visit creation triggers scoring, but is not transactionally bound to it
+
+**Status:** Accepted — 2026-09-05
+
+**Context:** Recording a visit and scoring it were two separate calls, so a
+client that made only the first left a visit unscored indefinitely. That state
+had no clinical meaning: every visit can always be scored, since the five
+fields the model requires are `NOT NULL` and the optional labs are imputed from
+training medians. An unscored visit meant nobody had asked, not that anything
+about the visit prevented it.
+
+**Decision:** `POST /api/patients/:id/visits` scores the visit it creates and
+returns the assessment inline, in the shape ADR-031 established, so one
+client-side type reads both this and the visit history. The patient's `sex`
+rides back on the insert's `select` rather than costing a second round trip.
+
+Scoring happens **after** the visit is committed and is not part of the same
+operation. A failure to record the assessment leaves the visit intact,
+`risk_assessment` null, and a logged error; `POST /predict` can score it later.
+
+**Rejected:** One transaction covering both — a clinical measurement would then
+be lost because a judgement about it could not be stored, which inverts what
+matters. `CLAUDE.md` §12 keeps facts and judgements separate in the schema; this
+is the same separation as an availability property. Also rejected: removing
+`POST /predict` now that creation scores automatically — it is still how a
+pre-existing unscored visit gets assessed, and how anything is re-scored after
+a retrain.
+
+**Consequences:** `null` remains a real state but stops being the ordinary one:
+it now means something went wrong, or the visit predates this change. That
+inversion is why the failure path is logged — a silent null would otherwise be
+indistinguishable from a visit nobody had scored yet, and invisible on the
+server. This closes that gap for this path only; logging the error behind a
+generic 500 elsewhere remains an open task.
+
+Existing unscored visits are not backfilled. Doing so would mean scoring
+historical rows under the current model and storing the result as though it had
+been assessed at the time, which is a decision about the record's meaning
+rather than a migration detail.
+
+**Verified:** one call now returns a recorded visit and its risk together
+(`high`, 100, `rf-098c19d0afc9` on a clearly diabetic profile), and the visit
+history reports the same assessment with no second call having been made. A
+test pins the two endpoints against each other, since they reach the assessment
+by different routes — one from the value just computed, one through a PostgREST
+embed.

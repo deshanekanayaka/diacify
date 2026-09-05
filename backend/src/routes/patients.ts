@@ -1,6 +1,9 @@
 import { Router, type RequestHandler } from "express";
 
 import { createRequestClient } from "../db/requestClient.js";
+import { recordAssessment } from "../db/riskAssessments.js";
+import { assessRisk } from "../ml/riskAssessment.js";
+import type { ServingModel } from "../ml/servingModel.js";
 import { INTERNAL_ERROR_BODY, isUuid } from "./http.js";
 import { createPatientSchema } from "./createPatientSchema.js";
 import { createVisitSchema } from "./createVisitSchema.js";
@@ -42,6 +45,7 @@ export interface CreatePatientsRouterOptions {
   supabasePublishableKey: string;
   createPatientRateLimit: RequestHandler;
   createVisitRateLimit: RequestHandler;
+  model: ServingModel;
 }
 
 /**
@@ -55,6 +59,7 @@ export function createPatientsRouter({
   supabasePublishableKey,
   createPatientRateLimit,
   createVisitRateLimit,
+  model,
 }: CreatePatientsRouterOptions): Router {
   const router = Router();
 
@@ -186,10 +191,12 @@ export function createPatientsRouter({
     const { accessToken } = req.user!;
     const client = createRequestClient(supabaseUrl, supabasePublishableKey, accessToken);
 
-    const { data, error } = await client
+    // The patient's sex is a model input, so it rides back on the insert
+    // rather than costing a second round trip to fetch.
+    const { data: created, error } = await client
       .from("visits")
       .insert({ ...parsed.data, patient_id: patientId })
-      .select()
+      .select("*, patients(sex)")
       .single();
 
     if (error) {
@@ -201,7 +208,22 @@ export function createPatientsRouter({
       return;
     }
 
-    res.status(201).json({ data });
+    const { patients: patient, ...visit } = created;
+
+    // Scored here so a clinician gets a risk from the one call that records
+    // the visit, rather than having to remember a second. Deliberately not
+    // bound to the insert: the visit is already committed, and a clinical
+    // measurement must not be lost because a judgement about it could not be
+    // stored. A failure leaves risk_assessment null and POST /predict can
+    // score it later - logged, because a silent null is otherwise invisible.
+    const assessment = patient ? assessRisk(model, visit, patient.sex) : null;
+    const stored = assessment ? await recordAssessment(client, visit.id, assessment) : null;
+
+    if (!stored) {
+      console.error(`Failed to record an assessment for visit ${visit.id}`);
+    }
+
+    res.status(201).json({ data: { ...visit, risk_assessment: stored } });
   });
 
   return router;

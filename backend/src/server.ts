@@ -57,6 +57,7 @@ app.use(
     supabasePublishableKey: env.supabasePublishableKey,
     createPatientRateLimit,
     createVisitRateLimit,
+    model: servingModel,
   }),
 );
 
