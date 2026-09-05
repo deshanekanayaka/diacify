@@ -57,6 +57,32 @@ is now `{postgres, service_role}` only.
 enumerate what a role actually holds rather than assuming your own
 migration is the whole story — twice now that assumption has been wrong.
 
+**Follow-up: the fix's own assertion was partly blind.** Found 2026-09-05
+via a CodeRabbit review comment on PR #42. The `DO` block above read
+`information_schema.role_table_grants` and listed `MAINTAIN` among the
+privileges it searched for — but that view implements the SQL standard,
+and `MAINTAIN` is a Postgres 17 addition outside it, so it is never
+reported there. The assertion checked three privileges while reading as
+though it checked four.
+
+Proven rather than assumed, two ways: `service_role` demonstrably holds
+`MAINTAIN` (visible through `aclexplode`) while the same view lists only
+seven privilege kinds, none of them `MAINTAIN`; and granting `MAINTAIN` to
+`authenticated` on a local database left the original assertion completing
+silently while the replacement raised on it.
+
+Nothing was actually over-granted — `REVOKE ALL` operates on the real ACL,
+so `MAINTAIN` had already gone. Only the check was wrong. That is the
+worse place for this kind of error, since an assertion is precisely what
+you rely on instead of looking.
+
+Fixed in `20260905105810_assert_table_grants_from_acl.sql`, reading
+`pg_class.relacl` via `aclexplode` and inverted from a blocklist to a
+subset test — `authenticated` must hold nothing outside the intended set,
+rather than must-not-hold a list someone thought to write. Same lesson as
+the two entries around it, for the third time: a claim that nothing
+enforces. Here the claim was the enforcement.
+
 ---
 
 ## `risk_assessments` was documented as append-only but granted `update` and `delete`

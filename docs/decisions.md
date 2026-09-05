@@ -936,3 +936,27 @@ expose `information_schema`, and adding a direct `pg` driver purely for a
 privilege check was not worth the dependency. Being in the migration means it
 runs against every database the migration touches, including hosted, and was
 confirmed load-bearing by granting `TRUNCATE` back and watching it fire.
+
+**Amended 2026-09-05 — the first assertion had a blind spot.** It read
+`information_schema.role_table_grants` and listed `MAINTAIN` among the
+privileges it looked for, but that view implements the SQL standard and
+`MAINTAIN` is a Postgres 17 addition outside it, so the view never reports it.
+Demonstrated rather than inferred: `service_role` holds `MAINTAIN` (visible via
+`aclexplode`) while the same view reports only seven privilege kinds, none of
+them `MAINTAIN`; and granting `MAINTAIN` to `authenticated` on a local database
+left the original assertion passing silently while the replacement caught it.
+
+The grants themselves were never wrong — `REVOKE ALL` acts on the real ACL, not
+on `information_schema`, so `MAINTAIN` was already gone. Only the check was
+wrong, which is the worse place for it: an assertion is what you trust instead
+of looking.
+
+Replaced (migration `20260905105810`) with a check reading `pg_class.relacl`
+through `aclexplode`, and inverted from a blocklist to a subset test:
+`authenticated` must hold nothing beyond the intended set per table, rather
+than must-not-hold a list someone remembered to write. That catches `MAINTAIN`
+and anything a future Postgres adds, and it mirrors how the grants themselves
+are written. A second block asserts `anon` holds nothing at all, per ADR-012.
+Caveat worth knowing: `relacl` is `NULL` for a table with no explicit grants
+and `aclexplode(NULL)` yields no rows, so such a table passes trivially — which
+is the correct outcome, but is a pass by absence rather than by check.
