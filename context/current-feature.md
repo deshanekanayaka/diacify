@@ -4,18 +4,14 @@
 
 ## Status
 
-In progress. Slice 1 (auth gatekeeper) merged to main (PR #28).
-Slice 2 (patients table + RLS, plus the anon-default-privileges bug
-fix) merged to main (PR #30). Slice 3 (`GET /api/patients`, plus
-review hardening and 3 logged bugs) merged to main (PR #32). Slice 4
-(`POST /api/patients` + rate limiting, plus `docs/decisions.md` as
-the project's first ADR log) merged to main (PR #34). Slice 5
-(`visits` table + `POST /api/patients/:id/visits`) merged to main
-(PR #36). Slice 6 (`GET /api/patients/:id/visits`) merged to main
-(PR #38). Slice 7 (ML predict endpoint — the first Node-side inference,
-closing ADR-001's deferred transport question) merged to main
-(PR #39). Slice 8 (persisting risk assessments) implemented on
-`feature/persist-risk-assessments`, not yet merged.
+In progress — slices 1-9 merged to `main`. See @context/progress.md for
+what each delivered, newest first.
+
+Deliberately not a per-slice list any more. This section used to name
+every slice and its PR number, which said what progress.md already said
+and had to be hand-edited at merge time; it was found stale after four
+separate merges. progress.md is only ever appended to, so it cannot rot
+the same way — please don't re-expand this.
 
 ## Goals
 
@@ -646,10 +642,26 @@ isolation before any schema or data exists:
 
 ## Context files
 
-Read these first, every session:
+Three files this section used to list — `project-overview.md`,
+`coding-standards.md`, `ai-interaction.md` — have never existed. Removed
+rather than left as instructions pointing at nothing.
 
-- @context/project-overview.md
-- @context/coding-standards.md
-- @context/ai-interaction.md
-- @context/progress.md — completed features
-- @context/current-feature.md refer to this if anything is unclear
+**Start of session** (28 lines, enough to know where things stand):
+
+- @context/tasks.md — what's next
+- @context/progress.md — what's done, newest first
+
+**Pull in when the work touches them:**
+
+- @docs/decisions.md — the ADR log. The authoritative record of every
+  architectural decision, what was rejected, and why. Check here before
+  changing anything with a decision behind it.
+- @BUGS.md — real bugs found, their root causes, and what prevents a
+  repeat. Three of the four share one shape: a property claimed in a
+  comment that nothing enforced.
+- @docs/phase-1-investigation.md — the legacy system, and the
+  D-numbered decisions the rebuild started from.
+- this file — goals, the decisions in narrative form, and per-slice
+  detail for work already done.
+
+`CLAUDE.md` loads automatically; it never needs requesting.
