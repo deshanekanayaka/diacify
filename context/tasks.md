@@ -6,7 +6,7 @@ Don't track workflow steps here. "Open a PR for slice N", "merge X", "push the m
 
 ## Now
 
-- [ ] After the `20260907190810_revoke_service_role_table_grants` migration runs against the hosted project, re-run the `aclexplode` query from ADR-035 there and confirm `service_role` actually ends up holding zero table privileges — this investigation could not verify hosted directly (no `service_role` credential for it exists in this repo, by design).
+_Nothing open right now — see Later below._
 
 ## Later — after all phases are complete
 

@@ -2,7 +2,7 @@
 
 Completed features/tasks, one line each. Newest first.
 
-- `service_role` table grants — revoked to zero on `patients`/`visits`/`risk_assessments` and asserted from the ACL (ADR-035), matching local's already-locked-down state; hosted verification still pending (see tasks.md)
+- `service_role` table grants — revoked to zero on `patients`/`visits`/`risk_assessments` and asserted from the ACL (ADR-035), matching local's already-locked-down state; migration run and independently re-verified against the hosted project (zero rows for `service_role` in `pg_class.relacl`)
 - Backend API design, slice 11 — `GET /api/patients/:id/visits` accepts `from`/`to` query params bounding `visit_date`, both optional and independent; `total` reflects the filtered count, not the patient's overall visit count
 - Auth — `requireAuth` now maps a timed-out JWKS fetch (`JWKSTimeout`) to 503 instead of 401; it extends `JOSEError` like a bad token does, so it was wrongly telling clinicians to log in again during an outage they can't fix. `JWKSNoMatchingKey` deliberately kept at 401 (a forged/garbage kid, not a rotation race)
 - Error logging — every silent 500 now logs the underlying error via a shared `logInternalError` helper; `recordAssessment` logs internally rather than the caller, since it's the only place the real Postgres error exists (fixes a gap slice 10 only partly covered)
