@@ -3,6 +3,7 @@ import request from "supertest";
 import { describe, expect, it } from "vitest";
 import {
   SignJWT,
+  errors as joseErrors,
   exportJWK,
   generateKeyPair,
   createLocalJWKSet,
@@ -94,9 +95,9 @@ describe("requireAuth", () => {
     expect(response.body).toEqual({ userId: "clinician-456", accessToken: token });
   });
 
-  it("returns 503 when the signing key cannot be fetched", async () => {
+  it("returns 503 on a non-JOSE failure fetching the signing key (e.g. connection refused)", async () => {
     const failingGetKey: JWTVerifyGetKey = () => {
-      throw new Error("network unreachable");
+      throw new TypeError("fetch failed");
     };
     const app = await buildApp(failingGetKey);
 
@@ -106,5 +107,38 @@ describe("requireAuth", () => {
 
     expect(response.status).toBe(503);
     expect(response.body).toEqual({ error: "Something went wrong. Please try again." });
+  });
+
+  it("returns 503 when the JWKS fetch times out", async () => {
+    // JWKSTimeout extends JOSEError, so without an explicit carve-out this
+    // falls into the generic 401 branch below — the exact bug being fixed.
+    const timingOutGetKey: JWTVerifyGetKey = () => {
+      throw new joseErrors.JWKSTimeout();
+    };
+    const app = await buildApp(timingOutGetKey);
+
+    const { privateKey } = await generateKeyPair("ES256");
+    const token = await buildSignedToken(privateKey, "test-key");
+    const response = await request(app).get("/protected").set("Authorization", `Bearer ${token}`);
+
+    expect(response.status).toBe(503);
+    expect(response.body).toEqual({ error: "Something went wrong. Please try again." });
+  });
+
+  it("returns 401 when the token's kid matches no key in the JWKS (not treated as an outage)", async () => {
+    // A fresh JWKS fetch already ran and still found no matching key -
+    // in practice a forged or garbage kid, not a key-rotation race, since
+    // access tokens are short-lived. Deliberately not reclassified to 503.
+    const noMatchGetKey: JWTVerifyGetKey = () => {
+      throw new joseErrors.JWKSNoMatchingKey();
+    };
+    const app = await buildApp(noMatchGetKey);
+
+    const { privateKey } = await generateKeyPair("ES256");
+    const token = await buildSignedToken(privateKey, "test-key");
+    const response = await request(app).get("/protected").set("Authorization", `Bearer ${token}`);
+
+    expect(response.status).toBe(401);
+    expect(response.body).toEqual({ error: "Missing or invalid authorization token" });
   });
 });

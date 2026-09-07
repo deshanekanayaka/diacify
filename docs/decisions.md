@@ -1108,6 +1108,45 @@ historical rows under the current model and storing the result as though it had
 been assessed at the time, which is a decision about the record's meaning
 rather than a migration detail.
 
+---
+
+## ADR-033 — `requireAuth` maps `JWKSTimeout` to 503, not the general 401 branch
+
+**Status:** Accepted — 2026-09-07
+
+**Context:** `requireAuth`'s catch block intended to split "caller's fault"
+(401) from "our key service is unreachable" (503), branching on
+`error instanceof joseErrors.JOSEError`. `jose`'s `JWKSTimeout` — thrown when
+fetching the JWKS itself times out — extends `JOSEError` the same as every
+token-fault error (`JWTExpired`, signature failures, etc.), so a JWKS timeout
+was silently falling into the 401 branch: a clinician told to log in again
+during an outage they cannot fix, the exact failure mode the 503 branch
+exists to prevent. A JWKS host that refuses the connection outright (a plain
+`fetch` `TypeError`, not a `JOSEError`) already reached 503 correctly — same
+root cause, two different status codes depending on exactly how the network
+failed. The existing 503 test threw a fabricated plain `Error`, which `jose`
+never actually produces, so it proved nothing about the real failure mode.
+
+**Decision:** Catch `joseErrors.JWKSTimeout` explicitly, before the general
+`JOSEError` check, and map it to 503.
+
+**Rejected:** Also reclassifying `JWKSNoMatchingKey` (a token's `kid` matches
+no key in the JWKS) to 503. `createRemoteJWKSet` already refetches once on an
+unknown `kid` before giving up, and Supabase access tokens are short-lived
+(~1hr), so a `JWKSNoMatchingKey` after a fresh refetch is in practice a
+forged or garbage token, not a key-rotation race — 401 is the correct answer,
+not an infrastructure fault. Also rejected: deleting the 401/503 split
+entirely and treating every verification failure as 401 — that would make a
+genuine Supabase-wide outage tell every clinician to log in again, repeatedly,
+which is what this split exists to avoid; the split wasn't wrong, only
+incomplete.
+
+**Consequences:** Two new tests lock in the classification precisely:
+`JWKSTimeout` → 503, `JWKSNoMatchingKey` → 401 — the second exists so a future
+change can't widen the 503 carve-out back over the rejected option without
+a test failing. The 503 test that used a fabricated `Error` now throws a
+`TypeError`, matching what a real connection refusal actually produces.
+
 **Verified:** one call now returns a recorded visit and its risk together
 (`high`, 100, `rf-098c19d0afc9` on a clearly diabetic profile), and the visit
 history reports the same assessment with no second call having been made. A
