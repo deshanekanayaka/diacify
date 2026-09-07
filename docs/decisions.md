@@ -1191,3 +1191,55 @@ result set, not the patient's overall visit count. The pagination
 offset/limit variables were renamed `rangeFrom`/`rangeTo` to free `from`/`to`
 for the date params — the two were on a collision course under the same
 names for unrelated concepts.
+
+---
+
+## ADR-035 — `service_role` table grants pinned to zero, matching local
+
+**Status:** Accepted — 2026-09-07
+
+**Context:** `service_role` bypasses RLS entirely (`rolbypassrls = true`,
+confirmed against local Postgres) and is never used for table access in this
+app — ADR-013's per-request client always queries as `authenticated`; the
+only `service_role` use anywhere is `backend/.env.test` calling the Auth
+admin API to delete test users, an unrelated subsystem. Confirmed directly
+against local Postgres that `service_role` already holds no DML on
+`patients`, `visits`, or `risk_assessments` (`MAINTAIN`, `REFERENCES`,
+`TRIGGER`, `TRUNCATE` only), traced to `pg_default_acl`: objects created by
+the `postgres` role (the role every migration runs as) get a narrower
+default `service_role` grant than objects created by `supabase_admin` would.
+The hosted project reportedly grants `service_role` full DML on the same
+tables instead — a platform default difference, not anything a migration
+here did; not independently re-verified against hosted directly, since no
+`service_role` credential for the hosted project exists in this repo
+(consistent with ADR-013's stance of never giving the application that
+credential).
+
+**Decision:** Revoke all table privileges from `service_role` on
+`patients`, `visits`, and `risk_assessments`, remove the corresponding
+default privilege for future tables, and assert the end state from the real
+ACL (`aclexplode`, the same approach `20260905105810` used after
+`information_schema` proved blind to `MAINTAIN`) — reusing the exact
+declarative pattern ADR-012 and ADR-029 already established for `anon` and
+`authenticated`.
+
+**Rejected:** Leaving the divergence documented but unfixed — the argument
+against it is the same one that justified ADR-012 and ADR-029: "nothing
+uses this yet" was already true for `anon`'s and `authenticated`'s stray
+grants, and leaving them was what let the gap sit unnoticed. Also rejected:
+matching hosted's permissive grant instead of local's locked-down one —
+strictly worse for a role that already bypasses RLS, and nothing in the
+codebase needs `service_role` to touch a table.
+
+**Threat addressed:** An admin script or background job written later,
+tested against `service_role` locally, hitting "permission denied" and
+being "fixed" by broadening the grant on hosted rather than recognizing
+local was already correct — a role that bypasses RLS is the last place a
+platform default should be more permissive than intended.
+
+**Consequences:** Verified locally: `service_role` holds zero rows in
+`pg_class.relacl` on all three tables after `supabase db reset`, and the
+migration's own assertion passes. Hosted verification is deferred to
+whoever runs this migration there — re-run the same `aclexplode` query
+afterward to confirm the grant actually changed, since this investigation
+could not query hosted directly.
