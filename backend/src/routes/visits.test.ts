@@ -388,6 +388,62 @@ describe("GET /api/patients/:id/visits", () => {
     ]);
   });
 
+  it("filters to visits on or after from", async () => {
+    const response = await request(app)
+      .get(`/api/patients/${patientWithVisits}/visits?from=2026-02-01`)
+      .set("Authorization", `Bearer ${clinicianD.accessToken}`);
+
+    expect(response.status).toBe(200);
+    expect(response.body.total).toBe(2);
+    expect(response.body.data.map((visit: { visit_date: string }) => visit.visit_date)).toEqual([
+      "2026-03-10",
+      "2026-02-10",
+    ]);
+  });
+
+  it("filters to visits on or before to", async () => {
+    const response = await request(app)
+      .get(`/api/patients/${patientWithVisits}/visits?to=2026-02-15`)
+      .set("Authorization", `Bearer ${clinicianD.accessToken}`);
+
+    expect(response.status).toBe(200);
+    expect(response.body.total).toBe(2);
+    expect(response.body.data.map((visit: { visit_date: string }) => visit.visit_date)).toEqual([
+      "2026-02-10",
+      "2026-01-10",
+    ]);
+  });
+
+  it("narrows to a single visit when from and to are both given", async () => {
+    const response = await request(app)
+      .get(`/api/patients/${patientWithVisits}/visits?from=2026-02-01&to=2026-02-15`)
+      .set("Authorization", `Bearer ${clinicianD.accessToken}`);
+
+    expect(response.status).toBe(200);
+    expect(response.body.total).toBe(1);
+    expect(response.body.data.map((visit: { visit_date: string }) => visit.visit_date)).toEqual([
+      "2026-02-10",
+    ]);
+  });
+
+  it("returns 400 for a malformed from and changes nothing", async () => {
+    const response = await request(app)
+      .get(`/api/patients/${patientWithVisits}/visits?from=not-a-date`)
+      .set("Authorization", `Bearer ${clinicianD.accessToken}`);
+
+    expect(response.status).toBe(400);
+    expect(response.body).toEqual({ error: "Invalid value for from parameter" });
+  });
+
+  it("returns 400 when from is after to", async () => {
+    const response = await request(app)
+      .get(`/api/patients/${patientWithVisits}/visits?from=2026-03-10&to=2026-01-10`)
+      .set("Authorization", `Bearer ${clinicianD.accessToken}`);
+
+    expect(response.status).toBe(400);
+    expect(response.body).toEqual({ error: "from must not be after to" });
+  });
+
   it("returns an empty list, not an error, for an owned patient with no visits", async () => {
     const response = await request(app)
       .get(`/api/patients/${patientWithNoVisits}/visits`)
