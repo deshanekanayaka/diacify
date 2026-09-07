@@ -1108,6 +1108,13 @@ historical rows under the current model and storing the result as though it had
 been assessed at the time, which is a decision about the record's meaning
 rather than a migration detail.
 
+**Verified:** one call now returns a recorded visit and its risk together
+(`high`, 100, `rf-098c19d0afc9` on a clearly diabetic profile), and the visit
+history reports the same assessment with no second call having been made. A
+test pins the two endpoints against each other, since they reach the assessment
+by different routes — one from the value just computed, one through a PostgREST
+embed.
+
 ---
 
 ## ADR-033 — `requireAuth` maps `JWKSTimeout` to 503, not the general 401 branch
@@ -1147,9 +1154,40 @@ change can't widen the 503 carve-out back over the rejected option without
 a test failing. The 503 test that used a fabricated `Error` now throws a
 `TypeError`, matching what a real connection refusal actually produces.
 
-**Verified:** one call now returns a recorded visit and its risk together
-(`high`, 100, `rf-098c19d0afc9` on a clearly diabetic profile), and the visit
-history reports the same assessment with no second call having been made. A
-test pins the two endpoints against each other, since they reach the assessment
-by different routes — one from the value just computed, one through a PostgREST
-embed.
+---
+
+## ADR-034 — `visit_date` range filtering: `from`/`to` query params, not a schema wrapper
+
+**Status:** Accepted — 2026-09-07
+
+**Context:** Slice 11 had three candidates: `visit_date` filtering, a
+per-visit assessment-history endpoint, and backfilling visits that predate
+slice 10's auto-scoring. There is no frontend yet, so none of the three was
+demanded by a live consumer — a pure prioritization call. The
+assessment-history endpoint was ruled out first: `risk_assessments` is
+append-only per `(visit, model_version)` (ADR-028), but exactly one
+`model_version` exists today, so it would return at most one row per visit —
+no payoff until a retrain happens. Backfilling isn't a vertical slice in the
+same sense (no new endpoint, a one-off script), and its urgency depends on
+production data this investigation can't see. Filtering was the only
+candidate that's a genuine API slice with a use the moment any frontend
+exists.
+
+**Decision:** `GET /api/patients/:id/visits` accepts `from` and `to` query
+params bounding `visit_date`, parsed by a new `parseDateRange` (mirroring the
+existing hand-rolled `parsePagination`, not a Zod schema — Zod stays reserved
+for request-body schemas per the existing split in this codebase). Both are
+optional and independent; neither present means unfiltered, matching prior
+behavior. Malformed input or `from` after `to` returns 400.
+
+**Rejected:** `visit_date_from`/`visit_date_to` — more explicit, but this
+resource has exactly one date field, so the shorter names carry no ambiguity
+today. `start`/`end` — a common REST convention, but less specific about
+what's actually being bounded.
+
+**Consequences:** `count: "exact"` was already in place for pagination, so
+`total` correctly reflects the filtered count once a range narrows the
+result set, not the patient's overall visit count. The pagination
+offset/limit variables were renamed `rangeFrom`/`rangeTo` to free `from`/`to`
+for the date params — the two were on a collision course under the same
+names for unrelated concepts.

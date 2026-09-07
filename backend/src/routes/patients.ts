@@ -7,6 +7,7 @@ import type { ServingModel } from "../ml/servingModel.js";
 import { INTERNAL_ERROR_BODY, isUuid } from "./http.js";
 import { createPatientSchema } from "./createPatientSchema.js";
 import { createVisitSchema } from "./createVisitSchema.js";
+import { parseDateRange } from "./dateRange.js";
 import { parsePagination } from "./pagination.js";
 import { logInternalError } from "../internalErrorLog.js";
 
@@ -127,8 +128,15 @@ export function createPatientsRouter({
       return;
     }
     const { limit, page } = pagination.params;
-    const from = (page - 1) * limit;
-    const to = from + limit - 1;
+    const rangeFrom = (page - 1) * limit;
+    const rangeTo = rangeFrom + limit - 1;
+
+    const dateRange = parseDateRange(req.query);
+    if (!dateRange.ok) {
+      res.status(400).json({ error: dateRange.error });
+      return;
+    }
+    const { from, to } = dateRange.params;
 
     const { accessToken } = req.user!;
     const client = createRequestClient(supabaseUrl, supabasePublishableKey, accessToken);
@@ -160,16 +168,20 @@ export function createPatientsRouter({
     // PostgREST applies per parent row - so each visit brings back only its
     // most recent assessment, in the same round trip, and a visit scored by
     // an older model version shows the retrained verdict rather than both.
-    const { data, error, count } = await client
+    let query = client
       .from("visits")
       .select(`*, risk_assessments(${LATEST_ASSESSMENT_FIELDS})`, { count: "exact" })
-      .eq("patient_id", patientId)
+      .eq("patient_id", patientId);
+    if (from !== undefined) query = query.gte("visit_date", from);
+    if (to !== undefined) query = query.lte("visit_date", to);
+
+    const { data, error, count } = await query
       .order("visit_date", { ascending: false })
       .order("created_at", { ascending: false })
       .order("id", { ascending: false })
       .order("created_at", { ascending: false, referencedTable: "risk_assessments" })
       .limit(1, { referencedTable: "risk_assessments" })
-      .range(from, to);
+      .range(rangeFrom, rangeTo);
 
     if (error) {
       logInternalError("GET /api/patients/:id/visits — visits query", error);
