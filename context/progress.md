@@ -2,6 +2,7 @@
 
 Completed features/tasks, one line each. Newest first.
 
+- Auth — `requireAuth` now maps a timed-out JWKS fetch (`JWKSTimeout`) to 503 instead of 401; it extends `JOSEError` like a bad token does, so it was wrongly telling clinicians to log in again during an outage they can't fix. `JWKSNoMatchingKey` deliberately kept at 401 (a forged/garbage kid, not a rotation race)
 - Error logging — every silent 500 now logs the underlying error via a shared `logInternalError` helper; `recordAssessment` logs internally rather than the caller, since it's the only place the real Postgres error exists (fixes a gap slice 10 only partly covered)
 - Backend API design, slice 10 — visit creation now scores the visit it records and returns the assessment inline, deliberately after the visit is committed rather than in one transaction so a clinical fact is never lost because a judgement about it could not be stored (ADR-032)
 - Backend API design, slice 9 — the visit history carries each visit's latest risk assessment inline (`null` when never scored), one round trip via a per-parent-limited PostgREST embed, closing the gap where assessments could be written but never read back (ADR-031)

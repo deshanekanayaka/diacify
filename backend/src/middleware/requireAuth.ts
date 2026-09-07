@@ -16,6 +16,10 @@ function extractBearerToken(header: string | undefined): string | null {
  * to `req.user`. Distinguishes an unauthenticated caller (401) from the
  * signing key being unreachable (503) — a wrong/expired token is not the
  * same failure as the verification service itself being down.
+ *
+ * `JWKSTimeout` is checked explicitly before the general JOSE-error branch:
+ * it extends `JOSEError` like every token-fault error, but a timed-out JWKS
+ * fetch is never the caller's doing.
  */
 export function createRequireAuth(getKey: JWTVerifyGetKey) {
   return async function requireAuth(req: Request, res: Response, next: NextFunction): Promise<void> {
@@ -34,6 +38,10 @@ export function createRequireAuth(getKey: JWTVerifyGetKey) {
       req.user = { id: payload.sub, accessToken: token };
       next();
     } catch (error) {
+      if (error instanceof joseErrors.JWKSTimeout) {
+        res.status(503).json(SERVICE_UNAVAILABLE_BODY);
+        return;
+      }
       if (error instanceof joseErrors.JOSEError) {
         res.status(401).json(UNAUTHORIZED_BODY);
         return;
