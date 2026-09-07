@@ -1,6 +1,6 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { config } from "dotenv";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 
 import { loadDefaultServingModel } from "../ml/servingModel.js";
 import { assessRisk } from "../ml/riskAssessment.js";
@@ -57,6 +57,10 @@ describe("recordAssessment", () => {
     await deleteTestUser(userId);
   });
 
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
   it("stores an assessment and returns it as persisted", async () => {
     const stored = await recordAssessment(client, visitId, assessment);
     expect(stored).not.toBeNull();
@@ -71,15 +75,20 @@ describe("recordAssessment", () => {
     expect(second).toEqual(first);
   });
 
-  it("returns null rather than throwing when the visit does not exist", async () => {
+  it("returns null and logs the underlying error when the visit does not exist", async () => {
     // A visit outside this clinician's reach is refused by RLS. The caller
     // has to be able to decide what that means, so this resolves to null
-    // instead of raising.
+    // instead of raising - but the RLS error itself must still reach a log,
+    // since the caller never sees it.
+    const spy = vi.spyOn(console, "error").mockImplementation(() => {});
+
     const stored = await recordAssessment(
       client,
       "00000000-0000-4000-8000-000000000000",
       assessment,
     );
+
     expect(stored).toBeNull();
+    expect(spy).toHaveBeenCalledWith("[recordAssessment]", expect.anything());
   });
 });

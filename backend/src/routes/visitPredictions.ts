@@ -5,6 +5,7 @@ import { createRequestClient } from "../db/requestClient.js";
 import { assessRisk } from "../ml/riskAssessment.js";
 import type { ServingModel } from "../ml/servingModel.js";
 import { INTERNAL_ERROR_BODY, isUuid } from "./http.js";
+import { logInternalError } from "../internalErrorLog.js";
 
 const VISIT_NOT_FOUND_BODY = { error: "Visit not found" } as const;
 
@@ -57,6 +58,7 @@ export function createVisitPredictionsRouter({
       .maybeSingle();
 
     if (error) {
+      logInternalError("POST /api/visits/:id/predict — visit lookup", error);
       res.status(500).json(INTERNAL_ERROR_BODY);
       return;
     }
@@ -67,6 +69,10 @@ export function createVisitPredictionsRouter({
     if (!visit.patients) {
       // patient_id is NOT NULL with a foreign key, so this is unreachable
       // short of the embed itself failing - reported rather than assumed away.
+      logInternalError(
+        "POST /api/visits/:id/predict — patient embed",
+        "embed returned no patient row",
+      );
       res.status(500).json(INTERNAL_ERROR_BODY);
       return;
     }
