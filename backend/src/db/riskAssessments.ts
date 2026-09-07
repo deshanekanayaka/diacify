@@ -2,6 +2,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 
 import type { Database } from "./database.types.js";
 import type { RiskAssessment } from "../ml/riskAssessment.js";
+import { logInternalError } from "../internalErrorLog.js";
 
 // Postgres unique-violation. On this table it means the visit has already
 // been scored by this model version - a repeat, not a failure.
@@ -65,5 +66,6 @@ export async function recordAssessment(
     return existing;
   }
 
+  logInternalError("recordAssessment", error);
   return null;
 }

@@ -8,6 +8,7 @@ import { INTERNAL_ERROR_BODY, isUuid } from "./http.js";
 import { createPatientSchema } from "./createPatientSchema.js";
 import { createVisitSchema } from "./createVisitSchema.js";
 import { parsePagination } from "./pagination.js";
+import { logInternalError } from "../internalErrorLog.js";
 
 // The Postgres error code surfaced by PostgREST when an insert is
 // rejected because the referenced patient isn't visible/owned by the
@@ -84,6 +85,7 @@ export function createPatientsRouter({
       .range(from, to);
 
     if (error) {
+      logInternalError("GET /api/patients", error);
       res.status(500).json(INTERNAL_ERROR_BODY);
       return;
     }
@@ -104,6 +106,7 @@ export function createPatientsRouter({
     const { data, error } = await client.from("patients").insert(parsed.data).select().single();
 
     if (error) {
+      logInternalError("POST /api/patients", error);
       res.status(500).json(INTERNAL_ERROR_BODY);
       return;
     }
@@ -141,6 +144,7 @@ export function createPatientsRouter({
       .maybeSingle();
 
     if (patientError) {
+      logInternalError("GET /api/patients/:id/visits — patient lookup", patientError);
       res.status(500).json(INTERNAL_ERROR_BODY);
       return;
     }
@@ -168,6 +172,7 @@ export function createPatientsRouter({
       .range(from, to);
 
     if (error) {
+      logInternalError("GET /api/patients/:id/visits — visits query", error);
       res.status(500).json(INTERNAL_ERROR_BODY);
       return;
     }
@@ -204,6 +209,7 @@ export function createPatientsRouter({
         res.status(404).json(PATIENT_NOT_FOUND_BODY);
         return;
       }
+      logInternalError("POST /api/patients/:id/visits — insert", error);
       res.status(500).json(INTERNAL_ERROR_BODY);
       return;
     }
@@ -218,10 +224,6 @@ export function createPatientsRouter({
     // score it later - logged, because a silent null is otherwise invisible.
     const assessment = patient ? assessRisk(model, visit, patient.sex) : null;
     const stored = assessment ? await recordAssessment(client, visit.id, assessment) : null;
-
-    if (!stored) {
-      console.error(`Failed to record an assessment for visit ${visit.id}`);
-    }
 
     res.status(201).json({ data: { ...visit, risk_assessment: stored } });
   });

@@ -2,6 +2,7 @@
 
 Completed features/tasks, one line each. Newest first.
 
+- Error logging — every silent 500 now logs the underlying error via a shared `logInternalError` helper; `recordAssessment` logs internally rather than the caller, since it's the only place the real Postgres error exists (fixes a gap slice 10 only partly covered)
 - Backend API design, slice 10 — visit creation now scores the visit it records and returns the assessment inline, deliberately after the visit is committed rather than in one transaction so a clinical fact is never lost because a judgement about it could not be stored (ADR-032)
 - Backend API design, slice 9 — the visit history carries each visit's latest risk assessment inline (`null` when never scored), one round trip via a per-parent-limited PostgREST embed, closing the gap where assessments could be written but never read back (ADR-031)
 - CI — GitHub Actions running lint/typecheck/test/build on the backend against a real `supabase start` stack, plus ruff and pytest for the ML pipeline; no repository secrets needed, and a broken migration now fails a PR before any test runs (ADR-030)
