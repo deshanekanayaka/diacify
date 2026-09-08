@@ -16,8 +16,12 @@
   text-align: left;
   font: inherit;
   font-weight: 600;
-  color: var(--tab-blank);
+  color: var(--tab-blank-text);
   cursor: pointer;
+}
+
+.new-chart-tab--closed button:hover {
+  background: rgba(176, 71, 60, 0.08);
 }
 
 .new-chart-tab--open {
@@ -51,11 +55,20 @@
 
 .new-chart-tab--open fieldset {
   display: flex;
-  gap: 1rem;
+  flex-wrap: wrap;
+  gap: 0.25rem 1rem;
   align-items: center;
   border: none;
   padding: 0;
   margin: 0;
+}
+
+.new-chart-tab--open legend {
+  flex-basis: 100%;
+  padding: 0;
+  margin: 0;
+  font-size: 0.85rem;
+  color: var(--ink-muted);
 }
 
 .new-chart-tab__error {
@@ -79,10 +92,23 @@
   cursor: pointer;
 }
 
+.new-chart-tab__actions button[type="submit"]:hover:not(:disabled) {
+  background: #345c4e;
+}
+
+.new-chart-tab__actions button[type="submit"]:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
 .new-chart-tab__actions button[type="button"] {
   background: none;
   border: 1px solid rgba(38, 34, 32, 0.25);
   border-radius: 6px;
   padding: 0.5rem 1rem;
   cursor: pointer;
+}
+
+.new-chart-tab__actions button[type="button"]:hover:not(:disabled) {
+  background: rgba(38, 34, 32, 0.06);
 }

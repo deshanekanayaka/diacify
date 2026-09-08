@@ -8,8 +8,16 @@
   max-width: 32rem;
 }
 
-.patient-drawer__empty {
+.patient-drawer__status {
+  padding: 0.85rem 1.25rem;
   color: var(--ink-muted);
   font-size: 0.9rem;
-  margin: 0 0 0.6rem;
+  background: rgba(255, 249, 236, 0.6);
+  border: 1px dashed rgba(38, 34, 32, 0.2);
+  border-radius: 0 10px 10px 0;
+}
+
+.patient-drawer__status--error {
+  color: var(--danger);
+  border-color: rgba(163, 53, 43, 0.35);
 }

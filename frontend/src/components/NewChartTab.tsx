@@ -90,9 +90,9 @@ export function NewChartTab() {
 
         <div className="new-chart-tab__actions">
           <button type="submit" disabled={createPatient.isPending}>
-            Save
+            {createPatient.isPending ? "Saving…" : "Save"}
           </button>
-          <button type="button" onClick={() => setOpen(false)}>
+          <button type="button" disabled={createPatient.isPending} onClick={() => setOpen(false)}>
             Cancel
           </button>
         </div>

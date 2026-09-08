@@ -10,6 +10,10 @@
   --accent: #3e6e5e;
   --accent-ink: #f5f1e6;
   --tab-blank: #b0473c;
+  /* Text/icon use of the blank-tab rust: #b0473c on the kraft ground is
+     4.44:1, just under the 4.5:1 body-text floor. Darkened for anywhere
+     it carries text rather than just the border/spine. */
+  --tab-blank-text: #8f362c;
   --danger: #a3352b;
   --tab-shadow: rgba(38, 34, 32, 0.18);
 
@@ -22,4 +26,14 @@ body {
   background: var(--ground);
   color: var(--ink);
   font-family: var(--font-ui);
+}
+
+::selection {
+  background: var(--accent);
+  color: var(--accent-ink);
+}
+
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
 }

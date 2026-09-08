@@ -32,11 +32,6 @@
   color: var(--ink);
 }
 
-.sign-in-form input:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 1px;
-}
-
 .sign-in-form button {
   background: var(--accent);
   color: var(--accent-ink);
@@ -46,6 +41,10 @@
   font: inherit;
   font-weight: 600;
   cursor: pointer;
+}
+
+.sign-in-form button:hover {
+  background: #345c4e;
 }
 
 .sign-in-form__error {

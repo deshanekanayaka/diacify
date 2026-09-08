@@ -6,6 +6,7 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 1rem;
   padding: 1rem 2rem;
   background: #fff9ec;
   border-bottom: 1px solid rgba(38, 34, 32, 0.1);
@@ -23,11 +24,19 @@
   display: flex;
   align-items: center;
   gap: 1rem;
+  min-width: 0;
   font-size: 0.85rem;
   color: var(--ink-muted);
 }
 
+.app-shell__account span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .app-shell__account button {
+  flex-shrink: 0;
   background: none;
   border: 1px solid rgba(38, 34, 32, 0.25);
   border-radius: 6px;
@@ -35,6 +44,10 @@
   font: inherit;
   color: var(--ink);
   cursor: pointer;
+}
+
+.app-shell__account button:hover {
+  background: rgba(38, 34, 32, 0.06);
 }
 
 .app-shell__main {
