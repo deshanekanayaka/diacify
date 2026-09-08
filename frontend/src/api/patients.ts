@@ -33,6 +33,14 @@ export function usePatients() {
   });
 }
 
+/** Fetches one patient by id. */
+export function usePatient(id: string) {
+  return useQuery({
+    queryKey: ["patients", id],
+    queryFn: () => apiFetch<{ data: Patient }>(`/api/patients/${id}`),
+  });
+}
+
 /** Creates a patient and refreshes the patient list on success. */
 export function useCreatePatient() {
   const queryClient = useQueryClient();

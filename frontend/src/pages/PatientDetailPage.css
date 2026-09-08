@@ -1,0 +1,43 @@
+.patient-detail__back {
+  display: inline-block;
+  margin-bottom: 0.75rem;
+  font-size: 0.85rem;
+  color: var(--ink-muted);
+  text-decoration: none;
+}
+
+.patient-detail__back:hover {
+  color: var(--ink);
+}
+
+.patient-detail__reference {
+  font-family: var(--font-label);
+  font-size: 1.5rem;
+  margin: 0 0 1.25rem;
+}
+
+.patient-detail__result {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  max-width: 40rem;
+}
+
+.patient-detail__result-actions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.patient-detail__result-actions button {
+  background: none;
+  border: 1px solid rgba(38, 34, 32, 0.25);
+  border-radius: 6px;
+  padding: 0.5rem 1rem;
+  font: inherit;
+  color: var(--ink);
+  cursor: pointer;
+}
+
+.patient-detail__result-actions button:hover {
+  background: rgba(38, 34, 32, 0.06);
+}

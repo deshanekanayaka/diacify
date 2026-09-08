@@ -9,6 +9,12 @@
   border-left: 6px solid var(--accent);
   border-radius: 0 10px 10px 0;
   box-shadow: 0 2px 0 var(--tab-shadow);
+  color: inherit;
+  text-decoration: none;
+}
+
+.patient-tab:hover {
+  background: #fef4dc;
 }
 
 .patient-tab__reference {

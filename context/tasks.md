@@ -6,7 +6,7 @@ Don't track workflow steps here. "Open a PR for slice N", "merge X", "push the m
 
 ## Now
 
-- [ ] Design and build the frontend. No frontend exists yet — backend API (slices 1-11) and ML pipeline are the only things a user could drive today, both via raw HTTP/CLI. Needs a stack decision first (CLAUDE.md D1/D2 — framework, rendering strategy, how it talks to the backend), then vertical slices per screen/flow, same as the backend build.
+- [ ] Continue building the frontend, vertical slice per screen/flow (stack decided: Vite + React Router + TanStack Query, ADR-036/037). Done so far: patient list + add patient, patient detail (record a visit, see the risk score, browse history). Still open: edit/delete a patient, a real designed sign-in screen (currently a deliberate plain stopgap), and whatever the next screen turns out to be.
 
 ## Later — after all phases are complete
 

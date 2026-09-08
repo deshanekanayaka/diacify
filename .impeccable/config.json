@@ -20,6 +20,24 @@
         ],
         "createdAt": "2026-09-08T09:10:16.213Z",
         "reason": "same Tabbed Chart Binder direction: the blank/open tab reuses the same tab-divider accent language as PatientTab.css"
+      },
+      {
+        "rule": "side-tab",
+        "value": "*",
+        "files": [
+          "frontend/src/components/RiskResult.css"
+        ],
+        "createdAt": "2026-09-08T09:48:59.096Z",
+        "reason": "locked direction contract (.impeccable/surfaces/frontend-src-pages-patientdetailpage-tsx.md): same tab-spine motif as PatientTab.css, used as the risk-category color mark on the instrument-readout raise"
+      },
+      {
+        "rule": "side-tab",
+        "value": "*",
+        "files": [
+          "frontend/src/components/VisitHistoryRow.css"
+        ],
+        "createdAt": "2026-09-08T09:48:59.114Z",
+        "reason": "same Tabbed Chart Binder tab-spine motif, applied to expand-in-place history rows (the sneaker-box-stack raise)"
       }
     ]
   }

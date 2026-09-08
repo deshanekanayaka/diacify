@@ -1,7 +1,7 @@
 ---
 version: 1
-slug: "patients"
-primary_target: "patients"
+slug: "frontend-src-pages-patientlistpage-tsx"
+primary_target: "frontend/src/pages/PatientListPage.tsx"
 related_targets: []
 ---
 
