@@ -1,0 +1,25 @@
+/*
+  Tabbed Chart Binder direction (.impeccable/surfaces/patients.md).
+  Kraft/manila ground, one institutional accent, monospace chart labels —
+  flat, restrained interpretation, no literal paper grain.
+*/
+:root {
+  --ground: #efe6d3;
+  --ink: #262220;
+  --ink-muted: #6b5f52;
+  --accent: #3e6e5e;
+  --accent-ink: #f5f1e6;
+  --tab-blank: #b0473c;
+  --danger: #a3352b;
+  --tab-shadow: rgba(38, 34, 32, 0.18);
+
+  --font-ui: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --font-label: ui-monospace, "SF Mono", Menlo, monospace;
+}
+
+body {
+  margin: 0;
+  background: var(--ground);
+  color: var(--ink);
+  font-family: var(--font-ui);
+}

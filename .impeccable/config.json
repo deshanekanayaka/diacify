@@ -1,0 +1,26 @@
+{
+  "detector": {
+    "ignoreRules": [],
+    "ignoreFiles": [],
+    "ignoreValues": [
+      {
+        "rule": "side-tab",
+        "value": "*",
+        "files": [
+          "frontend/src/components/PatientTab.css"
+        ],
+        "createdAt": "2026-09-08T09:10:16.197Z",
+        "reason": "locked direction contract (.impeccable/surfaces/patients.md, Tabbed Chart Binder world): the left accent is the literal chart-tab-divider motif the surface is built around, not a decorative flourish"
+      },
+      {
+        "rule": "side-tab",
+        "value": "*",
+        "files": [
+          "frontend/src/components/NewChartTab.css"
+        ],
+        "createdAt": "2026-09-08T09:10:16.213Z",
+        "reason": "same Tabbed Chart Binder direction: the blank/open tab reuses the same tab-divider accent language as PatientTab.css"
+      }
+    ]
+  }
+}

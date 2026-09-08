@@ -1,0 +1,15 @@
+.patient-drawer {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  max-width: 32rem;
+}
+
+.patient-drawer__empty {
+  color: var(--ink-muted);
+  font-size: 0.9rem;
+  margin: 0 0 0.6rem;
+}
