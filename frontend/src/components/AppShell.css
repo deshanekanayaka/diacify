@@ -1,0 +1,42 @@
+.app-shell {
+  min-height: 100vh;
+}
+
+.app-shell__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1rem 2rem;
+  background: #fff9ec;
+  border-bottom: 1px solid rgba(38, 34, 32, 0.1);
+}
+
+.app-shell__wordmark {
+  font-family: var(--font-label);
+  font-weight: 600;
+  font-size: 1.1rem;
+  color: var(--accent);
+  letter-spacing: 0.02em;
+}
+
+.app-shell__account {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  font-size: 0.85rem;
+  color: var(--ink-muted);
+}
+
+.app-shell__account button {
+  background: none;
+  border: 1px solid rgba(38, 34, 32, 0.25);
+  border-radius: 6px;
+  padding: 0.35rem 0.75rem;
+  font: inherit;
+  color: var(--ink);
+  cursor: pointer;
+}
+
+.app-shell__main {
+  padding: 2rem;
+}
