@@ -1,11 +1,12 @@
 import { useState, type FormEvent } from "react";
 
 import { useAuth } from "../lib/AuthContext";
+import "./SignInForm.css";
 
 /**
  * Plain functional sign-in — deliberately outside the Tabbed Chart Binder
- * direction, which was shaped for the patient list only. Not a designed
- * surface yet.
+ * direction, which was shaped for the patient list only. Still styled
+ * enough to read as a finished screen rather than broken markup.
  */
 export function SignInForm() {
   const { signIn } = useAuth();
@@ -20,16 +21,25 @@ export function SignInForm() {
   }
 
   return (
-    <form onSubmit={handleSubmit} style={{ maxWidth: "20rem", margin: "4rem auto", display: "flex", flexDirection: "column", gap: "0.5rem" }}>
+    <form className="sign-in-form" onSubmit={handleSubmit}>
       <label>
         Email
         <input type="email" value={email} onChange={(event) => setEmail(event.target.value)} required />
       </label>
       <label>
         Password
-        <input type="password" value={password} onChange={(event) => setPassword(event.target.value)} required />
+        <input
+          type="password"
+          value={password}
+          onChange={(event) => setPassword(event.target.value)}
+          required
+        />
       </label>
-      {error && <p role="alert">{error}</p>}
+      {error && (
+        <p className="sign-in-form__error" role="alert">
+          {error}
+        </p>
+      )}
       <button type="submit">Sign in</button>
     </form>
   );

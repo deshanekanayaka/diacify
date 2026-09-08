@@ -1,0 +1,55 @@
+/*
+  Plain, functional sign-in - not part of the Tabbed Chart Binder direction
+  (that was shaped for the patient list only), but still has to read as a
+  finished screen rather than broken markup.
+*/
+.sign-in-form {
+  max-width: 20rem;
+  margin: 4rem auto;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  padding: 2rem;
+  background: #fff;
+  border-radius: 10px;
+  box-shadow: 0 1px 3px rgba(38, 34, 32, 0.15);
+}
+
+.sign-in-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  font-size: 0.85rem;
+  color: var(--ink-muted);
+}
+
+.sign-in-form input {
+  font: inherit;
+  font-size: 1rem;
+  padding: 0.5rem 0.6rem;
+  border: 1px solid rgba(38, 34, 32, 0.25);
+  border-radius: 6px;
+  color: var(--ink);
+}
+
+.sign-in-form input:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.sign-in-form button {
+  background: var(--accent);
+  color: var(--accent-ink);
+  border: none;
+  border-radius: 6px;
+  padding: 0.6rem 1rem;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.sign-in-form__error {
+  margin: 0;
+  color: var(--danger);
+  font-size: 0.85rem;
+}

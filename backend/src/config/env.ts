@@ -2,6 +2,7 @@
 export interface Env {
   supabaseUrl: string;
   supabasePublishableKey: string;
+  allowedOrigin: string;
 }
 
 /**
@@ -21,5 +22,13 @@ export function loadEnv(source: NodeJS.ProcessEnv = process.env): Env {
     throw new Error("SUPABASE_PUBLISHABLE_KEY is not set");
   }
 
-  return { supabaseUrl, supabasePublishableKey };
+  // ADR-006 put the frontend on its own origin, talking to this API only
+  // over CORS - a single configured origin, not a wildcard, since every
+  // request already carries a clinician's bearer token.
+  const allowedOrigin = source.ALLOWED_ORIGIN;
+  if (!allowedOrigin) {
+    throw new Error("ALLOWED_ORIGIN is not set");
+  }
+
+  return { supabaseUrl, supabasePublishableKey, allowedOrigin };
 }
