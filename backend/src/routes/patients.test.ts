@@ -155,6 +155,72 @@ describe("GET /api/patients", () => {
   });
 });
 
+describe("GET /api/patients/:id", () => {
+  let app: express.Express;
+  let clinicianF: TestClinician;
+  let clinicianG: TestClinician;
+  let patientOwnedByF: string;
+
+  beforeAll(async () => {
+    app = buildApp();
+    clinicianF = await signUpTestClinician("get-patient-f");
+    clinicianG = await signUpTestClinician("get-patient-g");
+
+    const { data, error } = await clinicianF.client
+      .from("patients")
+      .insert({ sex: "female", reference: "Chart F1" })
+      .select()
+      .single();
+    if (error) throw error;
+    patientOwnedByF = data.id;
+  });
+
+  afterAll(async () => {
+    await deleteTestUser(clinicianF.userId);
+    await deleteTestUser(clinicianG.userId);
+  });
+
+  it("returns 401 with no Authorization header", async () => {
+    const response = await request(app).get(`/api/patients/${patientOwnedByF}`);
+    expect(response.status).toBe(401);
+  });
+
+  it("returns the caller's own patient", async () => {
+    const response = await request(app)
+      .get(`/api/patients/${patientOwnedByF}`)
+      .set("Authorization", `Bearer ${clinicianF.accessToken}`);
+
+    expect(response.status).toBe(200);
+    expect(response.body.data).toMatchObject({ id: patientOwnedByF, reference: "Chart F1", sex: "female" });
+  });
+
+  it("returns 404 for another clinician's patient", async () => {
+    const response = await request(app)
+      .get(`/api/patients/${patientOwnedByF}`)
+      .set("Authorization", `Bearer ${clinicianG.accessToken}`);
+
+    expect(response.status).toBe(404);
+    expect(response.body).toEqual({ error: "Patient not found" });
+  });
+
+  it("returns 404 for a well-formed id that matches no patient", async () => {
+    const response = await request(app)
+      .get("/api/patients/00000000-0000-0000-0000-000000000000")
+      .set("Authorization", `Bearer ${clinicianF.accessToken}`);
+
+    expect(response.status).toBe(404);
+  });
+
+  it("rejects a malformed id with 400", async () => {
+    const response = await request(app)
+      .get("/api/patients/not-a-uuid")
+      .set("Authorization", `Bearer ${clinicianF.accessToken}`);
+
+    expect(response.status).toBe(400);
+    expect(response.body).toEqual({ error: "Invalid patient id" });
+  });
+});
+
 async function ownPatientCount(clinician: TestClinician): Promise<number> {
   const { count, error } = await clinician.client
     .from("patients")

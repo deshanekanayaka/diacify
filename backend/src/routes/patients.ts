@@ -124,6 +124,31 @@ export function createPatientsRouter({
     res.status(201).json({ data });
   });
 
+  router.get("/:id", async (req, res) => {
+    const patientId = req.params.id;
+    if (!isUuid(patientId)) {
+      res.status(400).json({ error: "Invalid patient id" });
+      return;
+    }
+
+    const { accessToken } = req.user!;
+    const client = createRequestClient(supabaseUrl, supabasePublishableKey, accessToken);
+
+    const { data, error } = await client.from("patients").select("*").eq("id", patientId).maybeSingle();
+
+    if (error) {
+      logInternalError("GET /api/patients/:id", error);
+      res.status(500).json(INTERNAL_ERROR_BODY);
+      return;
+    }
+    if (!data) {
+      res.status(404).json(PATIENT_NOT_FOUND_BODY);
+      return;
+    }
+
+    res.status(200).json({ data });
+  });
+
   router.get("/:id/visits", async (req, res) => {
     const patientId = req.params.id;
     if (!isUuid(patientId)) {
