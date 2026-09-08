@@ -3,6 +3,7 @@ import express, { type ErrorRequestHandler } from "express";
 
 import { createSupabaseJwks } from "./auth/supabaseJwks.js";
 import { loadEnv } from "./config/env.js";
+import { createCors } from "./middleware/cors.js";
 import { createRateLimiter } from "./middleware/rateLimit.js";
 import { createRequireAuth } from "./middleware/requireAuth.js";
 import { loadDefaultServingModel } from "./ml/servingModel.js";
@@ -43,6 +44,7 @@ const predictRateLimit = createRateLimiter({
 });
 
 const app = express();
+app.use(createCors(env.allowedOrigin));
 app.use(express.json({ limit: "10kb" }));
 
 app.get("/health", (_req, res) => {

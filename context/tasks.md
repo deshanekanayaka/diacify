@@ -6,7 +6,11 @@ Don't track workflow steps here. "Open a PR for slice N", "merge X", "push the m
 
 ## Now
 
-_Nothing open right now — see Later below._
+- [ ] Rebuild the frontend from scratch (2026-09-08). The prior build (patient list + add patient, patient detail) is deleted — two rolled "own world" visual directions (Tabbed Chart Binder, then a dark ops-board/instrument register) both read as not clean/professional enough. `PRODUCT.md`'s Brand Commitments now records a durable preference instead: category-standard craft in the Apple Health / Apple's-own-apps register — light ground, soft rounded cards, systematic SF-style type, calm restrained color, generous whitespace, not a distinctive invented "own world." Stack decisions (Vite + React Router + TanStack Query, ADR-036/037) and backend contract (ADR-038/040 patient reference, ADR-006 CORS) are unaffected and still hold — this is a visual-direction restart, not an architecture one.
+- [ ] `GET /api/patients` still carries no risk signal — a prioritised list needs risk visible per row without one request per patient. Worth deciding before the list screen is rebuilt, since it shapes the response shape (embed latest assessment vs. a dedicated endpoint).
+- [ ] No sort/filter on the patient list (deferred since slice 3, one sortable column at the time). A risk-ranked dashboard needs sort-by-risk — same shape question as above, decide together.
+- [ ] ADR-004 (one Zod schema module, `z.infer`, imported by both backend and frontend) isn't honoured yet — `createVisitSchema.ts`/`createPatientSchema.ts` still live in `backend/src/routes/`, unreachable from a rebuilt frontend. Needs a workspace restructuring before the new frontend can validate against the same schema rather than hand-duplicating it.
+- [ ] Appointments and analytics: both exist in legacy, neither is planned here. Open scope question, not an assumption to make silently when the frontend gets rebuilt.
 
 ## Later — after all phases are complete
 

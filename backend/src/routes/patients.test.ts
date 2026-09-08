@@ -72,7 +72,7 @@ describe("GET /api/patients", () => {
     for (let i = 0; i < 3; i++) {
       const { data, error } = await clinicianA.client
         .from("patients")
-        .insert({ sex: "female" })
+        .insert({ sex: "female", reference: `Patient ${i}` })
         .select()
         .single();
       if (error) throw error;
@@ -155,6 +155,72 @@ describe("GET /api/patients", () => {
   });
 });
 
+describe("GET /api/patients/:id", () => {
+  let app: express.Express;
+  let clinicianF: TestClinician;
+  let clinicianG: TestClinician;
+  let patientOwnedByF: string;
+
+  beforeAll(async () => {
+    app = buildApp();
+    clinicianF = await signUpTestClinician("get-patient-f");
+    clinicianG = await signUpTestClinician("get-patient-g");
+
+    const { data, error } = await clinicianF.client
+      .from("patients")
+      .insert({ sex: "female", reference: "Chart F1" })
+      .select()
+      .single();
+    if (error) throw error;
+    patientOwnedByF = data.id;
+  });
+
+  afterAll(async () => {
+    await deleteTestUser(clinicianF.userId);
+    await deleteTestUser(clinicianG.userId);
+  });
+
+  it("returns 401 with no Authorization header", async () => {
+    const response = await request(app).get(`/api/patients/${patientOwnedByF}`);
+    expect(response.status).toBe(401);
+  });
+
+  it("returns the caller's own patient", async () => {
+    const response = await request(app)
+      .get(`/api/patients/${patientOwnedByF}`)
+      .set("Authorization", `Bearer ${clinicianF.accessToken}`);
+
+    expect(response.status).toBe(200);
+    expect(response.body.data).toMatchObject({ id: patientOwnedByF, reference: "Chart F1", sex: "female" });
+  });
+
+  it("returns 404 for another clinician's patient", async () => {
+    const response = await request(app)
+      .get(`/api/patients/${patientOwnedByF}`)
+      .set("Authorization", `Bearer ${clinicianG.accessToken}`);
+
+    expect(response.status).toBe(404);
+    expect(response.body).toEqual({ error: "Patient not found" });
+  });
+
+  it("returns 404 for a well-formed id that matches no patient", async () => {
+    const response = await request(app)
+      .get("/api/patients/00000000-0000-0000-0000-000000000000")
+      .set("Authorization", `Bearer ${clinicianF.accessToken}`);
+
+    expect(response.status).toBe(404);
+  });
+
+  it("rejects a malformed id with 400", async () => {
+    const response = await request(app)
+      .get("/api/patients/not-a-uuid")
+      .set("Authorization", `Bearer ${clinicianF.accessToken}`);
+
+    expect(response.status).toBe(400);
+    expect(response.body).toEqual({ error: "Invalid patient id" });
+  });
+});
+
 async function ownPatientCount(clinician: TestClinician): Promise<number> {
   const { count, error } = await clinician.client
     .from("patients")
@@ -188,10 +254,14 @@ describe("POST /api/patients", () => {
     const response = await request(app)
       .post("/api/patients")
       .set("Authorization", `Bearer ${clinicianC.accessToken}`)
-      .send({ sex: "male" });
+      .send({ sex: "male", reference: "Chart 1" });
 
     expect(response.status).toBe(201);
-    expect(response.body.data).toMatchObject({ sex: "male", clinician_id: clinicianC.userId });
+    expect(response.body.data).toMatchObject({
+      sex: "male",
+      reference: "Chart 1",
+      clinician_id: clinicianC.userId,
+    });
     expect(response.body.data.id).toBeDefined();
   });
 
@@ -201,7 +271,7 @@ describe("POST /api/patients", () => {
     const response = await request(app)
       .post("/api/patients")
       .set("Authorization", `Bearer ${clinicianC.accessToken}`)
-      .send({ sex: "male", clinician_id: clinicianD.userId });
+      .send({ sex: "male", reference: "Chart 2", clinician_id: clinicianD.userId });
 
     expect(response.status).toBe(400);
     expect(await ownPatientCount(clinicianC)).toBe(before);
@@ -213,17 +283,51 @@ describe("POST /api/patients", () => {
     const response = await request(app)
       .post("/api/patients")
       .set("Authorization", `Bearer ${clinicianC.accessToken}`)
-      .send({ sex: "other" });
+      .send({ sex: "other", reference: "Chart 3" });
 
     expect(response.status).toBe(400);
     expect(await ownPatientCount(clinicianC)).toBe(before);
+  });
+
+  it("rejects a missing reference with 400 and writes nothing", async () => {
+    const before = await ownPatientCount(clinicianC);
+
+    const response = await request(app)
+      .post("/api/patients")
+      .set("Authorization", `Bearer ${clinicianC.accessToken}`)
+      .send({ sex: "male" });
+
+    expect(response.status).toBe(400);
+    expect(await ownPatientCount(clinicianC)).toBe(before);
+  });
+
+  it("rejects a duplicate reference for the same clinician with 409 and writes nothing", async () => {
+    const before = await ownPatientCount(clinicianC);
+
+    const response = await request(app)
+      .post("/api/patients")
+      .set("Authorization", `Bearer ${clinicianC.accessToken}`)
+      .send({ sex: "male", reference: "Chart 1" });
+
+    expect(response.status).toBe(409);
+    expect(response.body).toEqual({ error: "Reference already in use" });
+    expect(await ownPatientCount(clinicianC)).toBe(before);
+  });
+
+  it("allows two different clinicians to use the same reference", async () => {
+    const response = await request(app)
+      .post("/api/patients")
+      .set("Authorization", `Bearer ${clinicianD.accessToken}`)
+      .send({ sex: "male", reference: "Chart 1" });
+
+    expect(response.status).toBe(201);
   });
 
   it("a created patient is visible to its owner but not to another clinician", async () => {
     const createResponse = await request(app)
       .post("/api/patients")
       .set("Authorization", `Bearer ${clinicianC.accessToken}`)
-      .send({ sex: "female" });
+      .send({ sex: "female", reference: "Chart 4" });
     const createdId = createResponse.body.data.id;
 
     const ownerView = await request(app)
@@ -256,14 +360,14 @@ describe("POST /api/patients rate limiting", () => {
       const response = await request(app)
         .post("/api/patients")
         .set("Authorization", `Bearer ${clinicianE.accessToken}`)
-        .send({ sex: "male" });
+        .send({ sex: "male", reference: `Chart ${i}` });
       expect(response.status).toBe(201);
     }
 
     const blocked = await request(app)
       .post("/api/patients")
       .set("Authorization", `Bearer ${clinicianE.accessToken}`)
-      .send({ sex: "male" });
+      .send({ sex: "male", reference: "Chart 2" });
 
     expect(blocked.status).toBe(429);
   });

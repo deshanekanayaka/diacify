@@ -44,7 +44,7 @@ describe("recordAssessment", () => {
     userId = data.user!.id;
 
     const { data: patient } = await client
-      .from("patients").insert({ sex: "male" }).select().single();
+      .from("patients").insert({ sex: "male", reference: "Chart 1" }).select().single();
     const { data: visit } = await client
       .from("visits")
       .insert({ patient_id: patient!.id, age: 45, systolic: 128, diastolic: 82, bmi: 27, hba1c: 5.8 })

@@ -63,7 +63,7 @@ describe("risk_assessments row level security", () => {
 
     const { data: patient, error: patientError } = await clinicianA.client
       .from("patients")
-      .insert({ sex: "male" })
+      .insert({ sex: "male", reference: crypto.randomUUID() })
       .select()
       .single();
     if (patientError) throw patientError;
@@ -181,7 +181,7 @@ describe("risk_assessments row level security", () => {
     // as a referential-integrity action, not as the caller's own DELETE.
     const { data: patient } = await clinicianA.client
       .from("patients")
-      .insert({ sex: "female" })
+      .insert({ sex: "female", reference: crypto.randomUUID() })
       .select()
       .single();
     const { data: visit } = await clinicianA.client

@@ -20,7 +20,12 @@ import { logInternalError } from "../internalErrorLog.js";
 // all surfaces as 42501, not a foreign-key violation, because RLS's
 // WITH CHECK is evaluated before the FK constraint gets a chance to run.
 const RLS_VIOLATION = "42501";
+// Postgres's unique_violation code, raised by idx_patients_clinician_id_reference
+// when a clinician reuses a reference on a second patient (migration
+// 20260908100000).
+const UNIQUE_VIOLATION = "23505";
 const PATIENT_NOT_FOUND_BODY = { error: "Patient not found" } as const;
+const DUPLICATE_REFERENCE_BODY = { error: "Reference already in use" } as const;
 
 // The verdict, not the working: a history list wants the category and score
 // beside each visit, and the three raw probabilities would trebl the payload
@@ -107,12 +112,41 @@ export function createPatientsRouter({
     const { data, error } = await client.from("patients").insert(parsed.data).select().single();
 
     if (error) {
+      if (error.code === UNIQUE_VIOLATION) {
+        res.status(409).json(DUPLICATE_REFERENCE_BODY);
+        return;
+      }
       logInternalError("POST /api/patients", error);
       res.status(500).json(INTERNAL_ERROR_BODY);
       return;
     }
 
     res.status(201).json({ data });
+  });
+
+  router.get("/:id", async (req, res) => {
+    const patientId = req.params.id;
+    if (!isUuid(patientId)) {
+      res.status(400).json({ error: "Invalid patient id" });
+      return;
+    }
+
+    const { accessToken } = req.user!;
+    const client = createRequestClient(supabaseUrl, supabasePublishableKey, accessToken);
+
+    const { data, error } = await client.from("patients").select("*").eq("id", patientId).maybeSingle();
+
+    if (error) {
+      logInternalError("GET /api/patients/:id", error);
+      res.status(500).json(INTERNAL_ERROR_BODY);
+      return;
+    }
+    if (!data) {
+      res.status(404).json(PATIENT_NOT_FOUND_BODY);
+      return;
+    }
+
+    res.status(200).json({ data });
   });
 
   router.get("/:id/visits", async (req, res) => {

@@ -11,6 +11,7 @@ import { z } from "zod";
 export const createPatientSchema = z
   .object({
     sex: z.enum(["male", "female"]),
+    reference: z.string().trim().min(1).max(40),
   })
   .strict();
 

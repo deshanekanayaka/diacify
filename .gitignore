@@ -21,3 +21,9 @@ machine-learning/models/*.pkl
 
 # Personal study notes (not project documentation)
 docs/study/
+.impeccable/questions/
+
+# Third-party skills (fetched, not project code)
+.agents/
+.claude/
+skills-lock.json

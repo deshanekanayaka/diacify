@@ -75,7 +75,7 @@ async function seedVisit(
   measurements: Record<string, number | null> = COMPLETE_VISIT,
 ): Promise<string> {
   const { data: patient, error: patientError } = await client
-    .from("patients").insert({ sex: "male" }).select().single();
+    .from("patients").insert({ sex: "male", reference: crypto.randomUUID() }).select().single();
   if (patientError) throw patientError;
 
   const { data, error } = await client
