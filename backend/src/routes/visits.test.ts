@@ -103,7 +103,11 @@ async function seedAssessment(
 }
 
 async function createPatient(client: SupabaseClient): Promise<string> {
-  const { data, error } = await client.from("patients").insert({ sex: "male" }).select().single();
+  const { data, error } = await client
+    .from("patients")
+    .insert({ sex: "male", reference: crypto.randomUUID() })
+    .select()
+    .single();
   if (error) throw error;
   return data.id as string;
 }
@@ -122,7 +126,7 @@ describe("POST /api/patients/:id/visits", () => {
 
     const { data: patientA, error: errorA } = await clinicianA.client
       .from("patients")
-      .insert({ sex: "male" })
+      .insert({ sex: "male", reference: "Patient A" })
       .select()
       .single();
     if (errorA) throw errorA;
@@ -130,7 +134,7 @@ describe("POST /api/patients/:id/visits", () => {
 
     const { data: patientB, error: errorB } = await clinicianB.client
       .from("patients")
-      .insert({ sex: "female" })
+      .insert({ sex: "female", reference: "Patient B" })
       .select()
       .single();
     if (errorB) throw errorB;
@@ -519,7 +523,7 @@ describe("POST /api/patients/:id/visits rate limiting", () => {
 
     const { data, error } = await clinicianC.client
       .from("patients")
-      .insert({ sex: "male" })
+      .insert({ sex: "male", reference: "Patient C" })
       .select()
       .single();
     if (error) throw error;

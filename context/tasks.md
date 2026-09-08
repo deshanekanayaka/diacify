@@ -6,7 +6,7 @@ Don't track workflow steps here. "Open a PR for slice N", "merge X", "push the m
 
 ## Now
 
-_Nothing open right now — see Later below._
+- [ ] Design and build the frontend. No frontend exists yet — backend API (slices 1-11) and ML pipeline are the only things a user could drive today, both via raw HTTP/CLI. Needs a stack decision first (CLAUDE.md D1/D2 — framework, rendering strategy, how it talks to the backend), then vertical slices per screen/flow, same as the backend build.
 
 ## Later — after all phases are complete
 

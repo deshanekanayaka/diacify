@@ -20,7 +20,12 @@ import { logInternalError } from "../internalErrorLog.js";
 // all surfaces as 42501, not a foreign-key violation, because RLS's
 // WITH CHECK is evaluated before the FK constraint gets a chance to run.
 const RLS_VIOLATION = "42501";
+// Postgres's unique_violation code, raised by idx_patients_clinician_id_reference
+// when a clinician reuses a reference on a second patient (migration
+// 20260908100000).
+const UNIQUE_VIOLATION = "23505";
 const PATIENT_NOT_FOUND_BODY = { error: "Patient not found" } as const;
+const DUPLICATE_REFERENCE_BODY = { error: "Reference already in use" } as const;
 
 // The verdict, not the working: a history list wants the category and score
 // beside each visit, and the three raw probabilities would trebl the payload
@@ -107,6 +112,10 @@ export function createPatientsRouter({
     const { data, error } = await client.from("patients").insert(parsed.data).select().single();
 
     if (error) {
+      if (error.code === UNIQUE_VIOLATION) {
+        res.status(409).json(DUPLICATE_REFERENCE_BODY);
+        return;
+      }
       logInternalError("POST /api/patients", error);
       res.status(500).json(INTERNAL_ERROR_BODY);
       return;

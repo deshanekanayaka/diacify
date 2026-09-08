@@ -51,7 +51,7 @@ describe("patients row level security", () => {
 
     const { data, error } = await clinicianA.client
       .from("patients")
-      .insert({ sex: "male" })
+      .insert({ sex: "male", reference: "Patient A" })
       .select()
       .single();
     if (error) throw error;

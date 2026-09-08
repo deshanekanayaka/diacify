@@ -72,7 +72,7 @@ describe("GET /api/patients", () => {
     for (let i = 0; i < 3; i++) {
       const { data, error } = await clinicianA.client
         .from("patients")
-        .insert({ sex: "female" })
+        .insert({ sex: "female", reference: `Patient ${i}` })
         .select()
         .single();
       if (error) throw error;
@@ -188,10 +188,14 @@ describe("POST /api/patients", () => {
     const response = await request(app)
       .post("/api/patients")
       .set("Authorization", `Bearer ${clinicianC.accessToken}`)
-      .send({ sex: "male" });
+      .send({ sex: "male", reference: "Chart 1" });
 
     expect(response.status).toBe(201);
-    expect(response.body.data).toMatchObject({ sex: "male", clinician_id: clinicianC.userId });
+    expect(response.body.data).toMatchObject({
+      sex: "male",
+      reference: "Chart 1",
+      clinician_id: clinicianC.userId,
+    });
     expect(response.body.data.id).toBeDefined();
   });
 
@@ -201,7 +205,7 @@ describe("POST /api/patients", () => {
     const response = await request(app)
       .post("/api/patients")
       .set("Authorization", `Bearer ${clinicianC.accessToken}`)
-      .send({ sex: "male", clinician_id: clinicianD.userId });
+      .send({ sex: "male", reference: "Chart 2", clinician_id: clinicianD.userId });
 
     expect(response.status).toBe(400);
     expect(await ownPatientCount(clinicianC)).toBe(before);
@@ -213,17 +217,51 @@ describe("POST /api/patients", () => {
     const response = await request(app)
       .post("/api/patients")
       .set("Authorization", `Bearer ${clinicianC.accessToken}`)
-      .send({ sex: "other" });
+      .send({ sex: "other", reference: "Chart 3" });
 
     expect(response.status).toBe(400);
     expect(await ownPatientCount(clinicianC)).toBe(before);
+  });
+
+  it("rejects a missing reference with 400 and writes nothing", async () => {
+    const before = await ownPatientCount(clinicianC);
+
+    const response = await request(app)
+      .post("/api/patients")
+      .set("Authorization", `Bearer ${clinicianC.accessToken}`)
+      .send({ sex: "male" });
+
+    expect(response.status).toBe(400);
+    expect(await ownPatientCount(clinicianC)).toBe(before);
+  });
+
+  it("rejects a duplicate reference for the same clinician with 409 and writes nothing", async () => {
+    const before = await ownPatientCount(clinicianC);
+
+    const response = await request(app)
+      .post("/api/patients")
+      .set("Authorization", `Bearer ${clinicianC.accessToken}`)
+      .send({ sex: "male", reference: "Chart 1" });
+
+    expect(response.status).toBe(409);
+    expect(response.body).toEqual({ error: "Reference already in use" });
+    expect(await ownPatientCount(clinicianC)).toBe(before);
+  });
+
+  it("allows two different clinicians to use the same reference", async () => {
+    const response = await request(app)
+      .post("/api/patients")
+      .set("Authorization", `Bearer ${clinicianD.accessToken}`)
+      .send({ sex: "male", reference: "Chart 1" });
+
+    expect(response.status).toBe(201);
   });
 
   it("a created patient is visible to its owner but not to another clinician", async () => {
     const createResponse = await request(app)
       .post("/api/patients")
       .set("Authorization", `Bearer ${clinicianC.accessToken}`)
-      .send({ sex: "female" });
+      .send({ sex: "female", reference: "Chart 4" });
     const createdId = createResponse.body.data.id;
 
     const ownerView = await request(app)
@@ -256,14 +294,14 @@ describe("POST /api/patients rate limiting", () => {
       const response = await request(app)
         .post("/api/patients")
         .set("Authorization", `Bearer ${clinicianE.accessToken}`)
-        .send({ sex: "male" });
+        .send({ sex: "male", reference: `Chart ${i}` });
       expect(response.status).toBe(201);
     }
 
     const blocked = await request(app)
       .post("/api/patients")
       .set("Authorization", `Bearer ${clinicianE.accessToken}`)
-      .send({ sex: "male" });
+      .send({ sex: "male", reference: "Chart 2" });
 
     expect(blocked.status).toBe(429);
   });

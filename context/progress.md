@@ -2,6 +2,8 @@
 
 Completed features/tasks, one line each. Newest first.
 
+- `patients.reference` — clinician-chosen chart label added (free text, 1-40 chars, unique per clinician via `(clinician_id, reference)` composite index), resolving ADR-038's deferred rules (ADR-040); `POST /api/patients` now requires it and maps a duplicate to `409` instead of `500`; migration verified against a full local `supabase db reset`, 167 backend tests passing including new missing/duplicate-reference cases
+- Frontend visual direction — patient list + add patient shaped and locked via `/impeccable shape` + `craft`: "Tabbed Chart Binder" world (kraft/manila ground, colored index tabs, monospace chart labels), recorded as the direction contract in `.impeccable/surfaces/patients.md`; frontend session handling decided as its own ADR (ADR-039: Supabase JS client, default persisted storage)
 - `service_role` table grants — revoked to zero on `patients`/`visits`/`risk_assessments` and asserted from the ACL (ADR-035), matching local's already-locked-down state; migration run and independently re-verified against the hosted project (zero rows for `service_role` in `pg_class.relacl`)
 - Backend API design, slice 11 — `GET /api/patients/:id/visits` accepts `from`/`to` query params bounding `visit_date`, both optional and independent; `total` reflects the filtered count, not the patient's overall visit count
 - Auth — `requireAuth` now maps a timed-out JWKS fetch (`JWKSTimeout`) to 503 instead of 401; it extends `JOSEError` like a bad token does, so it was wrongly telling clinicians to log in again during an outage they can't fix. `JWKSNoMatchingKey` deliberately kept at 401 (a forged/garbage kid, not a rotation race)

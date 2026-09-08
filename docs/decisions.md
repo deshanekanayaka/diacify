@@ -1243,3 +1243,168 @@ migration's own assertion passes. Hosted verification is deferred to
 whoever runs this migration there — re-run the same `aclexplode` query
 afterward to confirm the grant actually changed, since this investigation
 could not query hosted directly.
+
+---
+
+## ADR-036 — Frontend tooling: Vite + React Router, not Next.js
+
+**Status:** Accepted — 2026-09-07
+
+**Context:** No frontend exists yet (CLAUDE.md §17 D1/D2 left the stack an
+open question). Two earlier ADRs already narrowed the choice: ADR-006 put
+the frontend on its own origin (Vercel), talking to the Express backend
+only over CORS — not colocated or sharing a process — and ADR-004 requires
+the frontend to sit in the same TypeScript codebase to import the shared
+Zod schema. What remained open was the React tooling itself: a plain SPA
+bundler, or Next.js.
+
+**Decision:** Vite + React Router, deployed as a static client-only bundle.
+
+**Rejected:** Next.js used purely as a client (App Router, `"use client"`
+everywhere, no API routes, no server actions). Next's core value —
+server components, server-side data fetching, SSR for SEO — doesn't apply
+to an authenticated clinician tool backed by an existing API; adopting it
+would mean carrying a server-first framework's mental model (server/client
+component boundary) for a feature deliberately left unused, purely for its
+router and Vercel-native deploy. Directly contradicts CLAUDE.md D2: "Do not
+add an API layer solely because 'frontend applications need APIs.' Use the
+simplest architecture that works."
+
+**Consequences:** Routing (react-router-dom) and auth-gated routes are
+hand-rolled rather than file-based. In exchange, the frontend has exactly
+one rendering mode — the backend remains the sole owner of business logic,
+auth verification, and data access, and the frontend's job stays thin:
+render, call the API, hold client state.
+
+---
+
+## ADR-037 — Data fetching: TanStack Query, not hand-rolled fetch hooks
+
+**Status:** Accepted — 2026-09-07
+
+**Context:** No frontend code exists yet. The planned screens — paginated
+patient list, per-patient visit history (date-range filterable per
+ADR-034), create-patient and create-visit forms (the latter returning a
+risk assessment inline per ADR-032) — all need loading/error states
+(CLAUDE.md D2) and, after a create mutation, the relevant list has to
+reflect the new row without a manual reload.
+
+**Decision:** TanStack Query (`useQuery` for reads, `useMutation` for
+writes, query-key invalidation to refresh a list after a mutation).
+
+**Rejected:** A hand-rolled `fetch` wrapper plus `useState`/`useEffect` per
+screen. Not a one-off cost — it recurs at every screen, and each
+reimplementation has to separately get race conditions (a fast second
+request landing before a slow first one) and post-mutation cache staleness
+right. That's the exact undifferentiated problem this class of library
+exists to remove, not a case of reaching for a dependency before trying
+stdlib/native first.
+
+**Consequences:** One more dependency and a caching model to learn (stale
+time, query keys). In exchange, every screen gets loading/error/refetch
+state and cache invalidation from two hooks instead of reimplementing them.
+
+---
+
+## ADR-038 — Patient identification: clinician-assigned `reference`, not a legal name
+
+**Status:** Accepted — 2026-09-07
+
+**Context:** `patients` (migrations 20260901202128, 20260903183030) stores
+only `id uuid`, `clinician_id`, `created_at`, `sex` — no field a clinician
+can use to recognize a patient in a list. Neither the rebuild nor legacy
+ever had one. Surfaced while designing the patient-list screen: the list
+has no primary label to show per row without this.
+
+**Decision:** Add a clinician-assigned `reference` field to `patients` —
+a short label the clinician chooses (e.g. a chart number or short label),
+not a full legal name. Not yet migrated; this ADR records the schema
+decision, the migration itself is a backend slice, not a frontend/design
+task.
+
+**Rejected:** A real `display_name`/legal-name field (Option A) — deferred
+pending an explicit answer on whether this system is meant to hold real
+patient identity at all; storing a legal name raises the stakes of the
+existing RLS ownership boundary (ADR-011) in a way a clinician-chosen
+label doesn't. No identifier at all (Option C) — doesn't function as a
+clinician tool past a handful of patients; a UUID isn't something a
+clinician can recall or search by.
+
+**Consequences:** The patient-list and create-patient screens (design
+in progress) treat `reference` as the primary label. The migration
+(column, validation length/charset, whether it's unique per clinician)
+and its RLS implications are still open — to be specified when that
+backend slice is scheduled, not now.
+
+---
+
+## ADR-039 — Frontend session handling: Supabase JS client, default persisted storage
+
+**Status:** Accepted — 2026-09-08
+
+**Context:** No frontend code exists yet. Every patient-list/add-patient
+request needs a Supabase-issued JWT attached as a Bearer header; the
+backend (slice 1) verifies it locally against JWKS but has no opinion on
+how the browser obtains or stores it. Nothing in ADR-006/036/037 decided
+this, and it wasn't part of the shaped patient-list surface either — that
+brief assumed an authenticated session already exists. Raised as a
+DECISION REQUIRED before writing the first line of API-calling frontend
+code, since it's a real security choice (where the session token lives in
+the browser, how it survives a refresh).
+
+**Decision:** Use `@supabase/supabase-js` in the frontend for auth only
+(sign-in + session), the same client library the backend already depends
+on for its own Supabase access. It owns token refresh and storage. Default
+(persisted, i.e. `localStorage`) storage, not a custom session-only
+adapter. TanStack Query calls attach `session.access_token` as the Bearer
+header.
+
+**Rejected:** A hand-rolled fetch against the Supabase Auth REST endpoints
+with manual token storage — reimplements refresh-before-expiry logic the
+SDK already gets right, the exact "don't build what a library already
+does" case. A custom session-only (non-persisted) storage adapter was also
+on the table but not chosen: RLS already bounds a leaked token to that one
+clinician's own rows, and the persistence trade-off (a token surviving a
+closed tab) wasn't judged a serious enough risk here to give up the
+SDK's default refresh/storage behavior for.
+
+**Consequences:** One more frontend dependency (`@supabase/supabase-js`,
+already a backend dependency, so no new supply-chain surface). A signed-in
+clinician's session survives closing the tab; sign-out must explicitly
+call the SDK's sign-out to clear it, not just navigate away.
+
+---
+
+## ADR-040 — `patients.reference`: free text, 1-40 chars, unique per clinician
+
+**Status:** Accepted — 2026-09-08
+
+**Context:** ADR-038 decided *that* `patients` gets a clinician-assigned
+`reference` field but explicitly left its rules (length/charset,
+uniqueness) open for when the backend slice was scheduled. That moment
+arrived building the patient-list + add-patient frontend slice: the
+shaped screen needs `reference` to actually exist, so the migration had to
+happen first.
+
+**Decision:** `reference text not null`, `char_length(reference) between 1
+and 40`, unique per clinician via a composite index on
+`(clinician_id, reference)` — not globally unique. Migration
+`20260908100000_add_patient_reference.sql`, verified against a full local
+`supabase db reset` (all 12 migrations apply cleanly on an empty
+database) and the full backend test suite (167 tests, including new
+missing-reference/duplicate-reference cases) run against that local
+stack. `POST /api/patients` now maps the resulting `23505` unique
+violation to `409 { error: "Reference already in use" }` rather than a
+generic 500.
+
+**Rejected:** No uniqueness constraint (simpler migration, but silently
+lets a clinician re-enter the same chart number as two different
+patients — the exact accidental-duplicate case a reference field exists
+to catch). Global (cross-clinician) uniqueness — no reason two different
+clinicians' own chart-numbering schemes should collide; ownership is
+already per-clinician everywhere else in this schema.
+
+**Consequences:** `database.types.ts` regenerated via
+`supabase gen types typescript --local` against the reset local stack, not
+hand-edited. `createPatientSchema` now requires `reference` (trimmed,
+1-40 chars) alongside `sex`.
