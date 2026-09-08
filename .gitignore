@@ -21,3 +21,4 @@ machine-learning/models/*.pkl
 
 # Personal study notes (not project documentation)
 docs/study/
+.impeccable/questions/
