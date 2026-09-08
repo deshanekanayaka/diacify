@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-09-08T09:11:04Z",
+  "generatedAt": "2026-09-08T00:00:00Z",
   "title": "Design System: Diacify",
   "extensions": {
     "colorMeta": {
@@ -11,14 +11,18 @@
       "ink": { "role": "neutral", "displayName": "Near-Black Ink", "canonical": "#262220" },
       "ink-muted": { "role": "neutral", "displayName": "Muted Ink", "canonical": "#6b5f52" },
       "tab-blank": { "role": "secondary", "displayName": "Rust / Blank-Filing Red", "canonical": "#b0473c" },
-      "danger": { "role": "danger", "displayName": "Danger", "canonical": "#a3352b" }
+      "tab-blank-text": { "role": "secondary", "displayName": "Rust Text-Safe", "canonical": "#8f362c" },
+      "danger": { "role": "danger", "displayName": "Danger / Risk High", "canonical": "#a3352b" },
+      "risk-medium": { "role": "tertiary", "displayName": "Risk Medium — Gold", "canonical": "#a67c2e" },
+      "risk-medium-text": { "role": "tertiary", "displayName": "Risk Medium — Gold (text-safe)", "canonical": "#83601f" }
     },
     "typographyMeta": {
-      "label": { "displayName": "Chart Label (Mono)", "purpose": "Patient reference, date, and the reference input field only." },
-      "body": { "displayName": "Body (System Sans)", "purpose": "All other UI text: form labels, buttons, prompts, errors." }
+      "label": { "displayName": "Clinical/Identity Register (Mono)", "purpose": "Patient reference, dates, vitals values, lab units, risk score and category." },
+      "heading": { "displayName": "Page Heading (Mono)", "purpose": "The patient reference as the detail page's h1 — the system's only heading tier, still identity-derived." },
+      "body": { "displayName": "Body (System Sans)", "purpose": "All other UI text: form labels, buttons, prompts, errors, tab strip labels." }
     },
     "shadows": [
-      { "name": "folder-edge", "value": "0 2px 0 rgba(38, 34, 32, 0.18)", "purpose": "Flat offset shadow on every tab row, standing in for a folder edge. The system's only shadow." }
+      { "name": "folder-edge", "value": "0 2px 0 rgba(38, 34, 32, 0.18)", "purpose": "Flat offset shadow on every tab-shaped element (patient tabs, RiskResult, history rows), standing in for a folder edge. The system's only shadow." }
     ]
   },
   "components": [
@@ -42,53 +46,81 @@
       "name": "Primary Button",
       "kind": "button",
       "refersTo": "button-primary",
-      "description": "Form submit action (e.g. Save on the new-chart form).",
-      "html": "<button class=\"ds-btn-primary\">Save</button>",
-      "css": ".ds-btn-primary { background: #3e6e5e; color: #f5f1e6; border: none; border-radius: 6px; padding: 0.5rem 1rem; font-weight: 600; cursor: pointer; }"
+      "description": "Form submit action (new-chart Save, VisitForm Record visit).",
+      "html": "<button class=\"ds-btn-primary\">Record visit</button>",
+      "css": ".ds-btn-primary { background: #3e6e5e; color: #f5f1e6; border: none; border-radius: 6px; padding: 0.6rem 1.25rem; font-weight: 600; cursor: pointer; transition: background 0.15s; } .ds-btn-primary:hover { background: #345c4e; } .ds-btn-primary:disabled { opacity: 0.7; cursor: not-allowed; } .ds-btn-primary:focus-visible { outline: 2px solid #3e6e5e; outline-offset: 2px; }"
     },
     {
       "name": "Secondary Button",
       "kind": "button",
       "refersTo": "button-secondary",
-      "description": "Form dismiss action (e.g. Cancel on the new-chart form).",
+      "description": "Form dismiss / post-submit actions (Cancel, Record another visit, View in history).",
       "html": "<button class=\"ds-btn-secondary\">Cancel</button>",
-      "css": ".ds-btn-secondary { background: none; color: #262220; border: 1px solid rgba(38, 34, 32, 0.25); border-radius: 6px; padding: 0.5rem 1rem; cursor: pointer; }"
+      "css": ".ds-btn-secondary { background: none; color: #262220; border: 1px solid rgba(38, 34, 32, 0.25); border-radius: 6px; padding: 0.5rem 1rem; cursor: pointer; } .ds-btn-secondary:hover { background: rgba(38, 34, 32, 0.06); } .ds-btn-secondary:focus-visible { outline: 2px solid #3e6e5e; outline-offset: 2px; }"
     },
     {
       "name": "Reference Input",
       "kind": "input",
       "refersTo": "input-text",
-      "description": "Monospace text field for the patient reference, in the new-chart form.",
-      "html": "<label class=\"ds-field\">Reference<input class=\"ds-input\" type=\"text\" maxlength=\"40\" /></label>",
-      "css": ".ds-field { display: flex; flex-direction: column; gap: 0.25rem; font-size: 0.85rem; color: #6b5f52; } .ds-input { font-family: ui-monospace, \"SF Mono\", Menlo, monospace; font-size: 1rem; padding: 0.4rem 0.5rem; border: 1px solid rgba(38, 34, 32, 0.25); border-radius: 4px; }"
+      "description": "Monospace text/number field: the patient reference (list) or a VisitForm vitals value.",
+      "html": "<label class=\"ds-field\">Systolic BP <span class=\"ds-field__unit\">(mmHg)</span><input class=\"ds-input\" type=\"number\" step=\"0.1\" /></label>",
+      "css": ".ds-field { display: flex; flex-direction: column; gap: 0.3rem; font-size: 0.85rem; color: #6b5f52; } .ds-field__unit { font-family: ui-monospace, \"SF Mono\", Menlo, monospace; font-size: 0.75rem; } .ds-input { font-family: ui-monospace, \"SF Mono\", Menlo, monospace; font-size: 1rem; padding: 0.4rem 0.5rem; border: 1px solid rgba(38, 34, 32, 0.25); border-radius: 4px; color: #262220; } .ds-input:focus-visible { outline: 2px solid #3e6e5e; outline-offset: 2px; }"
+    },
+    {
+      "name": "Visit Tab Strip",
+      "kind": "nav",
+      "refersTo": "visit-tab-strip-item",
+      "description": "The patient-detail screen's own mini History/New Visit tabs, top-rounded, joining their content panel.",
+      "html": "<div class=\"ds-visit-strip\" role=\"tablist\"><button type=\"button\" role=\"tab\" aria-selected=\"true\">History</button><button type=\"button\" role=\"tab\" aria-selected=\"false\">New Visit</button></div>",
+      "css": ".ds-visit-strip { display: flex; gap: 0.4rem; margin-bottom: 1.25rem; } .ds-visit-strip button { font-size: 0.9rem; font-weight: 600; padding: 0.5rem 1.1rem; background: transparent; color: #6b5f52; border: 1px solid rgba(38, 34, 32, 0.2); border-bottom: none; border-radius: 8px 8px 0 0; cursor: pointer; } .ds-visit-strip button:hover { color: #262220; } .ds-visit-strip button[aria-selected='true'] { background: #fff9ec; color: #3e6e5e; border-color: #3e6e5e; } .ds-visit-strip button:focus-visible { outline: 2px solid #3e6e5e; outline-offset: 2px; }"
+    },
+    {
+      "name": "Risk Result",
+      "kind": "custom",
+      "refersTo": "risk-result",
+      "description": "The scored risk verdict as a dedicated large monospace readout; low/medium/high spine and text color, stays inside the cream/kraft world.",
+      "html": "<div class=\"ds-risk-result ds-risk-result--medium\"><span class=\"ds-risk-result__category\">medium risk</span><span class=\"ds-risk-result__score\">Score 54.0 / 100</span></div>",
+      "css": ".ds-risk-result { padding: 1.25rem 1.5rem; background: #fff9ec; border: 1px solid rgba(38, 34, 32, 0.1); border-radius: 0 10px 10px 0; box-shadow: 0 2px 0 rgba(38, 34, 32, 0.18); display: flex; flex-direction: column; gap: 0.35rem; } .ds-risk-result--low { border-left: 6px solid #3e6e5e; } .ds-risk-result--low .ds-risk-result__category { color: #3e6e5e; } .ds-risk-result--medium { border-left: 6px solid #a67c2e; } .ds-risk-result--medium .ds-risk-result__category { color: #a67c2e; } .ds-risk-result--high { border-left: 6px solid #a3352b; } .ds-risk-result--high .ds-risk-result__category { color: #a3352b; } .ds-risk-result__category { font-family: ui-monospace, \"SF Mono\", Menlo, monospace; font-size: 2.25rem; font-weight: 600; letter-spacing: 0.02em; text-transform: uppercase; line-height: 1; } .ds-risk-result__score { font-family: ui-monospace, \"SF Mono\", Menlo, monospace; font-size: 0.9rem; color: #6b5f52; }"
+    },
+    {
+      "name": "Visit History Row",
+      "kind": "custom",
+      "refersTo": "tab-patient",
+      "description": "One past visit as a compact tab that expands in place to a full vitals detail grid; spine colored by that visit's risk category.",
+      "html": "<li class=\"ds-history-row ds-history-row--high\"><button type=\"button\" class=\"ds-history-row__summary\" aria-expanded=\"false\"><span class=\"ds-history-row__date\">Sep 1, 2026</span><span class=\"ds-history-row__badge\">high</span></button></li>",
+      "css": ".ds-history-row { background: #fff9ec; border: 1px solid rgba(38, 34, 32, 0.1); border-radius: 0 10px 10px 0; box-shadow: 0 2px 0 rgba(38, 34, 32, 0.18); overflow: hidden; } .ds-history-row--low { border-left: 6px solid #3e6e5e; } .ds-history-row--medium { border-left: 6px solid #a67c2e; } .ds-history-row--high { border-left: 6px solid #a3352b; } .ds-history-row__summary { width: 100%; display: flex; align-items: baseline; justify-content: space-between; gap: 1rem; padding: 0.85rem 1.25rem; background: none; border: none; text-align: left; cursor: pointer; } .ds-history-row__summary:hover { background: #fef4dc; } .ds-history-row__date { font-family: ui-monospace, \"SF Mono\", Menlo, monospace; font-size: 1rem; } .ds-history-row__badge { font-family: ui-monospace, \"SF Mono\", Menlo, monospace; font-size: 0.8rem; text-transform: uppercase; color: #6b5f52; } .ds-history-row__summary:focus-visible { outline: 2px solid #3e6e5e; outline-offset: 2px; }"
     }
   ],
   "narrative": {
     "northStar": "The Tabbed Chart Binder",
-    "overview": "Diacify's patient list reads as a drawer of physical chart dividers, not a generic rounded-card app list. Each patient is a tab you'd flip past in a manila folder binder: a kraft-colored ground, a cream tab surface, a solid color spine on the left edge, and a chart-label typewriter register for the reference and date. The system is flat and restrained by deliberate choice — it borrows the folder-tab silhouette (the asymmetric flipped-corner radius, the colored spine, a thin flat offset shadow standing in for a folder edge) without reaching for literal paper texture, grain, or skeuomorphic ornament. This is a solo clinician's live, in-the-room tool, so the system stays quiet: one institutional teal accent marks the committed/active action, a rust-red spine marks the one blank, not-yet-committed tab, and everything else recedes into ink-on-kraft text.",
+    "overview": "Diacify reads as a drawer of physical chart dividers, not a generic rounded-card app. Each patient is a tab you'd flip past in a manila folder binder: a kraft-colored ground, a cream tab surface, a solid color spine on the left edge, and a chart-label typewriter register for identity and clinical data. The system is flat and restrained by deliberate choice — it borrows the folder-tab silhouette (the asymmetric flipped-corner radius, the colored spine, a thin flat offset shadow standing in for a folder edge) without reaching for literal paper texture, grain, or skeuomorphic ornament. The second shipped surface — the per-patient detail screen — extends the same world one level deeper instead of introducing a new one: a patient's own chart gets its own miniature pair of chart-tabs (History / New Visit), built from the same tab-shape and spine language at a smaller scale. Two raises were made on top of the committed world, and both stayed inside it: the scored risk verdict gets a large, dedicated monospace readout (still cream, still the flipped tab radius, still the folder-edge shadow — deliberately not a dark instrument-panel treatment), and past-visit rows expand in place as an accordion instead of navigating to a second screen.",
     "keyCharacteristics": [
       "Kraft/manila ground with one institutional teal accent, used sparingly",
-      "Chart-label typography set in monospace; everything else in the system sans stack",
-      "Flat folder-tab silhouette: asymmetric radius, colored left spine, thin flat offset shadow — no blur, no paper grain, no literal skeuomorphism",
-      "Only one surface is shaped so far: the patient list / add-patient drawer"
+      "A clinical/identity register set in monospace (patient reference, dates, vitals values, risk score and category); everything else in the system sans stack",
+      "Flat folder-tab silhouette: asymmetric radius, colored left spine, thin flat offset shadow — no blur, no paper grain, no literal skeuomorphism — now reused at two scales (patient tabs, and the mini History/New Visit tabs and accordion rows inside a patient's own chart)",
+      "Two surfaces are shaped so far: the patient list / add-patient drawer, and the per-patient detail chart (history, new-visit entry, risk readout)"
     ],
     "rules": [
-      { "name": "The One Spine Rule", "body": "A tab's left-edge spine carries exactly one color and one state: solid teal for a committed patient record, dashed rust for the blank unopened new-chart tab, solid rust once that tab is open and mid-entry. No other spine color exists in the shipped system.", "section": "colors" },
-      { "name": "The Mono-Is-Identity Rule", "body": "Monospace is reserved for chart-identity data (reference, date, the reference input) and nothing else.", "section": "typography" },
-      { "name": "The One Shadow Rule", "body": "There is exactly one shadow value in the system, used identically on every tab. Don't introduce blur, layered shadows, or hover-elevation.", "section": "elevation" },
-      { "name": "The Flipped-Tab Radius", "body": "Every tab uses an asymmetric radius (0 10px 10px 0) — square on the left where the spine sits, rounded on the right. Buttons and inputs use ordinary symmetric radii instead.", "section": "typography" }
+      { "name": "The One Spine Rule", "body": "A patient-list tab's left-edge spine carries exactly one color and one state: solid teal for a committed patient record, dashed rust for the blank unopened new-chart tab, solid rust once that tab is open and mid-entry. No filing-color spine carries clinical meaning.", "section": "colors" },
+      { "name": "The Risk-Is-Its-Own-Scale Rule", "body": "Clinical risk (low/medium/high) is a separate three-value scale from filing status. It reuses teal (low) and danger red (high) rather than inventing new hues for those two ends, and adds exactly one new hue (gold, medium) for the tier neither existing color could honestly express.", "section": "colors" },
+      { "name": "The Mono-Is-Clinical-Register Rule", "body": "Evidenced expansion of the prior Mono-Is-Identity rule: monospace now consistently marks any clinical or numeric data point (vitals, lab units, risk score, risk category, the page heading), not just chart identity — while system sans stays reserved for UI chrome, labels, and prose.", "section": "typography" },
+      { "name": "The One Shadow Rule", "body": "There is exactly one shadow value in the system, expressed as --tab-shadow and reused identically across both surfaces (patient tabs, RiskResult, history rows). Don't introduce blur, layered shadows, or hover-elevation.", "section": "elevation" }
     ],
     "dos": [
-      "Do keep the flipped 0 10px 10px 0 radius exclusive to tab-shaped rows — it's the system's one signature silhouette, not a general card radius.",
-      "Do keep the folder-edge shadow flat (0 2px 0, no blur) on every tab; it is the system's only shadow.",
-      "Do reserve monospace (--font-label) for chart-identity data (reference, date) — never for headings, buttons, or body copy.",
-      "Do keep filing color (rust, #b0473c) and the institutional accent (teal, #3e6e5e) semantically separate — spine color signals \"committed record vs. blank tab,\" never clinical risk."
+      "Do keep the flipped 0 10px 10px 0 radius exclusive to tab-shaped rows (patient tabs, the new-chart tab, RiskResult, history rows) — the system's one signature side-tab silhouette.",
+      "Do use the 8px 8px 0 0 top-tab radius only for tab strips that sit above the content they switch (VisitTabStrip) — a distinct, position-driven variant of the same family.",
+      "Do keep the folder-edge shadow (--tab-shadow) flat and identical everywhere it's used; it is the system's only shadow.",
+      "Do reserve monospace (--font-label) for the clinical/identity register — reference, date, vitals, lab units, risk score/category, the one heading — never for decorative headings, buttons, or prose.",
+      "Do keep filing color (rust) and clinical risk color (teal/gold/danger) semantically separate scales, even though the medium-risk gold and the unused filing gold happen to be visually similar.",
+      "Do check contrast against the actual background (kraft ground vs. cream tab surface) before adding a new color at text size — the system already carries two evidenced fixes for this."
     ],
     "donts": [
       "Don't add a drop-shadow, blur, or hover-elevation to a tab — the system uses exactly one flat offset shadow, on purpose.",
-      "Don't introduce a second accent color for a new UI role without checking it against the existing teal/rust split first — the palette is currently two functional hues plus neutrals, not an open set.",
-      "Don't treat SignInForm's inline, unstyled markup as part of this system. It's explicitly out of scope for the Tabbed Chart Binder direction and still needs its own design pass.",
-      "Don't carry the unused #C9A15A gold filing color from the direction contract into new work as if it shipped — it never appears in the build; only #b0473c does."
+      "Don't introduce a fourth risk tier or a new UI accent color without checking it against the existing teal/rust/gold/danger set first.",
+      "Don't treat SignInForm's inline, unstyled markup as part of this system. Still out of scope, still needs its own design pass.",
+      "Don't carry the unused #C9A15A gold filing color from the direction contract into new work as if it shipped. The medium-risk gold (#a67c2e) is a real but separate token.",
+      "Don't promote the VisitHistoryRow summary's #fef4dc hover fill into a system-wide token; it's evidenced exactly once and isn't a system yet.",
+      "Don't reach for a dark instrument-panel surface for readouts or scores — RiskResult is the confirmed counter-example: the build kept the scored verdict inside the committed kraft/cream material instead of introducing a competing one."
     ]
   }
 }
