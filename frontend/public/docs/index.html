@@ -202,16 +202,18 @@ a { color: var(--accent); }
   margin-top: var(--s5);
 }
 .part {
+  display: block;
   border: 1px solid var(--separator-strong);
   background: var(--surface);
   padding: var(--s3) var(--s4);
   font-size: 0.875rem;
   color: var(--ink-secondary);
+  text-decoration: none;
   flex: 1 1 16rem;
+  transition: border-color 120ms ease, background 120ms ease;
 }
-.part strong { color: var(--ink); display: block; font-weight: 600; }
-.part--current { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
-.part--current strong { color: var(--accent-ink); }
+.part:hover { border-color: var(--accent); background: var(--accent-wash); text-decoration: none; }
+.part strong { color: var(--accent); display: block; font-weight: 600; }
 
 /* ---------- sections ---------- */
 
@@ -698,15 +700,23 @@ footer {
 
 <div class="doc">
   <nav class="rail" aria-label="Contents">
-    <p class="rail__label">Part 1 — Contents</p>
+    <p class="rail__label">High level</p>
     <ol>
       <li><a href="#what"><span>1</span><span>What Diacify is</span></a></li>
       <li><a href="#lifecycles"><span>2</span><span>Two lifecycles, one file</span></a></li>
       <li><a href="#map"><span>3</span><span>The map</span></a></li>
       <li><a href="#domain"><span>4</span><span>The domain</span></a></li>
       <li><a href="#ownership"><span>5</span><span>The one idea</span></a></li>
-      <li><a href="#checks"><span>6</span><span>Check yourself</span></a></li>
-      <li><a href="#next"><span>7</span><span>What Part 2 covers</span></a></li>
+    </ol>
+    <p class="rail__label" style="margin-top: var(--s5)">Low level</p>
+    <ol>
+      <li><a href="#request"><span>6</span><span>One request, end to end</span></a></li>
+      <li><a href="#gates"><span>7</span><span>The gates</span></a></li>
+      <li><a href="#security"><span>8</span><span>Data and security</span></a></li>
+      <li><a href="#serving"><span>9</span><span>ML serving</span></a></li>
+      <li><a href="#training"><span>10</span><span>ML training</span></a></li>
+      <li><a href="#seams"><span>11</span><span>The seams</span></a></li>
+      <li><a href="#checks"><span>12</span><span>Check yourself</span></a></li>
     </ol>
   </nav>
 
@@ -714,7 +724,7 @@ footer {
     <header class="masthead">
       <div class="masthead__meta">
         <span class="wordmark">Diacify</span>
-        <span class="eyebrow">Architecture · Part 1</span>
+        <span class="eyebrow">Developer docs</span>
       </div>
       <h1>How Diacify works, from the top down</h1>
       <p class="lede">
@@ -724,16 +734,16 @@ footer {
         of this codebase assumed.
       </p>
       <div class="part-strip">
-        <div class="part part--current">
-          <strong>Part 1 · High level</strong>
-          The shape of the system and the four ideas you need before any
+        <a class="part" href="#what">
+          <strong>High level</strong>
+          The shape of the system and the five ideas you need before any
           code makes sense. Readable start to finish in about ten minutes.
-        </div>
-        <div class="part">
-          <strong>Part 2 · Low level</strong>
+        </a>
+        <a class="part" href="#request">
+          <strong>Low level</strong>
           One request traced end to end, the gates, RLS in detail, ML
           serving, the training pipeline, and the seams.
-        </div>
+        </a>
       </div>
     </header>
 
@@ -1444,15 +1454,545 @@ flowchart TD
       </ul>
     </section>
 
-    <section id="checks">
+    <section id="request">
       <div class="section-head">
         <span class="num">06</span>
+        <h2>One request, end to end</h2>
+      </div>
+
+      <p class="prose">
+        Everything in Part 1 shows up in one call. Recording a visit is the
+        only endpoint that touches all four workspaces and both ML
+        lifecycles' meeting point in a single round trip, so it is the one
+        worth tracing in full — real status codes, real function names.
+      </p>
+
+      <figure class="diagram">
+<pre class="mermaid">
+%%{init: {'theme':'base','themeVariables':{'primaryColor':'#eaf5ee','primaryTextColor':'#16261e','primaryBorderColor':'#16382b','secondaryColor':'#f4f1e9','secondaryTextColor':'#16261e','secondaryBorderColor':'#c9d6cb','tertiaryColor':'#ffffff','tertiaryTextColor':'#16261e','tertiaryBorderColor':'#c9d6cb','lineColor':'#435146','textColor':'#16261e','attributeBackgroundColorOdd':'#ffffff','attributeBackgroundColorEven':'#f4f1e9','nodeBorder':'#16382b','mainBkg':'#eaf5ee','edgeLabelBackground':'#fbf9f3','actorBkg':'#eaf5ee','actorBorder':'#16382b','actorTextColor':'#16261e','signalColor':'#435146','signalTextColor':'#16261e','labelBoxBkgColor':'#f4f1e9','labelBoxBorderColor':'#c9d6cb','labelTextColor':'#16261e','noteBkgColor':'#cfe3e8','noteBorderColor':'#16382b','noteTextColor':'#16261e','fontFamily':'Inter, system-ui, sans-serif','fontSize':'12px'}}}%%
+sequenceDiagram
+    participant B as Browser
+    participant S as Backend
+    participant P as Postgres
+
+    B->>S: POST /api/patients/:id/visits&lt;br/&gt;Bearer JWT, JSON body
+    activate S
+    S->>S: requireAuth — verify JWT locally
+    Note right of S: 401 bad token&lt;br/&gt;503 JWKS unreachable
+    S->>S: rateLimit — 20 writes/min, keyed by clinician id
+    Note right of S: 429 over budget
+    S->>S: createVisitSchema().safeParse(body)
+    Note right of S: 400 invalid shape
+    S->>P: insert into visits (as the caller's own JWT)
+    activate P
+    P-->>S: 42501 if the patient isn't the caller's → 404
+    P-->>S: inserted visit, plus patients(sex)
+    deactivate P
+    S->>S: assessRisk() — in-process, no network hop
+    S->>P: insert into risk_assessments
+    activate P
+    P-->>S: stored assessment (or the existing one, on a retry)
+    deactivate P
+    S-->>B: 201 { visit, risk_assessment }
+    deactivate S
+    B->>B: invalidate cached queries, navigate to the patient
+</pre>
+        <figcaption>
+          Four rejection points, four different status codes — each one
+          the earliest point that request could safely be refused.
+        </figcaption>
+      </figure>
+
+      <p class="sublabel">Where each step actually lives</p>
+      <div class="scroll-x">
+        <table>
+          <thead>
+            <tr><th>Step</th><th>File</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>Form submit</td><td class="mono">frontend/src/pages/RecordVisitPage.tsx</td></tr>
+            <tr><td>Request shape (compile-time only, see below)</td><td class="mono">shared/src/createVisitSchema.ts</td></tr>
+            <tr><td>requireAuth</td><td class="mono">backend/src/middleware/requireAuth.ts</td></tr>
+            <tr><td>rateLimit</td><td class="mono">backend/src/middleware/rateLimit.ts</td></tr>
+            <tr><td>Route handler, validation, insert</td><td class="mono">backend/src/routes/patients.ts</td></tr>
+            <tr><td>Feature vector → forest → verdict</td><td class="mono">backend/src/ml/features.ts, forest.ts, riskAssessment.ts</td></tr>
+            <tr><td>Persist the assessment</td><td class="mono">backend/src/db/riskAssessments.ts</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="box box--blue">
+        <p>
+          <strong>The shared schema runs at two different times.</strong>
+          <span class="mono">createVisitSchema()</span> lives in
+          <span class="mono">shared/</span> so both sides agree on one
+          definition — but the frontend never calls
+          <span class="mono">.safeParse()</span> on it, only imports the
+          inferred <span class="mono">CreateVisitInput</span> type. The
+          backend is the only place it actually runs, on the real body: one
+          definition, a compile-time contract on one side, a runtime gate
+          on the other.
+        </p>
+      </div>
+
+      <details class="why">
+        <summary>Why the visit is committed before it's scored</summary>
+        <div class="why__body">
+          <p>
+            The insert and the scoring are two separate calls, not one
+            transaction. If <span class="mono">assessRisk()</span> or the
+            assessment insert fails, the visit — a clinical fact that already
+            happened — stays saved, with
+            <span class="mono">risk_assessment: null</span> in the response.
+            <span class="mono">POST /api/visits/:id/predict</span> can score
+            it later.
+          </p>
+          <p>
+            The alternative — one transaction covering both — would roll the
+            visit back if scoring failed for any reason, including a bug in
+            the scoring code that has nothing to do with whether the
+            measurement itself was real
+            <a class="adr" href="#" data-adr="032">ADR-032</a>.
+          </p>
+        </div>
+      </details>
+    </section>
+
+    <section id="gates">
+      <div class="section-head">
+        <span class="num">07</span>
+        <h2>The gates</h2>
+      </div>
+
+      <p class="prose">
+        Three checks run before a write ever reaches a route handler's own
+        logic. The order they run in isn't a convention — one of them is a
+        literal data dependency on the one before it.
+      </p>
+
+      <div class="scroll-x">
+        <table>
+          <thead>
+            <tr><th>Gate</th><th>Rejects with</th><th>Keyed by</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>requireAuth</td>
+              <td><span class="mono">401</span> bad/missing token<br><span class="mono">503</span> JWKS unreachable</td>
+              <td>The <span class="mono">Authorization</span> header</td>
+            </tr>
+            <tr>
+              <td>rateLimit</td>
+              <td><span class="mono">429</span>, with <span class="mono">Retry-After</span></td>
+              <td><span class="mono">req.user.id</span></td>
+            </tr>
+            <tr>
+              <td>Zod validation</td>
+              <td><span class="mono">400</span></td>
+              <td>The request body</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="keystone">
+        <span class="sublabel">The ordering is mechanical, not defensive</span>
+        <p>
+          <span class="mono">rateLimit</span> keys its lookup on
+          <span class="mono">req.user.id</span>. That field does not exist
+          until <span class="mono">requireAuth</span> sets it. Rate limiting
+          is scoped per clinician, so it cannot even ask "how many requests
+          has this caller made" before it knows who the caller is —
+          swapping the two wouldn't just be less safe, it would throw.
+        </p>
+      </div>
+
+      <details class="why">
+        <summary>Why a timed-out JWKS fetch is 503, not 401</summary>
+        <div class="why__body">
+          <p>
+            <span class="mono">JWKSTimeout</span> extends the same
+            <span class="mono">JOSEError</span> base class every bad-token
+            error does, so it would fall into the general 401 branch by
+            default. <span class="mono">requireAuth</span> checks for it
+            explicitly, first, and maps it to 503 instead
+            <a class="adr" href="#" data-adr="033">ADR-033</a>.
+          </p>
+          <p>
+            The distinction matters to the person on the other end: a bad
+            token means "log in again," something a clinician can act on.
+            A verification service being unreachable is an outage they
+            cannot fix by logging in again — telling them to would be
+            actively wrong.
+          </p>
+        </div>
+      </details>
+
+      <details class="why">
+        <summary>Why rateLimit is in-memory, and what that costs</summary>
+        <div class="why__body">
+          <p>
+            Each clinician's recent write timestamps live in a
+            <span class="mono">Map</span> inside the backend process. Correct
+            for one running instance; a second instance would keep its own,
+            separate count, so a clinician split across two instances by a
+            load balancer effectively gets twice the budget. A shared store
+            (Postgres, Redis) would fix that — not needed yet at Diacify's
+            per-clinic scale, and documented as a real limitation rather than
+            hidden.
+          </p>
+        </div>
+      </details>
+    </section>
+
+    <section id="security">
+      <div class="section-head">
+        <span class="num">08</span>
+        <h2>Data and security, in detail</h2>
+      </div>
+
+      <p class="prose">
+        Part 1 covered <em>who owns a row</em>. This is <em>who is allowed to
+        touch the database at all</em>, and it turns out Diacify answers that
+        question more strictly than most Supabase projects do by default.
+      </p>
+
+      <p class="sublabel">Table grants, by role</p>
+      <div class="scroll-x">
+        <table>
+          <thead>
+            <tr><th>Role</th><th>On <span class="mono">patients</span> / <span class="mono">visits</span></th><th>On <span class="mono">risk_assessments</span></th></tr>
+          </thead>
+          <tbody>
+            <tr><td class="mono">anon</td><td>Nothing — revoked at the role level, including future tables <a class="adr" href="#" data-adr="012">ADR-012</a></td><td>Nothing</td></tr>
+            <tr><td class="mono">authenticated</td><td>select, insert, update, delete</td><td>select, insert only — an assessment is never edited or deleted, only added <a class="adr" href="#" data-adr="029">ADR-029</a></td></tr>
+            <tr><td class="mono">service_role</td><td>Nothing — revoked entirely <a class="adr" href="#" data-adr="035">ADR-035</a></td><td>Nothing</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="box box--mint">
+        <p>
+          <strong>service_role usually means "bypass RLS."</strong> Supabase
+          grants it that by default. Diacify revoked its table privileges to
+          zero anyway: nothing currently needs to act across every
+          clinician's rows at once, and a credential that <em>can</em>
+          bypass every check is a bigger attack surface than the
+          convenience is worth while nothing uses it.
+        </p>
+      </div>
+
+      <p class="sublabel">Migrations that assert their own end state</p>
+      <p class="prose">
+        Several grant migrations end with a <span class="mono">do $$ ...
+        end $$</span> block that queries Postgres's own catalog and raises an
+        exception if the role still holds a privilege it shouldn't. A future
+        migration that accidentally re-grants something fails immediately,
+        in CI, rather than silently widening access.
+      </p>
+
+      <div class="chain__pred" style="max-width: 60ch">select string_agg(...) from pg_class c
+cross join lateral aclexplode(c.relacl) a
+where pg_get_userbyid(a.grantee) = 'service_role';
+
+if offending is not null then
+  raise exception 'service_role holds table privileges it should not: %', offending;
+end if;</div>
+
+      <p class="sublabel" style="margin-top: var(--s6)">The list view's RLS gotcha</p>
+      <p class="prose">
+        <span class="mono">patients_with_latest_risk</span> — behind the
+        patient list's server-side risk filter/sort — joins all three
+        tables. A Postgres view runs with its <em>creator's</em> privileges
+        by default, which would silently bypass RLS underneath it.
+      </p>
+      <p class="prose">
+        It's declared <span class="mono">with (security_invoker = true)</span>,
+        so it runs as the querying clinician instead — one line standing
+        between "this view respects RLS" and "this view is a hole in it"
+        <a class="adr" href="#" data-adr="042">ADR-042</a>.
+      </p>
+    </section>
+
+    <section id="serving">
+      <div class="section-head">
+        <span class="num">09</span>
+        <h2>ML serving</h2>
+      </div>
+
+      <p class="prose">
+        <span class="mono">model.json</span> is plain data — no code. Loaded
+        once at boot, validated against a Zod schema before the server
+        accepts a single request, per the project rule that a model
+        artifact is untrusted input like any other.
+      </p>
+
+      <div class="chain__pred">{
+  "version": "rf-098c19d0afc9",
+  "featureNames": ["hba1c", "age", "sex_encoded", ...],  // 13 total
+  "classes": ["low", "medium", "high"],
+  "medians": { "age": ..., "hba1c": ..., ... },   // training-set medians
+  "ratioMedians": { "tg_hdl_ratio": ..., "ldl_hdl_ratio": ... },
+  "trees": [ { "left": [...], "right": [...],
+               "feature": [...], "threshold": [...],
+               "value": [...] }, ... ]              // 100 of these
+}</div>
+
+      <p class="sublabel">13 features, built from a visit and a patient</p>
+      <p class="prose">
+        Nine are read straight off the visit. Four are derived:
+      </p>
+      <ul class="bullets">
+        <li><span><strong>hypertension_flag</strong> — 1 if systolic ≥ 140 mmHg or diastolic ≥ 90 mmHg, else 0.</span></li>
+        <li><span><strong>tg_hdl_ratio</strong>, <strong>ldl_hdl_ratio</strong> — triglycerides/HDL and LDL/HDL, or a training-time median ratio when HDL is 0 (can't divide by it).</span></li>
+        <li><span><strong>age_bmi_interaction</strong> — age × BMI, a single term letting the forest see the two together rather than only separately.</span></li>
+      </ul>
+      <p class="note prose">
+        A missing optional lab (RBS, triglycerides, HDL, LDL) is filled with
+        the median <em>from the training set</em>, not zero and not omitted
+        — the same treatment a blank value got when the model learned, so
+        serving and training stay consistent.
+      </p>
+
+      <div class="box box--blue">
+        <p>
+          <strong>Why the code compares <span class="mono">Math.fround(value)</span>, not the raw number.</strong>
+          scikit-learn casts every feature to 32-bit float before comparing
+          it to a threshold; JavaScript numbers are 64-bit.
+          <span class="mono">Math.fround</span> reproduces that rounding
+          first, so the Node traversal is bit-exact with the Python model —
+          not approximately equal, exactly equal.
+        </p>
+      </div>
+
+      <details class="why">
+        <summary>What breaks without it</summary>
+        <div class="why__body">
+          <p>
+            A value can sit between a threshold and the next representable
+            float32 above it — close enough to be "the same number" at
+            float64 precision, but on the other side of the split once cast
+            to float32. Without rounding first, that value takes the
+            <em>other</em> branch, lands in a different leaf, and can change
+            the predicted category. Confirmed with a real near-threshold
+            case in <span class="mono">forest.test.ts</span>, not just
+            reasoned about.
+          </p>
+        </div>
+      </details>
+
+      <p class="sublabel">Walking the forest</p>
+      <p class="prose">
+        Each of the 100 trees is walked root to leaf — at every node,
+        compare one feature to a threshold, go left or right. The leaf
+        holds a probability distribution over the three classes.
+      </p>
+      <p class="prose">
+        The forest's answer is the plain average of all 100 leaves — where
+        <span class="mono">riskAssessment.ts</span> picks up: score,
+        category, and confidence, exactly as walked through in Part 1.
+      </p>
+    </section>
+
+    <section id="training">
+      <div class="section-head">
+        <span class="num">10</span>
+        <h2>ML training</h2>
+      </div>
+
+      <p class="prose">
+        Fifteen single-purpose Python modules, run top to bottom by
+        <span class="mono">train.py</span>, each depending only on the ones
+        above it.
+      </p>
+
+      <figure class="diagram">
+<pre class="mermaid">
+%%{init: {'theme':'base','themeVariables':{'primaryColor':'#eaf5ee','primaryTextColor':'#16261e','primaryBorderColor':'#16382b','lineColor':'#435146','fontFamily':'Inter, system-ui, sans-serif','fontSize':'13px'}}}%%
+flowchart TD
+    A["dataset.py + clinical_fields.py + assemble.py&lt;br/&gt;load raw CSV, parse each field, assemble a clean row"]
+    B["split.py&lt;br/&gt;stratified split, BEFORE imputation"]
+    C["imputation.py + features.py&lt;br/&gt;medians fit on train rows only, applied to both"]
+    D["labels.py&lt;br/&gt;ADA 2025 base label + 5-flag upgrade rule"]
+    E["feature_matrix.py&lt;br/&gt;rows to the model's numeric vector"]
+    F["model.py + hyperparameter_search.py + cross_validation.py&lt;br/&gt;fit, tune, 5-fold stratified CV"]
+    G["feature_importance.py + bias_audit.py&lt;br/&gt;rank features, check sex/age subgroups"]
+    H["persistence.py + serving_export.py&lt;br/&gt;save the model, write model.json"]
+
+    A --> B --> C --> D --> E --> F --> G --> H
+</pre>
+        <figcaption>
+          Each module has one job and a matching test file. Real modules
+          named, not a paraphrase — open any box above and that is the file.
+        </figcaption>
+      </figure>
+
+      <div class="box box--mint">
+        <p>
+          <strong>The split happens before imputation, on purpose.</strong>
+          Rows split into train/test first, stratified by HbA1c alone (the
+          one field guaranteed present before cleanup) — then imputation
+          medians are fit on training rows only, applied to both splits.
+        </p>
+      </div>
+
+      <details class="why">
+        <summary>Why fitting medians on the full dataset first would be wrong</summary>
+        <div class="why__body">
+          <p>
+            It would leak information from the test set into what the model
+            learned — a median computed partly from rows the model is later
+            "tested" against, inflating its apparent accuracy on data it
+            never really saw cold.
+          </p>
+        </div>
+      </details>
+
+      <p class="sublabel">The label itself: a two-stage clinical rule, not a model output</p>
+      <p class="prose">
+        This is worth pausing on, because it is not obvious from the module
+        list: the training labels aren't scraped from the dataset, they're
+        <em>computed</em> by a hand-written clinical rule, cited to real
+        guidelines.
+      </p>
+
+      <div class="chain">
+        <div class="chain__row">
+          <div>
+            <span class="chain__table">Stage A</span>
+            <span class="chain__depth">Base label, from HbA1c alone</span>
+          </div>
+          <div>
+            <p class="chain__gloss">
+              <span class="mono">&lt;5.7%</span> low ·
+              <span class="mono">5.7–6.4%</span> medium ·
+              <span class="mono">≥6.5%</span> high — the ADA 2025
+              Standards of Care diagnostic thresholds.
+            </p>
+          </div>
+        </div>
+
+        <div class="chain__row">
+          <div>
+            <span class="chain__table">Stage B</span>
+            <span class="chain__depth">Upgrade rule, never downgrades</span>
+          </div>
+          <div>
+            <p class="chain__gloss">
+              Count five secondary flags — hypertension, obesity
+              (BMI ≥ 30), elevated RBS (≥ 126), high TG/HDL (≥ 2.8),
+              high LDL/HDL (≥ 3.5). Two or more raised: the base label
+              moves up one tier, capped at high.
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <p class="note prose">
+        Four of those five flags are the same ones
+        <span class="mono">features.ts</span> builds for the model to read —
+        the labelling rule and the model's own features are drawn from the
+        same clinical reasoning, just used two different ways: one decides
+        what a training row is called, the other is a number the forest
+        learns a weight for.
+      </p>
+
+      <p class="sublabel">Evaluation</p>
+      <ul class="bullets">
+        <li><span>5-fold stratified cross-validation and a held-out test set, both reported in <span class="mono">model_metadata.json</span> alongside the exact thresholds used to produce that run's labels — a retrain's audit trail, not just its accuracy number.</span></li>
+        <li><span><span class="mono">bias_audit.py</span> breaks performance down by sex and by age band (under 40 / 40–60 / over 60), checking for a group the model is systematically less reliable for.</span></li>
+      </ul>
+    </section>
+
+    <section id="seams">
+      <div class="section-head">
+        <span class="num">11</span>
+        <h2>The seams</h2>
+      </div>
+
+      <p class="prose">
+        Where the design deliberately draws its lines, and what crossing
+        each one would cost.
+      </p>
+
+      <dl>
+        <div class="term">
+          <dt>Parse untrusted data once, at the boundary</dt>
+          <dd>
+            Zod schemas sit at the HTTP edge. After
+            <span class="mono">.safeParse()</span> succeeds, the rest of the
+            request works with typed data and never re-checks it.
+            <span class="mono">.strict()</span> means the accepted field set
+            is explicit — an unexpected field is rejected, not silently
+            dropped.
+          </dd>
+        </div>
+
+        <div class="term">
+          <dt>The ML modules know nothing about the web</dt>
+          <dd>
+            <span class="mono">assessRisk(model, visit, sex)</span> takes
+            plain values and returns a plain object — no database, no
+            <span class="mono">req</span>, no clock. The same function would
+            work unchanged from a batch backfill script. One call hides
+            feature engineering, a 100-tree traversal, a float32 parity
+            subtlety, and three business rules behind three arguments — a
+            deep module, in the sense that matters: the interface is far
+            simpler than what it does.
+          </dd>
+        </div>
+
+        <div class="term">
+          <dt>Authorization lives in Postgres, not in application code</dt>
+          <dd>
+            Handlers pass the caller's own token down and let RLS filter.
+            The honest trade-off: this leaks upward in places. Route code
+            still has to know that <span class="mono">42501</span> means
+            "not your patient," and that a failed read and a failed write
+            surface differently. Real coupling to the database's behaviour —
+            accepted because the alternative, every handler remembering to
+            filter by <span class="mono">clinician_id</span>, fails open the
+            moment one of them forgets.
+          </dd>
+        </div>
+
+        <div class="term">
+          <dt>One composition root</dt>
+          <dd>
+            <span class="mono">server.ts</span> is the only file that reads
+            <span class="mono">process.env</span>, reads the filesystem, or
+            constructs anything. Everything else takes its dependencies as
+            arguments — <span class="mono">createRequireAuth(getKey)</span>,
+            <span class="mono">createRateLimiter({ now })</span>. That is
+            why the rate limiter can be tested with a fake clock and no
+            server running at all.
+          </dd>
+        </div>
+      </dl>
+
+      <div class="box box--blue">
+        <p class="sublabel" style="margin-bottom: var(--s3)">Where it's thinner than it looks</p>
+        <p style="margin-bottom: var(--s3)">
+          Worth having an opinion on, not just accepting:
+        </p>
+        <ul class="bullets">
+          <li><span>A new Supabase client is built on every request, for RLS to work correctly — real, deliberate object-construction cost.</span></li>
+          <li><span>The rate limiter is per-process — correct for one backend instance, and documented as a limitation rather than solved.</span></li>
+          <li><span>No structured logging — a 500 currently leaves a trace only where <span class="mono">logInternalError</span> is explicitly called.</span></li>
+          <li><span><span class="mono">db/</span> isn't really a repository layer. Only <span class="mono">riskAssessments.ts</span> lives there; patient and visit queries are written inline in the routes that use them once each — defensible, but an asymmetry worth being able to justify.</span></li>
+        </ul>
+      </div>
+    </section>
+
+    <section id="checks">
+      <div class="section-head">
+        <span class="num">12</span>
         <h2>Check yourself</h2>
       </div>
 
       <div class="prose">
         <p>
-          If Part 1 landed, these should be answerable before you open the
+          If this landed, these should be answerable before you open the
           answer. If one isn't, the section it came from is worth a second
           pass.
         </p>
@@ -1534,35 +2074,64 @@ flowchart TD
             </p>
           </div>
         </details>
-      </div>
-    </section>
 
-    <section id="next">
-      <div class="section-head">
-        <span class="num">07</span>
-        <h2>What Part 2 covers</h2>
-      </div>
+        <details class="check">
+          <summary><span class="q">Q6</span><span>A clinician reports rate-limit errors on visits they never sent. Where do you look first?</span></summary>
+          <div class="check__answer">
+            <p>
+              Whether they're being routed to more than one backend instance.
+              The rate limiter keys its count on
+              <span class="mono">req.user.id</span> in an in-memory
+              <span class="mono">Map</span>, per process — two instances keep
+              two separate counts, which doesn't explain <em>extra</em>
+              rejections on its own, but does mean the limiter's real budget
+              silently depends on how many instances are running. The fix, if
+              it were needed, is a shared store (Postgres or Redis), not a
+              higher limit.
+            </p>
+          </div>
+        </details>
 
-      <div class="prose">
-        <p>
-          Part 1 is the shape. Part 2 is the mechanism — real file names, real
-          data shapes, real policy predicates, at the depth where you could
-          open any file and know what you're looking at.
-        </p>
-      </div>
+        <details class="check">
+          <summary><span class="q">Q7</span><span>What does <span class="mono">Math.fround</span> in <span class="mono">forest.ts</span> actually protect against?</span></summary>
+          <div class="check__answer">
+            <p>
+              scikit-learn compares split thresholds in 32-bit float
+              precision; a plain JavaScript number is 64-bit. A feature value
+              can sit in the gap between a threshold and the nearest float32
+              above it — close enough to be "the same number" at float64
+              precision, but on the other side of the split once cast to
+              float32. Without <span class="mono">Math.fround</span> first,
+              that value walks a different path through the tree and can
+              land in a different leaf, occasionally changing the predicted
+              category. Confirmed with a real near-threshold case in
+              <span class="mono">forest.test.ts</span>, not just reasoned
+              about.
+            </p>
+          </div>
+        </details>
 
-      <ul class="next-list">
-        <li><span class="n">06</span><span><strong>One request, end to end.</strong> Recording a visit, traced across all four workspaces — React form, shared schema, gates, route, RLS insert, feature vector, forest, assessment, response, UI.</span></li>
-        <li><span class="n">07</span><span><strong>The gates.</strong> Local JWKS verification, per-clinician rate limiting, boundary validation — and why the order is a data dependency rather than a habit.</span></li>
-        <li><span class="n">08</span><span><strong>Data and security in detail.</strong> Every table, every policy, the grant model, and what each migration was actually defending against.</span></li>
-        <li><span class="n">09</span><span><strong>ML serving.</strong> The shape of <span class="mono">model.json</span>, how 13 features get built from a visit, and how 100 trees become three probabilities.</span></li>
-        <li><span class="n">10</span><span><strong>ML training.</strong> All fifteen Python modules in order — dataset, imputation, feature engineering, labelling, leakage-safe splitting, tuning, evaluation, bias audit, export.</span></li>
-        <li><span class="n">11</span><span><strong>The seams.</strong> Where the boundaries sit, what each one buys, and what it costs.</span></li>
-      </ul>
+        <details class="check">
+          <summary><span class="q">Q8</span><span><span class="mono">service_role</span> usually bypasses RLS entirely. Why does Diacify hold it to zero table grants?</span></summary>
+          <div class="check__answer">
+            <p>
+              Because nothing in the running application currently needs to
+              act across every clinician's rows at once — every real
+              operation is scoped to one authenticated clinician already. A
+              credential that <em>can</em> ignore every ownership check is a
+              standing attack surface (a leaked key, a compromised script)
+              proportional to what it can reach, not to what actually uses
+              it. Holding it at zero costs nothing today and removes that
+              surface entirely; it can be widened deliberately, migration by
+              migration, the day something genuinely needs it.
+            </p>
+          </div>
+        </details>
+      </div>
     </section>
 
     <footer>
-      <span>Diacify · Architecture, Part 1 of 2</span>
+      <span>Diacify · Architecture</span>
       <span>Decisions cited as ADR-nnn live in <span class="mono">docs/decisions.md</span></span>
     </footer>
   </main>
