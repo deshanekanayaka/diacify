@@ -6,7 +6,7 @@ Don't track workflow steps here. "Open a PR for slice N", "merge X", "push the m
 
 ## Now
 
-- [ ] Appointments and analytics: both exist in legacy, neither is planned here. Open scope question — the rebuilt frontend ships neither, so decide deliberately rather than letting the omission stand by default.
+Nothing open right now.
 
 ## Later — after all phases are complete
 

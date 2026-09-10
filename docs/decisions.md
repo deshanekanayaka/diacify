@@ -1513,3 +1513,43 @@ reshape (`toPatientWithLatestAssessment`) to a flat-row reshape
 20260910180000_create_patients_with_latest_risk_view.sql`;
 `backend/src/routes/patients.test.ts`'s "GET /api/patients — risk filter
 and sort" block.
+
+---
+
+## ADR-043 — Scope: no appointments, no analytics
+
+**Status:** Accepted — 2026-09-10
+
+**Context:** Legacy had two features the rebuild never carried forward:
+`appointments` (a scheduling record independent of visits - date, type,
+notes, status) and `GET /api/analytics` (three practice-wide trend charts:
+risk-category migration over 12 months, average HbA1c per risk category
+over 12 months, a histogram of current risk scores). Both were left as an
+open scope question in `context/tasks.md` since the frontend rebuild
+shipped without them, rather than a decision made silently.
+
+Neither was in great shape in legacy. `appointments.visit_id` was a real
+foreign key the application declared but never populated - flagged in the
+phase-1 investigation as something with no defensible answer in an
+interview. `appointmentController.js` and `analyticsController.js` both
+had zero test coverage; `appointmentController.js` had at least one
+documented historical bug (an overdue-flag miscalculation) with no
+regression test protecting the fix that was made.
+
+**Decision:** Neither is in scope. Diacify stays patient → visit → risk
+score. No scheduling concept, no practice-wide trend/analytics view.
+
+**Rejected:** Rebuilding appointments to match legacy's shape (date, type,
+notes, status, and the unused visit_id link) - no stated clinical need
+survived being asked what it would actually be used for (a due-date
+reminder, a daily queue, and "just for completeness" would each imply a
+different, smaller design; none was confirmed as a real want). Rebuilding
+analytics' three charts - same reasoning, no stated need for practice-wide
+trend visibility beyond what the patient list and per-patient history
+already show.
+
+**Consequences:** No `appointments` table, no third domain entity beside
+`patients`/`visits`. If a real scheduling or trend-reporting need surfaces
+later, it gets designed against that actual need rather than inherited
+from legacy's shape - in particular, no `visit_id` FK ever gets added
+speculatively the way legacy's was.
