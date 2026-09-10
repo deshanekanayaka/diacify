@@ -752,11 +752,10 @@ table.data th:last-child {
 }
 
 /* One tile shape, reused for both feature grids: a thin-bordered card, a
-   monospace numbered label with a trailing hairline rule, then the icon
-   floating alone in real whitespace — no background square behind it —
-   before the heading and body. The icon gets its own zone with a fixed
-   min-height so every tile's heading lands on the same baseline
-   regardless of icon shape. */
+   monospace numbered label, then the icon floating alone in real
+   whitespace — no background square behind it — before the heading and
+   body. The icon gets its own zone with a fixed min-height so every
+   tile's heading lands on the same baseline regardless of icon shape. */
 .tile {
   background: var(--surface);
   border: 1px solid var(--separator);
@@ -773,14 +772,8 @@ table.data th:last-child {
   text-transform: uppercase;
   color: var(--ink-tertiary);
 }
-.tile__label::after {
-  content: "";
-  flex: 1;
-  height: 1px;
-  background: var(--separator-strong);
-}
 .tile__icon-zone {
-  min-height: 6rem;
+  min-height: 7rem;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -788,8 +781,8 @@ table.data th:last-child {
   color: var(--ink);
 }
 .tile__icon-zone svg {
-  width: 3.25rem;
-  height: 3.25rem;
+  width: 5.5rem;
+  height: 5.5rem;
 }
 .tile--highlight {
   border-color: var(--accent);
