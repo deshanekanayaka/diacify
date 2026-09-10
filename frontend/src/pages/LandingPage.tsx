@@ -92,7 +92,7 @@ export function LandingPage() {
         </section>
 
         <h2 className="t-title" style={{ marginBottom: "1.5rem" }}>
-          Three fields, one answer.
+          Five fields, one answer.
         </h2>
         <div className="tiles">
           {HOW_IT_WORKS.map((tile) => (
