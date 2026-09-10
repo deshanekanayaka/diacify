@@ -1,5 +1,6 @@
 import { Router, type RequestHandler } from "express";
 
+import type { Database } from "../db/database.types.js";
 import { createRequestClient } from "../db/requestClient.js";
 import { recordAssessment } from "../db/riskAssessments.js";
 import { assessRisk } from "../ml/riskAssessment.js";
@@ -8,6 +9,7 @@ import { INTERNAL_ERROR_BODY, isUuid } from "./http.js";
 import { createPatientSchema, createVisitSchema } from "@diacify/shared";
 import { parseDateRange } from "./dateRange.js";
 import { parsePagination } from "./pagination.js";
+import { parsePatientRiskQuery } from "./patientRiskQuery.js";
 import { logInternalError } from "../internalErrorLog.js";
 
 // The Postgres error code surfaced by PostgREST when an insert is
@@ -46,36 +48,39 @@ function toVisitWithLatestAssessment<T extends { risk_assessments: unknown[] }>(
   return { ...visit, risk_assessment: assessments[0] ?? null };
 }
 
+type PatientWithLatestRiskRow = Database["public"]["Views"]["patients_with_latest_risk"]["Row"];
+
 /**
- * Reshapes one patient row carrying its visit count and its latest visit's
- * latest assessment.
+ * Reshapes one row of the patients_with_latest_risk view into the response
+ * shape: the flat risk_category/risk_score/low_confidence/model_version/
+ * risk_assessed_at columns collapse into one nullable risk_assessment
+ * object - null meaning this patient has no visit yet, or none scored,
+ * same convention as every other "latest assessment" shape in this API.
  *
- * The query embeds `visits` twice under two aliases - `visit_count` (a bare
- * count aggregate) and `latest_visit` (the single most recent visit, itself
- * embedding that visit's single most recent assessment) - because a
- * PostgREST count embed and an order+limited embed of the same relation
- * need separate aliases to carry different modifiers in one request
- * (verified directly against local Postgres). Two nested one-element
- * arrays collapse into one nullable "current risk" field, same reasoning
- * as toVisitWithLatestAssessment one level up - null meaning either no
- * visit yet, or a visit that hasn't been scored.
- *
- * This is the plain embed PostgREST already supports, not the
- * patients_with_latest_risk view that sorting/filtering by risk would need
- * - see context/tasks.md.
+ * `supabase gen types` marks every column of a view as nullable, since it
+ * can't prove non-nullability through the underlying query - id, reference,
+ * sex, created_at and visit_count are asserted non-null here because the
+ * view selects them straight from patients' own NOT NULL columns (or, for
+ * visit_count, a count aggregate that always returns a row).
  */
-function toPatientWithLatestAssessment<
-  T extends {
-    visit_count: { count: number }[];
-    latest_visit: { visit_date: string; risk_assessments: unknown[] }[];
-  },
->(row: T) {
-  const { visit_count: visitCount, latest_visit: latestVisit, ...patient } = row;
+function toPatientListItem(row: PatientWithLatestRiskRow) {
   return {
-    ...patient,
-    visit_count: visitCount[0]?.count ?? 0,
-    last_visit_date: latestVisit[0]?.visit_date ?? null,
-    risk_assessment: latestVisit[0]?.risk_assessments[0] ?? null,
+    id: row.id!,
+    reference: row.reference!,
+    sex: row.sex!,
+    created_at: row.created_at!,
+    visit_count: row.visit_count!,
+    last_visit_date: row.last_visit_date,
+    risk_assessment:
+      row.risk_category === null
+        ? null
+        : {
+            risk_category: row.risk_category,
+            risk_score: row.risk_score!,
+            low_confidence: row.low_confidence!,
+            model_version: row.model_version!,
+            created_at: row.risk_assessed_at!,
+          },
   };
 }
 
@@ -108,28 +113,39 @@ export function createPatientsRouter({
       res.status(400).json({ error: pagination.error });
       return;
     }
+    const riskQuery = parsePatientRiskQuery(req.query);
+    if (!riskQuery.ok) {
+      res.status(400).json({ error: riskQuery.error });
+      return;
+    }
     const { limit, page } = pagination.params;
+    const { risk, sort } = riskQuery.params;
     const from = (page - 1) * limit;
     const to = from + limit - 1;
 
     const { accessToken } = req.user!;
     const client = createRequestClient(supabaseUrl, supabasePublishableKey, accessToken);
 
-    const { data, error, count } = await client
-      .from("patients")
-      .select(
-        `*, visit_count:visits(count), latest_visit:visits(id, visit_date, created_at, risk_assessments(${LATEST_ASSESSMENT_FIELDS}))`,
-        { count: "exact" },
-      )
-      .order("created_at", { ascending: false })
-      .order("id", { ascending: false })
-      .order("visit_date", { ascending: false, referencedTable: "latest_visit" })
-      .order("created_at", { ascending: false, referencedTable: "latest_visit" })
-      .order("id", { ascending: false, referencedTable: "latest_visit" })
-      .limit(1, { referencedTable: "latest_visit" })
-      .order("created_at", { ascending: false, referencedTable: "latest_visit.risk_assessments" })
-      .limit(1, { referencedTable: "latest_visit.risk_assessments" })
-      .range(from, to);
+    let query = client.from("patients_with_latest_risk").select("*", { count: "exact" });
+
+    if (risk === "unscored") {
+      query = query.is("risk_category", null);
+    } else if (risk !== undefined) {
+      query = query.eq("risk_category", risk);
+    }
+
+    // "id desc" as a tiebreaker in both branches, same reasoning as every
+    // other list route here - without it, rows with an equal created_at
+    // (or, for risk, an equal risk_score) could reorder between pages.
+    if (sort === "risk") {
+      query = query
+        .order("risk_score", { ascending: false, nullsFirst: false })
+        .order("id", { ascending: false });
+    } else {
+      query = query.order("created_at", { ascending: false }).order("id", { ascending: false });
+    }
+
+    const { data, error, count } = await query.range(from, to);
 
     if (error) {
       logInternalError("GET /api/patients", error);
@@ -137,7 +153,7 @@ export function createPatientsRouter({
       return;
     }
 
-    res.status(200).json({ data: data.map(toPatientWithLatestAssessment), page, limit, total: count });
+    res.status(200).json({ data: data.map(toPatientListItem), page, limit, total: count });
   });
 
   router.post("/", createPatientRateLimit, async (req, res) => {

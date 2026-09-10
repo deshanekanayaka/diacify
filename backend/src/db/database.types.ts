@@ -165,11 +165,33 @@ export type Database = {
             referencedRelation: "patients"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "visits_patient_id_fkey"
+            columns: ["patient_id"]
+            isOneToOne: false
+            referencedRelation: "patients_with_latest_risk"
+            referencedColumns: ["id"]
+          },
         ]
       }
     }
     Views: {
-      [_ in never]: never
+      patients_with_latest_risk: {
+        Row: {
+          created_at: string | null
+          id: string | null
+          last_visit_date: string | null
+          low_confidence: boolean | null
+          model_version: string | null
+          reference: string | null
+          risk_assessed_at: string | null
+          risk_category: Database["public"]["Enums"]["risk_category"] | null
+          risk_score: number | null
+          sex: Database["public"]["Enums"]["patient_sex"] | null
+          visit_count: number | null
+        }
+        Relationships: []
+      }
     }
     Functions: {
       [_ in never]: never

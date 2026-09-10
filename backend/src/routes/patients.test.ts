@@ -209,6 +209,116 @@ describe("GET /api/patients", () => {
   });
 });
 
+describe("GET /api/patients — risk filter and sort", () => {
+  let app: express.Express;
+  let clinician: TestClinician;
+  let unscoredId: string;
+  let lowId: string;
+  let mediumId: string;
+  let highId: string;
+
+  async function insertScoredPatient(reference: string, riskCategory: "low" | "medium" | "high", riskScore: number) {
+    const { data: patient, error: patientError } = await clinician.client
+      .from("patients")
+      .insert({ sex: "female", reference })
+      .select()
+      .single();
+    if (patientError) throw patientError;
+
+    const { data: visit, error: visitError } = await clinician.client
+      .from("visits")
+      .insert({ patient_id: patient.id, age: 40, systolic: 120, diastolic: 80, bmi: 25, hba1c: 5.5 })
+      .select()
+      .single();
+    if (visitError) throw visitError;
+
+    const { error: assessmentError } = await clinician.client.from("risk_assessments").insert({
+      visit_id: visit.id,
+      model_version: "test-model",
+      probability_low: 0.5,
+      probability_medium: 0.3,
+      probability_high: 0.2,
+      risk_score: riskScore,
+      risk_category: riskCategory,
+      low_confidence: false,
+    });
+    if (assessmentError) throw assessmentError;
+
+    return patient.id as string;
+  }
+
+  beforeAll(async () => {
+    app = buildApp();
+    clinician = await signUpTestClinician("get-patients-risk");
+
+    const { data: unscored, error: unscoredError } = await clinician.client
+      .from("patients")
+      .insert({ sex: "male", reference: "Unscored" })
+      .select()
+      .single();
+    if (unscoredError) throw unscoredError;
+    unscoredId = unscored.id;
+
+    lowId = await insertScoredPatient("Low", "low", 10);
+    mediumId = await insertScoredPatient("Medium", "medium", 50);
+    highId = await insertScoredPatient("High", "high", 90);
+  });
+
+  afterAll(async () => {
+    await deleteTestUser(clinician.userId);
+  });
+
+  it("filters to one risk category", async () => {
+    const response = await request(app)
+      .get("/api/patients?risk=high")
+      .set("Authorization", `Bearer ${clinician.accessToken}`);
+
+    expect(response.status).toBe(200);
+    expect(response.body.data.map((patient: { id: string }) => patient.id)).toEqual([highId]);
+  });
+
+  it("filters to unscored patients", async () => {
+    const response = await request(app)
+      .get("/api/patients?risk=unscored")
+      .set("Authorization", `Bearer ${clinician.accessToken}`);
+
+    expect(response.status).toBe(200);
+    expect(response.body.data.map((patient: { id: string }) => patient.id)).toEqual([unscoredId]);
+  });
+
+  it("rejects an unknown risk value with 400", async () => {
+    const response = await request(app)
+      .get("/api/patients?risk=critical")
+      .set("Authorization", `Bearer ${clinician.accessToken}`);
+
+    expect(response.status).toBe(400);
+    expect(response.body).toEqual({ error: "Invalid value for risk parameter" });
+  });
+
+  it("sorts by highest risk first, with unscored patients last", async () => {
+    const response = await request(app)
+      .get("/api/patients?sort=risk")
+      .set("Authorization", `Bearer ${clinician.accessToken}`);
+
+    expect(response.status).toBe(200);
+    expect(response.body.data.map((patient: { id: string }) => patient.id)).toEqual([
+      highId,
+      mediumId,
+      lowId,
+      unscoredId,
+    ]);
+  });
+
+  it("combines a risk filter with sort=risk", async () => {
+    const response = await request(app)
+      .get("/api/patients?risk=medium&sort=risk")
+      .set("Authorization", `Bearer ${clinician.accessToken}`);
+
+    expect(response.status).toBe(200);
+    expect(response.body.data.map((patient: { id: string }) => patient.id)).toEqual([mediumId]);
+  });
+});
+
 describe("PATCH /api/patients/:id", () => {
   let app: express.Express;
   let clinicianH: TestClinician;
