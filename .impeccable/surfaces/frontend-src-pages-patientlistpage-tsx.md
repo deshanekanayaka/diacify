@@ -2,19 +2,19 @@
 version: 1
 slug: "frontend-src-pages-patientlistpage-tsx"
 primary_target: "frontend/src/pages/PatientListPage.tsx"
-related_targets: []
+related_targets: ["frontend/src/pages/PatientDetailPage.tsx","frontend/src/pages/RecordVisitPage.tsx","frontend/src/pages/NewPatientPage.tsx","frontend/src/pages/SignInPage.tsx"]
 ---
 
 ## Direction contract
 
-THESIS: The patient list is a drawer of tabbed chart dividers you flip through, refusing the generic rounded-card app-list every clinical-SaaS default reaches for.
+THESIS: A risk score is a specimen result, not a status label — every row and verdict reads like a printed lab requisition, refusing generic pastel dashboard-kit cards and the retired folder-tab metaphor.
 
-OWN-WORLD: Kraft/manila ground (#EFE6D3), near-black ink (#262220), one institutional teal accent (#3E6E5E) for the active/selected tab, a warm tab-color set (#C9A15A, #B0473C) used only as filing color, never as clinical-risk color. Body/UI in the system font stack; patient reference + dates set in a monospace, typewriter-label register. Flat, restrained interpretation — thin folder-edge shadow only, no literal paper grain.
+OWN-WORLD: White clinical ground, near-black ink. Daylight Clinic's teal/gold/red/grey risk triad stays canonical, each a leading "cap" swatch with its own fill pattern (solid/hatch/dot/dashed) — risk is never color-alone. Barcode-tick texture on printed surfaces. Monospace for clinical/identity figures, plain sans for chrome. Square corners, 1px rules, no shadows.
 
-STORY: The clinician opens the app, scans a short stack of chart tabs by reference + date, taps one to continue, or taps the pinned blank tab to start a new chart inline.
+STORY: A clinician scans rows like labeled specimens — cap color+pattern read before the number; a verdict shows the current result plus trend against the last visit.
 
-FIRST VIEWPORT: A vertical single-column drawer of tab rows, newest-first; a blank "+ New chart" tab pinned above row one; empty state shows just that one blank tab with a one-line prompt.
+FIRST VIEWPORT: Patient list as full-width label rows (cap | reference | gender | last-seen | risk badge+score | actions); barcode rule above the verdict card; outlined filter pills; square "+ New patient" top-right.
 
-FORM: Tabbed Chart Binder — candidate 4 of 7 on the grounded list, assigned by the roll (seed key 882689fe, direction scope, operate mode); beat a competitive oscilloscope/instrument-panel challenger narrowly on product clarity for this specific surface.
+FORM: Specimen Label, candidate 3 of 7, seed 775f310c, re-roll round 1 — raised past an instrument-panel challenger (trend, not just value) and a dance-notation challenger (color never alone).
 
 FINISH: unreviewed and undocumented is unfinished; this build ends with the finish review, the verdict, DESIGN.md, and every shipping raster carrying its provenance.
