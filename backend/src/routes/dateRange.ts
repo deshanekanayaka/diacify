@@ -1,3 +1,5 @@
+import { parseField } from "./queryParam.js";
+
 const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 
 export interface DateRangeParams {
@@ -17,10 +19,10 @@ export type DateRangeResult =
  * no further parsing is needed.
  */
 export function parseDateRange(query: { from?: unknown; to?: unknown }): DateRangeResult {
-  const from = parseDate(query.from);
+  const from = parseField(query.from, (raw) => (DATE_PATTERN.test(raw) ? raw : null));
   if (from === null) return { ok: false, error: "Invalid value for from parameter" };
 
-  const to = parseDate(query.to);
+  const to = parseField(query.to, (raw) => (DATE_PATTERN.test(raw) ? raw : null));
   if (to === null) return { ok: false, error: "Invalid value for to parameter" };
 
   if (from !== undefined && to !== undefined && from > to) {
@@ -31,11 +33,4 @@ export function parseDateRange(query: { from?: unknown; to?: unknown }): DateRan
   if (from !== undefined) params.from = from;
   if (to !== undefined) params.to = to;
   return { ok: true, params };
-}
-
-/** Returns the date string, `undefined` if absent, or `null` if malformed. */
-function parseDate(value: unknown): string | null | undefined {
-  if (value === undefined) return undefined;
-  if (typeof value !== "string" || !DATE_PATTERN.test(value)) return null;
-  return value;
 }

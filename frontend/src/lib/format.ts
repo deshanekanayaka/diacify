@@ -1,5 +1,3 @@
-import type { RiskCategory } from "../api/visits";
-
 const DATE_ONLY_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 
 /**
@@ -28,9 +26,4 @@ function parseDateOnlyAsLocal(dateOnly: string): Date {
 /** The risk score to the one decimal a clinician reads at a glance. */
 export function formatScore(score: number): string {
   return score.toFixed(1);
-}
-
-/** Maps a risk category to its CSS modifier suffix, so colour lives in CSS. */
-export function riskModifier(category: RiskCategory): string {
-  return category;
 }

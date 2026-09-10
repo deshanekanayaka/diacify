@@ -1,3 +1,5 @@
+import { parseField } from "./queryParam.js";
+
 const DEFAULT_LIMIT = 20;
 const MAX_LIMIT = 100;
 const DEFAULT_PAGE = 1;
@@ -17,10 +19,10 @@ export type PaginationResult =
  * anything non-numeric or less than 1 is rejected outright.
  */
 export function parsePagination(query: { limit?: unknown; page?: unknown }): PaginationResult {
-  const rawLimit = parsePositiveInt(query.limit);
+  const rawLimit = parseField(query.limit, parsePositiveInt);
   if (rawLimit === null) return { ok: false, error: "Invalid value for limit parameter" };
 
-  const rawPage = parsePositiveInt(query.page);
+  const rawPage = parseField(query.page, parsePositiveInt);
   if (rawPage === null) return { ok: false, error: "Invalid value for page parameter" };
 
   return {
@@ -32,10 +34,8 @@ export function parsePagination(query: { limit?: unknown; page?: unknown }): Pag
   };
 }
 
-/** Returns the parsed integer, `undefined` if absent, or `null` if invalid. */
-function parsePositiveInt(value: unknown): number | null | undefined {
-  if (value === undefined) return undefined;
-  if (typeof value !== "string" || !/^\d+$/.test(value)) return null;
-  const parsed = Number(value);
+function parsePositiveInt(raw: string): number | null {
+  if (!/^\d+$/.test(raw)) return null;
+  const parsed = Number(raw);
   return Number.isSafeInteger(parsed) && parsed >= 1 ? parsed : null;
 }
