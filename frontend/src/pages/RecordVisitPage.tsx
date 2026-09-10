@@ -35,10 +35,27 @@ export function RecordVisitPage() {
     });
   }
 
+  // Same ordering as PatientDetailPage: all hooks above run unconditionally,
+  // and only after that do we decide whether there's a patient to record a
+  // visit for at all - the form must not render while that's still unknown,
+  // or (worse) render fully after it's failed.
+  if (patient.isPending) {
+    return <p className="placeholder">Loading patient…</p>;
+  }
+  if (patient.isError) {
+    return (
+      <div className="page">
+        <p className="banner banner--error" role="alert">
+          {patient.error.message}
+        </p>
+      </div>
+    );
+  }
+
   return (
     <div className="page page--narrow">
       <Link to={`/patients/${patientId}`} className="back-link">
-        ‹ {patient.data?.data.reference ?? "Patient"}
+        ‹ {patient.data.data.reference}
       </Link>
       <h1 className="t-title">Record visit</h1>
       <p className="t-body" style={{ marginBottom: "1.5rem" }}>

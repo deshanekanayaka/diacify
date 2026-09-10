@@ -39,15 +39,24 @@ export function DeletePatientButton({
   }
 
   return (
-    <button
-      type="button"
-      className={className}
-      onClick={handleClick}
-      disabled={deletePatient.isPending}
-      aria-label={variant === "icon" ? `Delete ${reference}` : undefined}
-      title={variant === "icon" ? "Delete" : undefined}
-    >
-      {variant === "icon" ? <IconTrash /> : deletePatient.isPending ? "Deleting…" : "Delete"}
-    </button>
+    <>
+      <button
+        type="button"
+        className={className}
+        onClick={handleClick}
+        disabled={deletePatient.isPending}
+        aria-label={variant === "icon" ? `Delete ${reference}` : undefined}
+        title={variant === "icon" ? "Delete" : undefined}
+      >
+        {variant === "icon" ? <IconTrash /> : deletePatient.isPending ? "Deleting…" : "Delete"}
+      </button>
+      {/* A failed delete otherwise leaves the button simply clickable again,
+          with nothing telling the clinician it didn't work. */}
+      {deletePatient.isError ? (
+        <span role="alert" className="t-caption" style={{ color: "var(--danger)" }}>
+          {deletePatient.error.message}
+        </span>
+      ) : null}
+    </>
   );
 }
