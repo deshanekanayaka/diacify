@@ -153,6 +153,224 @@ describe("GET /api/patients", () => {
     expect(response.status).toBe(400);
     expect(response.body).toEqual({ error: "Invalid value for page parameter" });
   });
+
+  it("carries risk_assessment: null for a patient with no visits", async () => {
+    const response = await request(app)
+      .get("/api/patients")
+      .set("Authorization", `Bearer ${clinicianA.accessToken}`);
+
+    expect(response.status).toBe(200);
+    for (const patient of response.body.data) {
+      expect(patient.risk_assessment).toBeNull();
+      expect(patient.visit_count).toBe(0);
+      expect(patient.last_visit_date).toBeNull();
+    }
+  });
+
+  it("carries the patient's latest visit's latest assessment as risk_assessment", async () => {
+    const { data: visit, error: visitError } = await clinicianA.client
+      .from("visits")
+      .insert({
+        patient_id: insertedPatientIds[0],
+        age: 40,
+        systolic: 120,
+        diastolic: 80,
+        bmi: 25,
+        hba1c: 5.5,
+      })
+      .select()
+      .single();
+    if (visitError) throw visitError;
+
+    const { error: assessmentError } = await clinicianA.client.from("risk_assessments").insert({
+      visit_id: visit.id,
+      model_version: "test-model",
+      probability_low: 0.7,
+      probability_medium: 0.2,
+      probability_high: 0.1,
+      risk_score: 15,
+      risk_category: "low",
+      low_confidence: false,
+    });
+    if (assessmentError) throw assessmentError;
+
+    const response = await request(app)
+      .get("/api/patients")
+      .set("Authorization", `Bearer ${clinicianA.accessToken}`);
+
+    const scored = response.body.data.find((patient: { id: string }) => patient.id === insertedPatientIds[0]);
+    expect(scored.risk_assessment).toMatchObject({
+      model_version: "test-model",
+      risk_category: "low",
+      risk_score: 15,
+    });
+    expect(scored.visit_count).toBe(1);
+    expect(scored.last_visit_date).toBe(visit.visit_date);
+  });
+});
+
+describe("PATCH /api/patients/:id", () => {
+  let app: express.Express;
+  let clinicianH: TestClinician;
+  let clinicianI: TestClinician;
+  let ownPatientId: string;
+  let otherPatientId: string;
+
+  beforeAll(async () => {
+    app = buildApp();
+    clinicianH = await signUpTestClinician("patch-patients-h");
+    clinicianI = await signUpTestClinician("patch-patients-i");
+
+    const { data: own, error: ownError } = await clinicianH.client
+      .from("patients")
+      .insert({ sex: "female", reference: "Original" })
+      .select()
+      .single();
+    if (ownError) throw ownError;
+    ownPatientId = own.id;
+
+    const { data: other, error: otherError } = await clinicianI.client
+      .from("patients")
+      .insert({ sex: "male", reference: "Not yours" })
+      .select()
+      .single();
+    if (otherError) throw otherError;
+    otherPatientId = other.id;
+  });
+
+  afterAll(async () => {
+    await deleteTestUser(clinicianH.userId);
+    await deleteTestUser(clinicianI.userId);
+  });
+
+  it("returns 401 with no Authorization header", async () => {
+    const response = await request(app)
+      .patch(`/api/patients/${ownPatientId}`)
+      .send({ sex: "male", reference: "New" });
+    expect(response.status).toBe(401);
+  });
+
+  it("updates the caller's own patient and returns it", async () => {
+    const response = await request(app)
+      .patch(`/api/patients/${ownPatientId}`)
+      .set("Authorization", `Bearer ${clinicianH.accessToken}`)
+      .send({ sex: "male", reference: "Renamed" });
+
+    expect(response.status).toBe(200);
+    expect(response.body.data).toMatchObject({ sex: "male", reference: "Renamed" });
+  });
+
+  it("returns 404 for another clinician's patient, and does not change it", async () => {
+    const response = await request(app)
+      .patch(`/api/patients/${otherPatientId}`)
+      .set("Authorization", `Bearer ${clinicianH.accessToken}`)
+      .send({ sex: "female", reference: "Hijacked" });
+
+    expect(response.status).toBe(404);
+
+    const stillOriginal = await clinicianI.client.from("patients").select("reference").eq("id", otherPatientId).single();
+    expect(stillOriginal.data?.reference).toBe("Not yours");
+  });
+
+  it("rejects invalid patient data with 400", async () => {
+    const response = await request(app)
+      .patch(`/api/patients/${ownPatientId}`)
+      .set("Authorization", `Bearer ${clinicianH.accessToken}`)
+      .send({ sex: "other", reference: "Renamed" });
+
+    expect(response.status).toBe(400);
+  });
+
+  it("rejects renaming to a reference already used by the same clinician, with 409", async () => {
+    const { error } = await clinicianH.client.from("patients").insert({ sex: "male", reference: "Taken" });
+    if (error) throw error;
+
+    const response = await request(app)
+      .patch(`/api/patients/${ownPatientId}`)
+      .set("Authorization", `Bearer ${clinicianH.accessToken}`)
+      .send({ sex: "male", reference: "Taken" });
+
+    expect(response.status).toBe(409);
+  });
+});
+
+describe("DELETE /api/patients/:id", () => {
+  let app: express.Express;
+  let clinicianJ: TestClinician;
+  let clinicianK: TestClinician;
+
+  beforeAll(async () => {
+    app = buildApp();
+    clinicianJ = await signUpTestClinician("delete-patients-j");
+    clinicianK = await signUpTestClinician("delete-patients-k");
+  });
+
+  afterAll(async () => {
+    await deleteTestUser(clinicianJ.userId);
+    await deleteTestUser(clinicianK.userId);
+  });
+
+  it("returns 401 with no Authorization header", async () => {
+    const response = await request(app).delete("/api/patients/00000000-0000-0000-0000-000000000000");
+    expect(response.status).toBe(401);
+  });
+
+  it("deletes the caller's own patient, cascading its visits, and returns 204", async () => {
+    const { data: patient, error: patientError } = await clinicianJ.client
+      .from("patients")
+      .insert({ sex: "female", reference: "To delete" })
+      .select()
+      .single();
+    if (patientError) throw patientError;
+
+    const { data: visit, error: visitError } = await clinicianJ.client
+      .from("visits")
+      .insert({ patient_id: patient.id, age: 30, systolic: 110, diastolic: 70, bmi: 22, hba1c: 5 })
+      .select()
+      .single();
+    if (visitError) throw visitError;
+
+    const response = await request(app)
+      .delete(`/api/patients/${patient.id}`)
+      .set("Authorization", `Bearer ${clinicianJ.accessToken}`);
+
+    expect(response.status).toBe(204);
+
+    const remainingPatient = await clinicianJ.client.from("patients").select("id").eq("id", patient.id).maybeSingle();
+    expect(remainingPatient.data).toBeNull();
+
+    // Deleting a patient must not leave orphaned visits behind - visits.patient_id
+    // is `on delete cascade`, so this confirms the cascade actually ran, not
+    // just that the patients row is gone.
+    const remainingVisit = await clinicianJ.client.from("visits").select("id").eq("id", visit.id).maybeSingle();
+    expect(remainingVisit.data).toBeNull();
+  });
+
+  it("returns 404 for another clinician's patient, and does not delete it", async () => {
+    const { data: patient, error } = await clinicianK.client
+      .from("patients")
+      .insert({ sex: "male", reference: "Not yours" })
+      .select()
+      .single();
+    if (error) throw error;
+
+    const response = await request(app)
+      .delete(`/api/patients/${patient.id}`)
+      .set("Authorization", `Bearer ${clinicianJ.accessToken}`);
+
+    expect(response.status).toBe(404);
+
+    const stillThere = await clinicianK.client.from("patients").select("id").eq("id", patient.id).maybeSingle();
+    expect(stillThere.data).not.toBeNull();
+  });
+
+  it("returns 404 for a well-formed id that doesn't exist", async () => {
+    const response = await request(app)
+      .delete("/api/patients/00000000-0000-0000-0000-000000000000")
+      .set("Authorization", `Bearer ${clinicianJ.accessToken}`);
+
+    expect(response.status).toBe(404);
+  });
 });
 
 describe("GET /api/patients/:id", () => {
