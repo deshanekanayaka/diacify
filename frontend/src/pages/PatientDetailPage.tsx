@@ -34,6 +34,10 @@ export function PatientDetailPage() {
 
   const rows = visits.data?.data ?? [];
   const latest = rows[0];
+  // The true count, not rows.length: useVisits caps at a page (see
+  // VISIT_HISTORY_LIMIT), so for a patient past that ceiling rows.length
+  // would understate how many visits actually exist.
+  const visitCount = visits.data?.total ?? rows.length;
 
   return (
     <div className="page">
@@ -45,7 +49,7 @@ export function PatientDetailPage() {
         <div>
           <h1 className="t-title t-num">{patient.data.data.reference}</h1>
           <p className="t-caption" style={{ textTransform: "capitalize" }}>
-            {patient.data.data.sex} · {rows.length} {rows.length === 1 ? "visit" : "visits"}
+            {patient.data.data.sex} · {visitCount} {visitCount === 1 ? "visit" : "visits"}
           </p>
         </div>
         <div className="row">

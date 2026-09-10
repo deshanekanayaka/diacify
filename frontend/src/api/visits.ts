@@ -1,6 +1,13 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { apiFetch } from "../lib/apiClient";
+import { PATIENTS_QUERY_KEY } from "./patients";
+
+// Matches usePatients' own limit in api/patients.ts - the patient list's
+// visit_count/last_visit_date/risk_assessment are the same "current risk"
+// shape as this page's own data, so a visit history should reflect the
+// same realistic-scale ceiling rather than silently truncating differently.
+const VISIT_HISTORY_LIMIT = 100;
 
 export type RiskCategory = "low" | "medium" | "high";
 
@@ -58,11 +65,18 @@ function visitsQueryKey(patientId: string) {
   return ["patients", patientId, "visits"] as const;
 }
 
-/** Fetches a patient's visit history, newest first, each carrying its latest risk assessment. */
+/**
+ * Fetches a patient's visit history, newest first, each carrying its latest
+ * risk assessment - up to VISIT_HISTORY_LIMIT of them. The backend's own
+ * page default (20) is not the same thing as "every visit"; without an
+ * explicit limit, a patient with more than 20 visits would silently lose
+ * the older ones from both the table and the displayed visit count.
+ */
 export function useVisits(patientId: string) {
   return useQuery({
     queryKey: visitsQueryKey(patientId),
-    queryFn: () => apiFetch<VisitListResponse>(`/api/patients/${patientId}/visits`),
+    queryFn: () =>
+      apiFetch<VisitListResponse>(`/api/patients/${patientId}/visits?limit=${VISIT_HISTORY_LIMIT}`),
   });
 }
 
@@ -78,6 +92,10 @@ export function useCreateVisit(patientId: string) {
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: visitsQueryKey(patientId) });
+      // A new visit changes what the patient list shows for this patient
+      // (visit_count, last_visit_date, risk_assessment), so its cache is
+      // stale too, not just this patient's own visit history.
+      queryClient.invalidateQueries({ queryKey: PATIENTS_QUERY_KEY });
     },
   });
 }

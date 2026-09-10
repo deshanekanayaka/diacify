@@ -49,7 +49,10 @@ export interface CreatePatientInput {
 // filter counts would only reflect the first 100, newest first.
 const LIST_ALL_LIMIT = 100;
 
-const PATIENTS_QUERY_KEY = ["patients"] as const;
+/** Exported so other mutations (e.g. recording a visit) that change what
+ *  this list shows for a patient can invalidate it without redeclaring
+ *  the same literal key. */
+export const PATIENTS_QUERY_KEY = ["patients"] as const;
 
 /** Fetches the caller's own patients, newest first, up to LIST_ALL_LIMIT of them. */
 export function usePatients() {
