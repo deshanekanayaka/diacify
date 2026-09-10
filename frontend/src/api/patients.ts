@@ -1,7 +1,10 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import type { CreatePatientInput } from "@diacify/shared";
 
 import { apiFetch } from "../lib/apiClient";
 import type { RiskAssessment } from "./visits";
+
+export type { CreatePatientInput };
 
 export type PatientSex = "male" | "female";
 
@@ -33,11 +36,6 @@ interface PatientListResponse {
   page: number;
   limit: number;
   total: number;
-}
-
-export interface CreatePatientInput {
-  reference: string;
-  sex: PatientSex;
 }
 
 // The list's risk filter/sort/counts (see PatientListPage) run entirely in
