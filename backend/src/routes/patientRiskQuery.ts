@@ -1,4 +1,5 @@
 import { RISK_CATEGORIES } from "../ml/riskCategory.js";
+import { parseField } from "./queryParam.js";
 
 // "unscored" alongside the model's own categories - a patient with no
 // scored visit yet is a real, distinct filter bucket on the patient list,
@@ -25,10 +26,10 @@ export type PatientRiskQueryResult =
  * patients table's default order).
  */
 export function parsePatientRiskQuery(query: { risk?: unknown; sort?: unknown }): PatientRiskQueryResult {
-  const risk = parseEnumParam(query.risk, RISK_FILTER_VALUES);
+  const risk = parseField(query.risk, (raw) => oneOf(raw, RISK_FILTER_VALUES));
   if (risk === null) return { ok: false, error: "Invalid value for risk parameter" };
 
-  const sort = parseEnumParam(query.sort, SORT_VALUES);
+  const sort = parseField(query.sort, (raw) => oneOf(raw, SORT_VALUES));
   if (sort === null) return { ok: false, error: "Invalid value for sort parameter" };
 
   const params: PatientRiskQueryParams = { sort: sort ?? "newest" };
@@ -36,8 +37,6 @@ export function parsePatientRiskQuery(query: { risk?: unknown; sort?: unknown })
   return { ok: true, params };
 }
 
-/** Returns the value if it's one of `values`, `undefined` if absent, or `null` if invalid. */
-function parseEnumParam<T extends string>(value: unknown, values: readonly T[]): T | null | undefined {
-  if (value === undefined) return undefined;
-  return (values as readonly string[]).includes(value as string) ? (value as T) : null;
+function oneOf<T extends string>(raw: string, values: readonly T[]): T | null {
+  return (values as readonly string[]).includes(raw) ? (raw as T) : null;
 }
