@@ -1,0 +1,1683 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Diacify Architecture</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=Inter:wght@400;500;600;700&display=swap">
+
+<style>
+/*
+ * Diacify's own visual system, lifted from frontend/src/theme.css so the
+ * doc reads as the same product rather than a separate microsite. Single
+ * theme by choice: the warm ground and dark-green accent are the product's
+ * identity, and inverting them would be a different design, not this one
+ * at night.
+ */
+:root {
+  --ground: #fbf9f3;
+  --surface: #ffffff;
+  --sunken: #f4f1e9;
+  --separator: rgba(22, 40, 31, 0.1);
+  --separator-strong: rgba(22, 40, 31, 0.2);
+
+  --ink: #16261e;
+  --ink-secondary: #435146;
+  /* Darker than the app's own --ink-tertiary (#7c8a7f), which measures
+     3.6:1 on white and fails WCAG AA for body text. Same sage-grey
+     character, 5.4:1 on surface and 5.2:1 on ground. */
+  --ink-tertiary: #5f6d63;
+
+  --accent: #16382b;
+  --accent-ink: #f3f7ee;
+  --accent-wash: #e6efe3;
+
+  --mint-100: #eaf5ee;
+  --mint-200: #d3ead9;
+  --blue-100: #eef4f6;
+  --blue-200: #cfe3e8;
+
+  --risk-low: #1c7a33;
+  --risk-medium: #93630a;
+  --risk-high: #a32d21;
+
+  --font-display: "Fraunces", Georgia, "Times New Roman", serif;
+  --font-text: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --font-mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, monospace;
+
+  --s1: 0.25rem;
+  --s2: 0.5rem;
+  --s3: 0.75rem;
+  --s4: 1rem;
+  --s5: 1.5rem;
+  --s6: 2rem;
+  --s7: 3rem;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--ground);
+  color: var(--ink);
+  font-family: var(--font-text);
+  font-size: 17px;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ---------- shell ---------- */
+
+.doc {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--s6);
+  max-width: 1180px;
+  margin: 0 auto;
+  padding: var(--s6) var(--s5) var(--s7);
+}
+@media (min-width: 1000px) {
+  .doc { grid-template-columns: 15rem minmax(0, 1fr); gap: var(--s7); }
+}
+
+.rail { align-self: start; }
+@media (min-width: 1000px) {
+  .rail { position: sticky; top: var(--s5); }
+}
+.rail__label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-tertiary);
+  margin: 0 0 var(--s3);
+}
+.rail ol {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+.rail li { border-bottom: 1px solid var(--separator); }
+.rail li:first-child { border-top: 1px solid var(--separator); }
+.rail a {
+  display: flex;
+  gap: var(--s3);
+  padding: var(--s3) 0;
+  color: var(--ink-secondary);
+  text-decoration: none;
+  font-size: 0.875rem;
+  line-height: 1.35;
+}
+.rail a:hover { color: var(--accent); }
+.rail a span:first-child {
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  color: var(--ink-tertiary);
+  padding-top: 0.15em;
+}
+
+.body { min-width: 0; }
+.prose { max-width: 68ch; }
+
+/* ---------- type ---------- */
+
+h1, h2, h3 {
+  font-family: var(--font-display);
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  text-wrap: balance;
+  margin: 0;
+}
+h1 { font-size: clamp(2.25rem, 5vw, 3.25rem); line-height: 1.05; }
+h2 { font-size: 1.875rem; line-height: 1.15; }
+h3 { font-size: 1.25rem; line-height: 1.25; }
+
+p { margin: 0; }
+.prose > p + p,
+.prose > h3 + p { margin-top: var(--s4); }
+
+.eyebrow {
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-tertiary);
+}
+
+/* The label voice for anything longer than about three words. Uppercase
+   strips the ascenders and descenders we read word shapes by, which a
+   four-word label survives and a question does not - so descriptive
+   labels keep sentence case and earn their rank from weight and size. */
+.sublabel {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--ink-secondary);
+}
+
+.lede {
+  font-size: 1.1875rem;
+  color: var(--ink-secondary);
+  max-width: 60ch;
+}
+
+code, .mono { font-family: var(--font-mono); }
+code {
+  font-size: 0.875em;
+  background: var(--sunken);
+  padding: 0.1em 0.35em;
+  border: 1px solid var(--separator);
+}
+
+a { color: var(--accent); }
+
+/* ---------- masthead ---------- */
+
+.masthead {
+  border-bottom: 2px solid var(--ink);
+  padding-bottom: var(--s5);
+  margin-bottom: var(--s6);
+}
+.masthead__meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s2) var(--s4);
+  align-items: baseline;
+  margin-bottom: var(--s4);
+}
+.wordmark {
+  font-family: var(--font-display);
+  font-size: 1.25rem;
+  font-weight: 600;
+}
+.masthead h1 { margin-bottom: var(--s4); }
+
+.part-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s2);
+  margin-top: var(--s5);
+}
+.part {
+  border: 1px solid var(--separator-strong);
+  background: var(--surface);
+  padding: var(--s3) var(--s4);
+  font-size: 0.875rem;
+  color: var(--ink-secondary);
+  flex: 1 1 16rem;
+}
+.part strong { color: var(--ink); display: block; font-weight: 600; }
+.part--current { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.part--current strong { color: var(--accent-ink); }
+
+/* ---------- sections ---------- */
+
+section { margin-top: var(--s7); scroll-margin-top: var(--s5); }
+section > * + * { margin-top: var(--s5); }
+section > h2 + p { margin-top: var(--s4); }
+
+.section-head {
+  display: flex;
+  gap: var(--s4);
+  align-items: baseline;
+  border-bottom: 1px solid var(--separator-strong);
+  padding-bottom: var(--s3);
+}
+.section-head .num {
+  font-family: var(--font-mono);
+  font-size: 0.875rem;
+  color: var(--ink-tertiary);
+}
+
+/* ---------- boxes ---------- */
+
+.box {
+  background: var(--surface);
+  border: 1px solid var(--separator-strong);
+  padding: var(--s5);
+}
+.box--mint { background: var(--mint-100); border-color: var(--mint-200); }
+.box--blue { background: var(--blue-100); border-color: var(--blue-200); }
+.box--sunken { background: var(--sunken); }
+
+/* The one loud idea per part gets the accent block. Used twice, on purpose. */
+.keystone {
+  background: var(--accent);
+  color: var(--accent-ink);
+  padding: var(--s6);
+}
+.keystone .eyebrow,
+.keystone .sublabel { color: var(--mint-200); }
+.keystone p { margin-top: var(--s4); max-width: 58ch; }
+.keystone strong { color: #ffffff; }
+
+/* Term definition: a memorable one-liner, then how Diacify actually uses it. */
+.term {
+  background: var(--surface);
+  border: 1px solid var(--separator-strong);
+  padding: var(--s4) var(--s5);
+}
+.term dt {
+  font-family: var(--font-display);
+  font-size: 1.0625rem;
+  font-weight: 600;
+  color: var(--accent);
+}
+.term dd { margin: var(--s2) 0 0; }
+.term dd + dd {
+  margin-top: var(--s3);
+  padding-top: var(--s3);
+  border-top: 1px dashed var(--separator);
+  font-size: 0.9375rem;
+  color: var(--ink-secondary);
+}
+.term dd .in-diacify {
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-tertiary);
+  display: block;
+  margin-bottom: var(--s1);
+}
+dl { margin: 0; display: flex; flex-direction: column; gap: var(--s4); }
+
+.adr {
+  display: inline-block;
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  background: var(--blue-200);
+  color: var(--accent);
+  padding: 0.1em 0.45em;
+  text-decoration: none;
+  border: 1px solid transparent;
+}
+.adr:hover { border-color: var(--accent); }
+
+.note {
+  font-size: 0.9375rem;
+  color: var(--ink-secondary);
+  border-top: 1px solid var(--separator);
+  padding-top: var(--s3);
+}
+
+/* ---------- diagrams ---------- */
+
+/* Artifacts render these natively; no library is loaded. Each diagram
+   carries an init directive pushing Diacify's palette into mermaid, so a
+   flowchart doesn't arrive in mermaid's default lavender. */
+figure.diagram {
+  margin: 0;
+  border: 1px solid var(--separator-strong);
+  background: var(--surface);
+}
+figure.diagram pre.mermaid {
+  margin: 0;
+  padding: var(--s5) var(--s4);
+  text-align: center;
+  overflow-x: auto;
+  background: none;
+  border: none;
+}
+figure.diagram figcaption {
+  border-top: 1px solid var(--separator);
+  padding: var(--s3) var(--s4);
+  font-size: 0.875rem;
+  color: var(--ink-secondary);
+  background: var(--sunken);
+}
+
+/* ---------- bullets ---------- */
+
+/* A consequence list reads faster than the same items welded into a
+   paragraph, and each line can be scanned independently. */
+ul.bullets {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+ul.bullets li {
+  display: flex;
+  gap: var(--s3);
+  padding: var(--s3) 0;
+  border-bottom: 1px solid var(--separator);
+  font-size: 0.9375rem;
+  color: var(--ink-secondary);
+}
+ul.bullets li:last-child { border-bottom: none; }
+ul.bullets li::before { content: "→"; color: var(--accent); flex: none; }
+ul.bullets strong { color: var(--ink); }
+
+/* ---------- disclosure ---------- */
+
+/* The reasoning is kept, not deleted - it just isn't on screen by default.
+   Skim the page, open the "why" only where you want the argument. */
+details.why {
+  border: 1px solid var(--separator);
+  background: var(--sunken);
+}
+details.why > summary {
+  cursor: pointer;
+  padding: var(--s3) var(--s4);
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--accent);
+  list-style: none;
+  display: flex;
+  gap: var(--s2);
+  align-items: center;
+}
+details.why > summary::-webkit-details-marker { display: none; }
+details.why > summary::before { content: "＋"; font-weight: 400; }
+details.why[open] > summary::before { content: "－"; }
+details.why > summary:hover { background: var(--accent-wash); }
+.why__body {
+  padding: var(--s4);
+  border-top: 1px solid var(--separator);
+  background: var(--surface);
+  font-size: 0.9375rem;
+  color: var(--ink-secondary);
+}
+.why__body > * + * { margin-top: var(--s3); }
+
+/* ---------- tables ---------- */
+
+.scroll-x { overflow-x: auto; }
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9375rem;
+}
+th {
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--ink-tertiary);
+  text-align: left;
+  padding: var(--s3);
+  white-space: nowrap;
+  border-bottom: 2px solid var(--ink);
+}
+td {
+  padding: var(--s3);
+  border-bottom: 1px solid var(--separator);
+  vertical-align: top;
+}
+tbody tr:last-child td { border-bottom: none; }
+td .mono { font-size: 0.875rem; }
+.num-cell { font-variant-numeric: tabular-nums; text-align: right; }
+
+/* ---------- lifecycle toggle ---------- */
+
+.lc__controls {
+  display: flex;
+  border: 1px solid var(--separator-strong);
+  background: var(--sunken);
+  padding: 3px;
+  gap: 3px;
+  margin-bottom: var(--s5);
+}
+.lc__controls button {
+  flex: 1;
+  font: inherit;
+  font-size: 0.9375rem;
+  font-weight: 500;
+  padding: var(--s2) var(--s3);
+  border: none;
+  background: transparent;
+  color: var(--ink-secondary);
+  cursor: pointer;
+}
+.lc__controls button[aria-pressed="true"] {
+  background: var(--accent);
+  color: var(--accent-ink);
+  font-weight: 600;
+}
+
+.lc__stage {
+  display: grid;
+  gap: var(--s3);
+  grid-template-columns: 1fr;
+  align-items: stretch;
+}
+@media (min-width: 720px) {
+  .lc__stage { grid-template-columns: 1fr auto 1fr; align-items: center; }
+}
+
+.lc__side {
+  border: 1px solid var(--separator-strong);
+  background: var(--surface);
+  padding: var(--s4);
+  transition: background 160ms ease, border-color 160ms ease;
+}
+/* The inactive side stays fully legible - both lifecycles are worth reading
+   at a glance, and the toggle only decides which one the caption explains.
+   Emphasis comes from ground and border, never from dimming the text. */
+.lc__side[data-active="true"] {
+  background: var(--mint-100);
+  border-color: var(--accent);
+}
+.lc__side h3 {
+  margin: 0 0 var(--s1);
+  font-family: var(--font-display);
+  font-size: 1.0625rem;
+  font-weight: 600;
+  letter-spacing: normal;
+}
+.lc__side .lc__when {
+  font-size: 0.8125rem;
+  color: var(--ink-tertiary);
+  margin: 0 0 var(--s3);
+}
+.lc__steps {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  color: var(--ink-secondary);
+}
+.lc__steps li { background: var(--sunken); padding: 0.3em 0.5em; }
+.lc__side[data-active="true"] .lc__steps li { background: var(--surface); }
+
+.lc__join {
+  text-align: center;
+  padding: var(--s4) var(--s3);
+  background: var(--accent);
+  color: var(--accent-ink);
+  border: 1px solid var(--accent);
+}
+.lc__join .mono { font-size: 0.8125rem; display: block; margin-top: var(--s1); }
+.lc__join .eyebrow { color: var(--mint-200); }
+.lc__caption {
+  margin-top: var(--s4);
+  font-size: 0.9375rem;
+  color: var(--ink-secondary);
+  min-height: 3em;
+}
+
+/* ---------- map ---------- */
+
+.map {
+  display: grid;
+  gap: var(--s3);
+  grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
+}
+.map__cell {
+  border: 1px solid var(--separator-strong);
+  background: var(--surface);
+  padding: var(--s4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--s2);
+}
+.map__cell .mono { font-size: 0.8125rem; font-weight: 600; }
+.map__cell p { font-size: 0.875rem; color: var(--ink-secondary); }
+.map__cell .stack-tag {
+  margin-top: auto;
+  padding-top: var(--s3);
+  border-top: 1px solid var(--separator);
+  font-size: 0.75rem;
+  color: var(--ink-tertiary);
+}
+.map__cell--platform { background: var(--blue-100); border-color: var(--blue-200); }
+
+/* ---------- score explorer ---------- */
+
+.sx { display: grid; gap: var(--s5); grid-template-columns: 1fr; }
+@media (min-width: 780px) { .sx { grid-template-columns: 1fr 1fr; } }
+
+.sx__sliders { display: flex; flex-direction: column; gap: var(--s4); }
+.sx__slider label {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.875rem;
+  font-weight: 500;
+  margin-bottom: var(--s1);
+}
+.sx__slider label .val { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+.sx__slider input[type="range"] { width: 100%; accent-color: var(--accent); }
+.sx__derived {
+  font-size: 0.8125rem;
+  color: var(--ink-tertiary);
+  border-top: 1px solid var(--separator);
+  padding-top: var(--s3);
+}
+
+.sx__out { display: flex; flex-direction: column; gap: var(--s3); }
+.sx__readout {
+  border: 1px solid var(--separator-strong);
+  background: var(--surface);
+  padding: var(--s4);
+}
+.sx__readout .eyebrow { display: block; margin-bottom: var(--s1); }
+.sx__big {
+  font-family: var(--font-display);
+  font-size: 2.25rem;
+  line-height: 1.05;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  text-transform: capitalize;
+}
+.sx__formula { font-family: var(--font-mono); font-size: 0.75rem; color: var(--ink-tertiary); margin-top: var(--s2); }
+[data-cat="low"] .sx__big { color: var(--risk-low); }
+[data-cat="medium"] .sx__big { color: var(--risk-medium); }
+[data-cat="high"] .sx__big { color: var(--risk-high); }
+
+.flag {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s2);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  padding: 0.25em 0.6em;
+  border: 1px solid currentColor;
+}
+.flag--on { color: var(--risk-medium); background: #fbf0dc; border-color: #fbf0dc; }
+.flag--off { color: var(--ink-tertiary); background: var(--sunken); border-color: var(--separator); }
+
+.compare { margin-top: var(--s5); }
+.compare .who { font-weight: 600; }
+.compare tr[data-cat="low"] .cat { color: var(--risk-low); font-weight: 600; }
+.compare tr[data-cat="medium"] .cat { color: var(--risk-medium); font-weight: 600; }
+
+/* ---------- ownership chain ---------- */
+
+.chain { display: flex; flex-direction: column; gap: var(--s3); }
+.chain__row {
+  display: grid;
+  gap: var(--s3);
+  grid-template-columns: 1fr;
+  border: 1px solid var(--separator-strong);
+  background: var(--surface);
+  padding: var(--s4);
+}
+@media (min-width: 780px) {
+  .chain__row { grid-template-columns: 11rem minmax(0, 1fr); align-items: start; }
+}
+.chain__table { font-family: var(--font-mono); font-size: 0.875rem; font-weight: 600; }
+.chain__depth { font-size: 0.75rem; color: var(--ink-tertiary); display: block; font-family: var(--font-text); font-weight: 400; margin-top: 2px; }
+.chain__pred {
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  line-height: 1.5;
+  background: var(--sunken);
+  padding: var(--s3);
+  overflow-x: auto;
+  white-space: pre;
+  border: 1px solid var(--separator);
+}
+.chain__gloss { font-size: 0.875rem; color: var(--ink-secondary); margin-top: var(--s2); }
+
+/* ---------- check yourself ---------- */
+
+.checks { display: flex; flex-direction: column; gap: var(--s3); }
+details.check {
+  border: 1px solid var(--separator-strong);
+  background: var(--surface);
+}
+details.check > summary {
+  cursor: pointer;
+  padding: var(--s4);
+  font-weight: 500;
+  list-style: none;
+  display: flex;
+  gap: var(--s3);
+  align-items: baseline;
+}
+details.check > summary::-webkit-details-marker { display: none; }
+details.check > summary::after {
+  content: "Show answer";
+  margin-left: auto;
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--ink-tertiary);
+  white-space: nowrap;
+}
+details.check[open] > summary::after { content: "Hide"; }
+details.check > summary .q {
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  color: var(--ink-tertiary);
+}
+details.check > summary:hover { background: var(--sunken); }
+.check__answer {
+  padding: 0 var(--s4) var(--s4);
+  border-top: 1px solid var(--separator);
+  margin-top: 0;
+}
+.check__answer p { margin-top: var(--s4); font-size: 0.9375rem; color: var(--ink-secondary); }
+.check__answer p strong { color: var(--ink); }
+
+/* ---------- next ---------- */
+
+.next-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.next-list li {
+  display: flex;
+  gap: var(--s4);
+  padding: var(--s3) 0;
+  border-bottom: 1px solid var(--separator);
+  font-size: 0.9375rem;
+  color: var(--ink-secondary);
+}
+.next-list li:last-child { border-bottom: none; }
+.next-list .n { font-family: var(--font-mono); font-size: 0.8125rem; color: var(--ink-tertiary); }
+.next-list strong { color: var(--ink); font-weight: 600; }
+
+footer {
+  margin-top: var(--s7);
+  border-top: 1px solid var(--separator);
+  padding-top: var(--s4);
+  font-size: 0.875rem;
+  color: var(--ink-tertiary);
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s2) var(--s5);
+  justify-content: space-between;
+}
+
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+@media (prefers-reduced-motion: reduce) {
+  * { transition: none !important; }
+}
+</style>
+</head>
+<body>
+
+<div class="doc">
+  <nav class="rail" aria-label="Contents">
+    <p class="rail__label">Part 1 — Contents</p>
+    <ol>
+      <li><a href="#what"><span>1</span><span>What Diacify is</span></a></li>
+      <li><a href="#lifecycles"><span>2</span><span>Two lifecycles, one file</span></a></li>
+      <li><a href="#map"><span>3</span><span>The map</span></a></li>
+      <li><a href="#domain"><span>4</span><span>The domain</span></a></li>
+      <li><a href="#ownership"><span>5</span><span>The one idea</span></a></li>
+      <li><a href="#checks"><span>6</span><span>Check yourself</span></a></li>
+      <li><a href="#next"><span>7</span><span>What Part 2 covers</span></a></li>
+    </ol>
+  </nav>
+
+  <main class="body">
+    <header class="masthead">
+      <div class="masthead__meta">
+        <span class="wordmark">Diacify</span>
+        <span class="eyebrow">Architecture · Part 1</span>
+      </div>
+      <h1>How Diacify works, from the top down</h1>
+      <p class="lede">
+        A clinician records what they measured at a patient visit. Diacify
+        answers with a diabetes risk assessment. Everything below explains
+        how that sentence turns into a running system — no prior knowledge
+        of this codebase assumed.
+      </p>
+      <div class="part-strip">
+        <div class="part part--current">
+          <strong>Part 1 · High level</strong>
+          The shape of the system and the four ideas you need before any
+          code makes sense. Readable start to finish in about ten minutes.
+        </div>
+        <div class="part">
+          <strong>Part 2 · Low level</strong>
+          One request traced end to end, the gates, RLS in detail, ML
+          serving, the training pipeline, and the seams.
+        </div>
+      </div>
+    </header>
+
+    <section id="what">
+      <div class="section-head">
+        <span class="num">01</span>
+        <h2>What Diacify is</h2>
+      </div>
+
+      <div class="prose">
+        <p>
+          Diacify is a tool for one kind of person doing one kind of job: a
+          clinician, seeing a patient, who wants to know how that patient's
+          numbers read against a diabetes risk model.
+        </p>
+        <p>
+          The whole product is three nouns and one verb: a
+          <strong>clinician</strong> keeps <strong>patients</strong>, each
+          patient accumulates <strong>visits</strong>, and recording a visit
+          produces a <strong>risk assessment</strong>.
+        </p>
+        <p>
+          No appointments, no analytics dashboard. Both existed in legacy and
+          were deliberately left out
+          <a class="adr" href="#" data-adr="043">ADR-043</a>.
+        </p>
+      </div>
+
+      <div class="box box--sunken">
+        <p class="sublabel" style="margin-bottom: var(--s3)">One pass through the product</p>
+        <div class="scroll-x">
+          <table>
+            <thead>
+              <tr><th>The clinician does</th><th>Diacify records</th><th>They get back</th></tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>Signs up, signs in</td>
+                <td>An identity in Supabase Auth</td>
+                <td>A session; everything after this is scoped to them</td>
+              </tr>
+              <tr>
+                <td>Adds a patient with a chart reference</td>
+                <td>A <span class="mono">patients</span> row: reference, sex</td>
+                <td>A patient in their list — no name, no date of birth</td>
+              </tr>
+              <tr>
+                <td>Records a visit: age, blood pressure, BMI, HbA1c, and optionally a lipid panel</td>
+                <td>A <span class="mono">visits</span> row — measurements only</td>
+                <td>A risk assessment, scored immediately</td>
+              </tr>
+              <tr>
+                <td>Reads the result</td>
+                <td>A <span class="mono">risk_assessments</span> row</td>
+                <td><span style="color: var(--risk-low); font-weight: 600">low</span> / <span style="color: var(--risk-medium); font-weight: 600">medium</span> / <span style="color: var(--risk-high); font-weight: 600">high</span>, a 0–100 score, and a confidence flag</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="note">
+          A patient is identified by a clinician-chosen <em>reference</em> —
+          a chart label like <span class="mono">JD-0412</span> — not by a
+          legal name. Diacify never stores one
+          <a class="adr" href="#" data-adr="038">ADR-038</a>.
+        </p>
+      </div>
+    </section>
+
+    <section id="lifecycles">
+      <div class="section-head">
+        <span class="num">02</span>
+        <h2>Two lifecycles, one file</h2>
+      </div>
+
+      <p class="prose">
+        Diacify has two separate lifecycles. One <strong>trains</strong> a
+        model; the other <strong>serves</strong> it. Different languages,
+        different workspaces, different times, no shared code — meeting at
+        exactly one file.
+      </p>
+
+      <div class="box">
+        <div class="lc__controls" role="group" aria-label="Choose a lifecycle">
+          <button type="button" data-lc="training" aria-pressed="true">Training — offline</button>
+          <button type="button" data-lc="serving" aria-pressed="false">Serving — every request</button>
+        </div>
+
+        <div class="lc__stage">
+          <div class="lc__side" id="lc-training" data-active="true">
+            <h3>Training</h3>
+            <p class="lc__when">Python · run by hand, rarely</p>
+            <ul class="lc__steps">
+              <li>662-row CSV dataset</li>
+              <li>parse &amp; clean each field</li>
+              <li>impute missing values</li>
+              <li>engineer ratios &amp; flags</li>
+              <li>assign ADA 2025 labels</li>
+              <li>leakage-safe train/test split</li>
+              <li>fit random forest · 100 trees</li>
+              <li>cross-validate, audit bias</li>
+              <li>export</li>
+            </ul>
+          </div>
+
+          <div class="lc__join">
+            <span class="eyebrow">They meet here</span>
+            <span class="mono">backend/src/ml/model.json</span>
+          </div>
+
+          <div class="lc__side" id="lc-serving" data-active="false">
+            <h3>Serving</h3>
+            <p class="lc__when">TypeScript · every prediction</p>
+            <ul class="lc__steps">
+              <li>load &amp; validate model.json at boot</li>
+              <li>visit measurements arrive</li>
+              <li>build 13-value feature vector</li>
+              <li>walk all 100 trees</li>
+              <li>average into 3 probabilities</li>
+              <li>derive score, category, confidence</li>
+              <li>store the assessment</li>
+            </ul>
+          </div>
+        </div>
+
+        <p class="lc__caption" id="lc-caption"></p>
+      </div>
+
+      <dl>
+        <div class="term">
+          <dt>The serving model</dt>
+          <dd>
+            A trained model flattened into plain data — no code, no runtime,
+            nothing to execute. Just the numbers a prediction needs.
+          </dd>
+          <dd>
+            <span class="in-diacify">In Diacify</span>
+            <span class="mono">model.json</span> holds 100 decision trees as
+            nested thresholds, the feature order, the class names
+            <span class="mono">["low","medium","high"]</span>, and the
+            imputation medians learned during training. It is committed to
+            git alongside the code that reads it, and stamped with a version
+            — currently <span class="mono">rf-098c19d0afc9</span>. The Python
+            side writes it; the Node side only ever reads it
+            <a class="adr" href="#" data-adr="025">ADR-025</a>.
+          </dd>
+        </div>
+      </dl>
+
+      <div class="box box--mint">
+        <p class="sublabel" style="margin-bottom: var(--s3)">What porting the forest into the backend removed</p>
+        <div class="scroll-x">
+          <table>
+            <thead>
+              <tr><th></th><th>Legacy Diacify</th><th>Now</th></tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>Inference runs in</td>
+                <td>A separate Python service</td>
+                <td>The backend process</td>
+              </tr>
+              <tr>
+                <td>A prediction is</td>
+                <td>A network call</td>
+                <td>A function call</td>
+              </tr>
+              <tr>
+                <td>If it's unavailable</td>
+                <td>The visit saves unscored</td>
+                <td>Cannot happen</td>
+              </tr>
+              <tr>
+                <td>So the schema needed</td>
+                <td>A <span class="mono">'pending'</span> state on every visit</td>
+                <td>Nothing — no row means not scored</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="note">
+          Two runtimes became one <a class="adr" href="#" data-adr="001">ADR-001</a>.
+          Training stayed in Python because scikit-learn, cross-validation and
+          bias-audit tooling live there — and it runs on a laptop, not in
+          production.
+        </p>
+      </div>
+    </section>
+
+    <section id="map">
+      <div class="section-head">
+        <span class="num">03</span>
+        <h2>The map</h2>
+      </div>
+
+      <p class="prose">
+        Four workspaces in one repository, plus one managed platform doing
+        work that would otherwise be code.
+      </p>
+
+      <figure class="diagram">
+<pre class="mermaid">
+%%{init: {'theme':'base','themeVariables':{'primaryColor':'#eaf5ee','primaryTextColor':'#16261e','primaryBorderColor':'#16382b','secondaryColor':'#f4f1e9','secondaryTextColor':'#16261e','secondaryBorderColor':'#c9d6cb','tertiaryColor':'#ffffff','tertiaryTextColor':'#16261e','tertiaryBorderColor':'#c9d6cb','lineColor':'#435146','textColor':'#16261e','attributeBackgroundColorOdd':'#ffffff','attributeBackgroundColorEven':'#f4f1e9','nodeBorder':'#16382b','mainBkg':'#eaf5ee','edgeLabelBackground':'#fbf9f3','fontFamily':'Inter, system-ui, sans-serif','fontSize':'13px'}}}%%
+flowchart LR
+    C["Clinician's browser"]
+    F["frontend&lt;br/&gt;Vercel"]
+    B["backend&lt;br/&gt;Render"]
+    DB[("Supabase Postgres&lt;br/&gt;row-level security")]
+    M["model.json&lt;br/&gt;100 trees"]:::artifact
+    ML["machine-learning&lt;br/&gt;Python, offline"]:::offline
+
+    C -->|"session JWT"| F
+    F -->|"JSON, shape from shared/"| B
+    B -->|"queries as the caller"| DB
+    M -.->|"read once at boot"| B
+    ML -.->|"writes, on a laptop"| M
+
+    classDef offline fill:#f4f1e9,stroke:#5f6d63,color:#435146,stroke-dasharray:4 3
+    classDef artifact fill:#cfe3e8,stroke:#16382b,color:#16261e
+</pre>
+        <figcaption>
+          Solid lines are the request path. Dashed lines never run while a
+          clinician is using Diacify — that whole branch happens beforehand,
+          on someone's laptop.
+        </figcaption>
+      </figure>
+
+      <div class="map">
+        <div class="map__cell">
+          <span class="mono">frontend/</span>
+          <p>
+            Eight pages a clinician actually uses — landing, sign in, sign up,
+            patient list, new and edit patient, patient detail, record visit.
+            Fetches from the backend and renders; holds no business rules.
+          </p>
+          <span class="stack-tag">Vite · React Router · TanStack Query</span>
+        </div>
+
+        <div class="map__cell">
+          <span class="mono">shared/</span>
+          <p>
+            The request shapes both sides agree on, as Zod schemas. The
+            frontend validates a form against the same object the backend
+            validates the request against, so the two cannot drift.
+          </p>
+          <span class="stack-tag">TypeScript · Zod · npm workspace</span>
+        </div>
+
+        <div class="map__cell">
+          <span class="mono">backend/</span>
+          <p>
+            Eight HTTP endpoints across two routers, the authentication and
+            rate-limit gates, and the ML serving code that turns a visit into
+            a risk assessment in-process.
+          </p>
+          <span class="stack-tag">Node · Express · TypeScript</span>
+        </div>
+
+        <div class="map__cell">
+          <span class="mono">machine-learning/</span>
+          <p>
+            Fifteen single-purpose modules run top to bottom by
+            <span class="mono">train.py</span>: raw CSV in, evaluated model
+            out, plus the audit trail. Never runs in production.
+          </p>
+          <span class="stack-tag">Python · scikit-learn · pytest</span>
+        </div>
+
+        <div class="map__cell map__cell--platform">
+          <span class="mono">Supabase</span>
+          <p>
+            Not a workspace — a managed platform. Provides identity (Auth),
+            the database (Postgres), and, critically, the authorization rules
+            that decide who can see which rows.
+          </p>
+          <span class="stack-tag">Auth · Postgres · Row-level security</span>
+        </div>
+
+        <div class="map__cell map__cell--platform">
+          <span class="mono">Deployment</span>
+          <p>
+            The backend runs on Render, the frontend on Vercel, the database
+            is hosted Supabase. Three services, no container orchestration
+            <a class="adr" href="#" data-adr="006">ADR-006</a>.
+          </p>
+          <span class="stack-tag">Render · Vercel · Supabase</span>
+        </div>
+      </div>
+
+      <p class="note prose">
+        Everything except <span class="mono">machine-learning/</span> is
+        TypeScript, and all four workspaces share one root lockfile
+        <a class="adr" href="#" data-adr="041">ADR-041</a>.
+      </p>
+    </section>
+
+    <section id="domain">
+      <div class="section-head">
+        <span class="num">04</span>
+        <h2>The domain</h2>
+      </div>
+
+      <p class="prose">
+        Four concepts. Two are easy; two carry a distinction that shapes the
+        database, the API, and the UI.
+      </p>
+
+      <figure class="diagram">
+<pre class="mermaid">
+%%{init: {'theme':'base','themeVariables':{'primaryColor':'#eaf5ee','primaryTextColor':'#16261e','primaryBorderColor':'#16382b','secondaryColor':'#f4f1e9','secondaryTextColor':'#16261e','secondaryBorderColor':'#c9d6cb','tertiaryColor':'#ffffff','tertiaryTextColor':'#16261e','tertiaryBorderColor':'#c9d6cb','lineColor':'#435146','textColor':'#16261e','attributeBackgroundColorOdd':'#ffffff','attributeBackgroundColorEven':'#f4f1e9','nodeBorder':'#16382b','mainBkg':'#eaf5ee','edgeLabelBackground':'#fbf9f3','fontFamily':'Inter, system-ui, sans-serif','fontSize':'13px'}}}%%
+erDiagram
+    AUTH_USERS ||--o{ PATIENTS : "owns"
+    PATIENTS ||--o{ VISITS : "accumulates"
+    VISITS ||--o{ RISK_ASSESSMENTS : "is judged by"
+
+    AUTH_USERS {
+        uuid id "the clinician"
+    }
+    PATIENTS {
+        uuid clinician_id "the only ownership column"
+        text reference "chart label, not a name"
+        text sex "the one attribute the model uses"
+    }
+    VISITS {
+        date visit_date "FACTS - what was measured"
+        numeric hba1c "required"
+        numeric bmi "required"
+        numeric ldl "nullable - not always drawn"
+    }
+    RISK_ASSESSMENTS {
+        text model_version "JUDGEMENTS - what a model concluded"
+        numeric risk_score "0-100 ranking number"
+        enum risk_category "low, medium, high"
+        boolean low_confidence "was the model unsure"
+    }
+</pre>
+        <figcaption>
+          One visit can carry several assessments — one per model version,
+          never overwritten. That crow's foot on the right is the whole
+          facts-versus-judgements idea in one mark.
+        </figcaption>
+      </figure>
+
+      <dl>
+        <div class="term">
+          <dt>Clinician</dt>
+          <dd>The person using Diacify. Owns everything they create, and can never see anything they didn't.</dd>
+          <dd>
+            <span class="in-diacify">In Diacify</span>
+            A Supabase Auth user. There is no <span class="mono">clinicians</span>
+            table of our own — <span class="mono">patients.clinician_id</span>
+            references <span class="mono">auth.users(id)</span> directly.
+          </dd>
+        </div>
+
+        <div class="term">
+          <dt>Patient</dt>
+          <dd>A person under a clinician's care, identified by a label that clinician chose.</dd>
+          <dd>
+            <span class="in-diacify">In Diacify</span>
+            A <span class="mono">patients</span> row holding a
+            <span class="mono">reference</span> (1–40 characters, unique per
+            clinician) and <span class="mono">sex</span> — which is here for
+            one reason only: it is the single patient-level attribute the
+            trained model actually consumes
+            <a class="adr" href="#" data-adr="014">ADR-014</a>. Everything
+            else clinical belongs to a visit, not the person.
+          </dd>
+        </div>
+
+        <div class="term">
+          <dt>Visit — a <em>fact</em></dt>
+          <dd>An observation. What was measured, on a given date. True regardless of what anyone concludes from it.</dd>
+          <dd>
+            <span class="in-diacify">In Diacify</span>
+            A <span class="mono">visits</span> row: age, systolic, diastolic,
+            BMI and HbA1c are required; RBS, cholesterol, triglycerides, HDL,
+            LDL and VLDL are nullable, because a clinician doesn't draw a full
+            lipid panel every time. There are no score columns on this table
+            at all <a class="adr" href="#" data-adr="018">ADR-018</a>.
+          </dd>
+        </div>
+
+        <div class="term">
+          <dt>Risk assessment — a <em>judgement</em></dt>
+          <dd>A conclusion drawn from a fact by a particular model at a particular time. Can be revisited; can be wrong; can be superseded.</dd>
+          <dd>
+            <span class="in-diacify">In Diacify</span>
+            A <span class="mono">risk_assessments</span> row referencing a
+            visit, stamped with the <span class="mono">model_version</span>
+            that produced it. Append-only: one row per
+            <span class="mono">(visit, model_version)</span> pair, so
+            retraining <em>adds</em> a second opinion rather than erasing the
+            first <a class="adr" href="#" data-adr="028">ADR-028</a>.
+          </dd>
+        </div>
+      </dl>
+
+      <div class="keystone">
+        <span class="sublabel">The distinction that shapes the schema</span>
+        <p>
+          <strong>Facts and judgements are stored separately, on purpose.</strong>
+          Legacy Diacify put the measurements and the model's output on the
+          same row, so re-scoring a visit overwrote history and a
+          <span class="mono">model_version</span> column could only ever mean
+          "the latest one". Splitting them makes "did the retrain move
+          anyone between categories?" an answerable question instead of an
+          erased one.
+        </p>
+      </div>
+
+      <h3 style="margin-top: var(--s6)">Score and category answer different questions</h3>
+
+      <div class="prose">
+        <p>
+          Every assessment carries both a <span class="mono">risk_score</span>
+          (0–100) and a <span class="mono">risk_category</span>
+          (low / medium / high). It is natural to assume one is derived from
+          the other. It isn't — and the reason is the most instructive thing
+          in the domain.
+        </p>
+        <p>
+          The model outputs three probabilities that sum to 1. The
+          <strong>category</strong> is simply whichever is largest. The
+          <strong>score</strong> is a weighted sum — medium counts half, high
+          counts fully — designed for <em>ranking one patient against
+          another</em>. Move the sliders and watch them disagree.
+        </p>
+      </div>
+
+      <div class="box">
+        <div class="sx">
+          <div class="sx__sliders">
+            <p class="sublabel">The model's three probabilities</p>
+
+            <div class="sx__slider">
+              <label for="p-high">
+                <span>probability · high</span>
+                <span class="val" id="v-high">0.40</span>
+              </label>
+              <input type="range" id="p-high" min="0" max="100" value="40">
+            </div>
+
+            <div class="sx__slider">
+              <label for="p-medium">
+                <span>probability · medium</span>
+                <span class="val" id="v-medium">0.15</span>
+              </label>
+              <input type="range" id="p-medium" min="0" max="100" value="15">
+            </div>
+
+            <div class="sx__slider">
+              <label>
+                <span>probability · low</span>
+                <span class="val" id="v-low">0.45</span>
+              </label>
+              <div style="height: 6px; background: var(--sunken); border: 1px solid var(--separator)">
+                <div id="bar-low" style="height: 100%; background: var(--accent); width: 45%"></div>
+              </div>
+            </div>
+
+            <p class="sx__derived">
+              Low is whatever remains — the three always sum to 1, so it isn't
+              independently adjustable.
+            </p>
+          </div>
+
+          <div class="sx__out" id="sx-out" data-cat="low">
+            <div class="sx__readout">
+              <span class="sublabel">risk_category — what is this patient?</span>
+              <div class="sx__big" id="out-cat">low</div>
+              <p class="sx__formula">argmax(low, medium, high)</p>
+            </div>
+
+            <div class="sx__readout">
+              <span class="sublabel">risk_score — how urgently, versus others?</span>
+              <div class="sx__big" id="out-score">47.50</div>
+              <p class="sx__formula">(0.5 × medium + 1 × high) × 100</p>
+            </div>
+
+            <div>
+              <span class="flag flag--on" id="out-conf">low confidence</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="compare">
+          <p class="sublabel" style="margin-bottom: var(--s3)">Why deriving one from the other breaks</p>
+          <div class="scroll-x">
+            <table>
+              <thead>
+                <tr>
+                  <th>Patient</th>
+                  <th class="num-cell">low</th>
+                  <th class="num-cell">medium</th>
+                  <th class="num-cell">high</th>
+                  <th class="num-cell">score</th>
+                  <th>category</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr data-cat="low">
+                  <td class="who">A</td>
+                  <td class="num-cell mono">0.45</td>
+                  <td class="num-cell mono">0.15</td>
+                  <td class="num-cell mono">0.40</td>
+                  <td class="num-cell mono">47.50</td>
+                  <td class="cat">low</td>
+                </tr>
+                <tr data-cat="medium">
+                  <td class="who">B</td>
+                  <td class="num-cell mono">0.25</td>
+                  <td class="num-cell mono">0.60</td>
+                  <td class="num-cell mono">0.15</td>
+                  <td class="num-cell mono">45.00</td>
+                  <td class="cat">medium</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p class="note">
+            A scores <em>higher</em> than B while being categorised
+            <em>lower</em>. Both are correct.
+          </p>
+          <details class="why" style="margin-top: var(--s3)">
+            <summary>How both can be true at once</summary>
+            <div class="why__body">
+              <p>
+                A carries a 40% chance of high risk, so A is worth looking at
+                first — the score doing its job. But the model's single best
+                guess for A is still "low", and B's is "medium" — the category
+                doing its job.
+              </p>
+              <p>
+                Band the score into categories and you would report A as the
+                higher-risk patient, contradicting the model. That is why
+                Diacify computes them independently.
+              </p>
+            </div>
+          </details>
+        </div>
+      </div>
+
+      <dl style="margin-top: var(--s5)">
+        <div class="term">
+          <dt>Low confidence</dt>
+          <dd>A signal that the model's top answer wasn't a clear winner, so a clinician shouldn't read the category as settled.</dd>
+          <dd>
+            <span class="in-diacify">In Diacify</span>
+            Set when the highest of the three probabilities falls below
+            <span class="mono">0.55</span>. The threshold has to sit above
+            <span class="mono">1/3</span> to mean anything at all — with three
+            classes the top probability can never be lower than that, so an
+            earlier <span class="mono">0.40</span> threshold was advertised
+            but literally unreachable.
+          </dd>
+        </div>
+      </dl>
+    </section>
+
+    <section id="ownership">
+      <div class="section-head">
+        <span class="num">05</span>
+        <h2>The one idea to hold onto</h2>
+      </div>
+
+      <div class="keystone">
+        <span class="sublabel">If you remember one thing</span>
+        <p>
+          <strong>The backend does not decide who owns what data.</strong>
+          It forwards the clinician's own token to Postgres and lets the
+          database answer. No route handler in Diacify contains a
+          <span class="mono">clinician_id</span> filter — not one — and that
+          is not an oversight.
+        </p>
+      </div>
+
+      <dl>
+        <div class="term">
+          <dt>Row-level security (RLS)</dt>
+          <dd>
+            A rule attached to a table itself, saying which rows the current
+            user is allowed to touch. The database enforces it on every query,
+            no matter who is asking or what they asked for.
+          </dd>
+          <dd>
+            <span class="in-diacify">In Diacify</span>
+            Each request builds a Supabase client from <em>the caller's own
+            JWT</em>, so queries run as that clinician
+            <a class="adr" href="#" data-adr="013">ADR-013</a>. A
+            <span class="mono">SELECT * FROM patients</span> with no
+            <span class="mono">WHERE</span> clause returns only their
+            patients — because Postgres silently adds the condition.
+          </dd>
+        </div>
+      </dl>
+
+      <p class="prose">
+        Ownership gets further from the row at each level, so each table
+        proves it by walking back up the chain.
+      </p>
+
+      <div class="chain">
+        <div class="chain__row">
+          <div>
+            <span class="chain__table">patients</span>
+            <span class="chain__depth">Owned directly</span>
+          </div>
+          <div>
+            <div class="chain__pred">clinician_id = auth.uid()</div>
+            <p class="chain__gloss">
+              The row names its owner, so the check is one comparison.
+            </p>
+          </div>
+        </div>
+
+        <div class="chain__row">
+          <div>
+            <span class="chain__table">visits</span>
+            <span class="chain__depth">Owned through one join</span>
+          </div>
+          <div>
+            <div class="chain__pred">exists (
+  select 1 from patients p
+  where p.id = visits.patient_id
+    and p.clinician_id = auth.uid()
+)</div>
+            <p class="chain__gloss">
+              Nothing on a visit names a clinician, so ownership is proved by
+              looking at its patient <a class="adr" href="#" data-adr="017">ADR-017</a>.
+            </p>
+          </div>
+        </div>
+
+        <div class="chain__row">
+          <div>
+            <span class="chain__table">risk_assessments</span>
+            <span class="chain__depth">Owned through two joins</span>
+          </div>
+          <div>
+            <div class="chain__pred">exists (
+  select 1 from visits v
+  join patients p on p.id = v.patient_id
+  where v.id = risk_assessments.visit_id
+    and p.clinician_id = auth.uid()
+)</div>
+            <p class="chain__gloss">
+              Assessment → visit → patient → clinician, resolved in one
+              expression.
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <h3 style="margin-top: var(--s6)">Why not just put a <span class="mono">clinician_id</span> on every table?</h3>
+
+      <p class="prose">
+        It reads more simply, and it is a common design. It also leaves the
+        write path open. Follow one insert down both routes:
+      </p>
+
+      <figure class="diagram">
+<pre class="mermaid">
+%%{init: {'theme':'base','themeVariables':{'primaryColor':'#eaf5ee','primaryTextColor':'#16261e','primaryBorderColor':'#16382b','secondaryColor':'#f4f1e9','secondaryTextColor':'#16261e','secondaryBorderColor':'#c9d6cb','tertiaryColor':'#ffffff','tertiaryTextColor':'#16261e','tertiaryBorderColor':'#c9d6cb','lineColor':'#435146','textColor':'#16261e','attributeBackgroundColorOdd':'#ffffff','attributeBackgroundColorEven':'#f4f1e9','nodeBorder':'#16382b','mainBkg':'#eaf5ee','edgeLabelBackground':'#fbf9f3','fontFamily':'Inter, system-ui, sans-serif','fontSize':'13px'}}}%%
+flowchart TD
+    W["Clinician A inserts a visit&lt;br/&gt;patient_id points at Clinician B's patient"]
+    W --> D["Denormalized&lt;br/&gt;clinician_id column"]
+    W --> J["Join-based policy&lt;br/&gt;what Diacify does"]
+
+    D --> D1["WITH CHECK: clinician_id = A ✓&lt;br/&gt;A did set their own id"]
+    D1 --> D2["Foreign key: does that patient row exist? ✓&lt;br/&gt;it does — it is just not A's"]
+    D2 --> D3["Visit written onto B's patient"]:::bad
+
+    J --> J1["WITH CHECK: does this patient belong to A?"]
+    J1 --> J2["Rejected"]:::good
+
+    classDef bad fill:#fbeae7,stroke:#a32d21,color:#a32d21
+    classDef good fill:#eaf5ee,stroke:#1c7a33,color:#1c7a33
+</pre>
+        <figcaption>
+          A foreign key confirms the referenced row <em>exists</em>. It never
+          asks who owns it, and it never consults RLS.
+        </figcaption>
+      </figure>
+
+      <details class="why">
+        <summary>Why the column isn't worth keeping alongside the join</summary>
+        <div class="why__body">
+          <p>
+            Closing that write hole requires the join check anyway. Once it is
+            there, the denormalized column adds nothing to enforcement — it
+            just becomes a second place ownership is recorded, and therefore a
+            second place it can disagree with itself.
+          </p>
+          <p>
+            Legacy Diacify checked this precedent: it scoped visits through
+            patients too, and denormalized only onto
+            <span class="mono">appointments</span>, a different table with a
+            different reason <a class="adr" href="#" data-adr="017">ADR-017</a>.
+          </p>
+        </div>
+      </details>
+
+      <p class="sublabel">What follows from this one decision</p>
+      <ul class="bullets">
+        <li><span>No route handler mentions a clinician. There is nothing to forget to filter by.</span></li>
+        <li><span>Another clinician's patient returns <strong>404, not 403</strong> — invisible rather than forbidden, so the API never confirms someone else's record exists.</span></li>
+        <li><span>A bad <span class="mono">patient_id</span> surfaces as a Postgres <span class="mono">42501</span> rather than a clean validation error <a class="adr" href="#" data-adr="008">ADR-008</a>.</span></li>
+      </ul>
+    </section>
+
+    <section id="checks">
+      <div class="section-head">
+        <span class="num">06</span>
+        <h2>Check yourself</h2>
+      </div>
+
+      <div class="prose">
+        <p>
+          If Part 1 landed, these should be answerable before you open the
+          answer. If one isn't, the section it came from is worth a second
+          pass.
+        </p>
+      </div>
+
+      <div class="checks">
+        <details class="check">
+          <summary><span class="q">Q1</span><span>Someone asks "is Diacify a Python app or a Node app?" Why is that question malformed?</span></summary>
+          <div class="check__answer">
+            <p>
+              Because it conflates the two lifecycles. <strong>Training</strong>
+              is Python and runs offline on a laptop, rarely, by hand.
+              <strong>Serving</strong> is TypeScript and runs in the backend
+              on every prediction. The running application in production
+              contains no Python at all — it reads
+              <span class="mono">model.json</span>, which Python produced
+              earlier. The correct answer is "Node in production; Python
+              produced the model it serves."
+            </p>
+          </div>
+        </details>
+
+        <details class="check">
+          <summary><span class="q">Q2</span><span>Why doesn't the <span class="mono">visits</span> table have a <span class="mono">risk_score</span> column?</span></summary>
+          <div class="check__answer">
+            <p>
+              A visit is a <strong>fact</strong> — what was measured. A score
+              is a <strong>judgement</strong> — what one model concluded about
+              those measurements. Storing them on one row means re-scoring
+              overwrites the previous conclusion, which destroys the ability
+              to compare model versions and makes the stored
+              <span class="mono">model_version</span> meaningless. They live
+              in separate tables, and assessments are append-only per
+              <span class="mono">(visit, model_version)</span>.
+            </p>
+          </div>
+        </details>
+
+        <details class="check">
+          <summary><span class="q">Q3</span><span>Patient A's score is 47.5 and category is <em>low</em>; patient B's score is 45.0 and category is <em>medium</em>. Is that a bug?</span></summary>
+          <div class="check__answer">
+            <p>
+              No — they answer different questions. The category is the
+              model's single most likely class (<span class="mono">argmax</span>).
+              The score is a ranking number weighting medium at half and high
+              at full. A is a genuinely split case carrying 40% probability of
+              high risk, so it ranks above B for attention, while its single
+              best guess is still "low". <strong>Deriving</strong> the category
+              by banding the score is the actual bug — it would report A as
+              higher-risk than B, contradicting the model.
+            </p>
+          </div>
+        </details>
+
+        <details class="check">
+          <summary><span class="q">Q4</span><span>You're reviewing a new endpoint. It filters by <span class="mono">clinician_id</span> in the query. What do you say?</span></summary>
+          <div class="check__answer">
+            <p>
+              That it shouldn't need to. Queries run through a Supabase client
+              built from the caller's own JWT, so RLS already restricts every
+              statement to that clinician's rows. A hand-written filter is at
+              best redundant, and at worst misleading — it implies the
+              application is the thing enforcing ownership, which invites
+              someone later to write an endpoint that forgets. The database is
+              the enforcement point; the application never gets a vote.
+            </p>
+          </div>
+        </details>
+
+        <details class="check">
+          <summary><span class="q">Q5</span><span>Why does requesting another clinician's patient by id return 404 rather than 403?</span></summary>
+          <div class="check__answer">
+            <p>
+              Because RLS doesn't hide the row from the response — it hides it
+              from the <em>query</em>. The backend genuinely finds nothing, so
+              "not found" is the honest answer. It's also the safer one: a 403
+              would confirm that a record with that id exists and belongs to
+              someone else, which is information the caller shouldn't have.
+            </p>
+          </div>
+        </details>
+      </div>
+    </section>
+
+    <section id="next">
+      <div class="section-head">
+        <span class="num">07</span>
+        <h2>What Part 2 covers</h2>
+      </div>
+
+      <div class="prose">
+        <p>
+          Part 1 is the shape. Part 2 is the mechanism — real file names, real
+          data shapes, real policy predicates, at the depth where you could
+          open any file and know what you're looking at.
+        </p>
+      </div>
+
+      <ul class="next-list">
+        <li><span class="n">06</span><span><strong>One request, end to end.</strong> Recording a visit, traced across all four workspaces — React form, shared schema, gates, route, RLS insert, feature vector, forest, assessment, response, UI.</span></li>
+        <li><span class="n">07</span><span><strong>The gates.</strong> Local JWKS verification, per-clinician rate limiting, boundary validation — and why the order is a data dependency rather than a habit.</span></li>
+        <li><span class="n">08</span><span><strong>Data and security in detail.</strong> Every table, every policy, the grant model, and what each migration was actually defending against.</span></li>
+        <li><span class="n">09</span><span><strong>ML serving.</strong> The shape of <span class="mono">model.json</span>, how 13 features get built from a visit, and how 100 trees become three probabilities.</span></li>
+        <li><span class="n">10</span><span><strong>ML training.</strong> All fifteen Python modules in order — dataset, imputation, feature engineering, labelling, leakage-safe splitting, tuning, evaluation, bias audit, export.</span></li>
+        <li><span class="n">11</span><span><strong>The seams.</strong> Where the boundaries sit, what each one buys, and what it costs.</span></li>
+      </ul>
+    </section>
+
+    <footer>
+      <span>Diacify · Architecture, Part 1 of 2</span>
+      <span>Decisions cited as ADR-nnn live in <span class="mono">docs/decisions.md</span></span>
+    </footer>
+  </main>
+</div>
+
+<!-- Diagrams render via mermaid directly (this page doesn't run inside an
+     Artifact host, which renders mermaid natively - here it has to be
+     loaded and started explicitly). One pinned UMD build, no bundler. -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/mermaid/11.15.0/mermaid.min.js"></script>
+<script>
+  mermaid.initialize({ startOnLoad: true, securityLevel: "strict" });
+</script>
+
+<script>
+(function () {
+  "use strict";
+
+  /* ---------- lifecycle toggle ---------- */
+
+  var CAPTIONS = {
+    training: "Run by hand, on a laptop, when the dataset or the model changes — which is rarely. It reads a CSV and writes model.json. Nothing here is deployed, and nothing here runs while a clinician is using Diacify.",
+    serving: "Runs inside the backend process. model.json is read and validated once at boot, so a malformed artifact stops the process immediately rather than surfacing as a failed prediction on someone's first real request."
+  };
+
+  var lcButtons = document.querySelectorAll(".lc__controls button");
+  var lcSides = { training: document.getElementById("lc-training"), serving: document.getElementById("lc-serving") };
+  var lcCaption = document.getElementById("lc-caption");
+
+  function selectLifecycle(name) {
+    lcButtons.forEach(function (button) {
+      button.setAttribute("aria-pressed", String(button.dataset.lc === name));
+    });
+    Object.keys(lcSides).forEach(function (key) {
+      lcSides[key].setAttribute("data-active", String(key === name));
+    });
+    lcCaption.textContent = CAPTIONS[name];
+  }
+
+  lcButtons.forEach(function (button) {
+    button.addEventListener("click", function () { selectLifecycle(button.dataset.lc); });
+  });
+  selectLifecycle("training");
+
+  /* ---------- score vs category explorer ---------- */
+
+  var MEDIUM_WEIGHT = 0.5;
+  var HIGH_WEIGHT = 1;
+  var LOW_CONFIDENCE_THRESHOLD = 0.55;
+
+  var highInput = document.getElementById("p-high");
+  var mediumInput = document.getElementById("p-medium");
+  var out = {
+    high: document.getElementById("v-high"),
+    medium: document.getElementById("v-medium"),
+    low: document.getElementById("v-low"),
+    bar: document.getElementById("bar-low"),
+    wrap: document.getElementById("sx-out"),
+    category: document.getElementById("out-cat"),
+    score: document.getElementById("out-score"),
+    confidence: document.getElementById("out-conf")
+  };
+
+  /* Mirrors backend/src/ml/riskAssessment.ts - a ranking number, not a
+     probability, deliberately not the source of the category. */
+  function calculateRiskScore(p) {
+    return Math.round((MEDIUM_WEIGHT * p.medium + HIGH_WEIGHT * p.high) * 100 * 100) / 100;
+  }
+
+  function classifyRisk(p) {
+    if (p.low >= p.medium && p.low >= p.high) return "low";
+    return p.medium >= p.high ? "medium" : "high";
+  }
+
+  function render() {
+    var high = Number(highInput.value) / 100;
+    var medium = Number(mediumInput.value) / 100;
+
+    // Low takes the remainder, so the three always sum to 1. If the two
+    // sliders together exceed 1, the later-moved one gives way.
+    if (high + medium > 1) {
+      medium = 1 - high;
+      mediumInput.value = String(Math.round(medium * 100));
+    }
+    var low = 1 - high - medium;
+    var probabilities = { low: low, medium: medium, high: high };
+
+    out.high.textContent = high.toFixed(2);
+    out.medium.textContent = medium.toFixed(2);
+    out.low.textContent = low.toFixed(2);
+    out.bar.style.width = (low * 100) + "%";
+
+    var category = classifyRisk(probabilities);
+    out.category.textContent = category;
+    out.score.textContent = calculateRiskScore(probabilities).toFixed(2);
+    out.wrap.setAttribute("data-cat", category);
+
+    var topProbability = Math.max(low, medium, high);
+    var isLowConfidence = topProbability < LOW_CONFIDENCE_THRESHOLD;
+    out.confidence.textContent = isLowConfidence ? "low confidence" : "confident";
+    out.confidence.className = "flag " + (isLowConfidence ? "flag--on" : "flag--off");
+  }
+
+  highInput.addEventListener("input", render);
+  mediumInput.addEventListener("input", render);
+  render();
+
+  /* ---------- ADR links ---------- */
+
+  // The ADR log lives in the repo, not on this page. Until it is published
+  // somewhere linkable, these explain rather than 404.
+  document.querySelectorAll(".adr").forEach(function (link) {
+    link.setAttribute("title", "ADR-" + link.dataset.adr + " in docs/decisions.md");
+    link.addEventListener("click", function (event) { event.preventDefault(); });
+  });
+})();
+</script>
+</body>
+</html>
