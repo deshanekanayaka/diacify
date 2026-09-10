@@ -4,15 +4,15 @@ A clinician records a patient visit; Diacify returns a diabetes risk
 assessment, scored in-process by a random forest ported from the
 project's own training pipeline.
 
-**[Read the architecture](https://diacify.vercel.app/architecture.html)**
-— what the system does, its two lifecycles (offline training vs.
-in-process serving), the domain model, and the row-level-security idea
-most of the design falls out of. Written for a new developer, assumes
-nothing about this codebase. Source is
-[`frontend/public/architecture.html`](frontend/public/architecture.html)
-(open it in a browser to read it — GitHub only shows the source).
-`docs/decisions.md` is the accompanying decision log (43 ADRs) if you
-want the reasoning behind a specific choice.
+**[Docs](https://diacify.vercel.app/docs/)** — what the system does,
+its two lifecycles (offline training vs. in-process serving), the
+domain model, and the row-level-security idea most of the design falls
+out of. Written for a new developer, assumes nothing about this
+codebase. Source is
+[`frontend/public/docs/`](frontend/public/docs/index.html) (open it in
+a browser to read it — GitHub only shows the source). `docs/decisions.md`
+is the accompanying decision log (43 ADRs) if you want the reasoning
+behind a specific choice.
 
 ## Stack
 

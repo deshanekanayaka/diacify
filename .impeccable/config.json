@@ -43,7 +43,7 @@
         "rule": "overused-font",
         "value": "inter",
         "files": [
-          "frontend/public/architecture.html"
+          "frontend/public/docs/index.html"
         ],
         "createdAt": "2026-09-10T19:55:17.226Z",
         "reason": "user directed: match frontend/src/theme.css exactly, which already uses Inter as the product's body face"
@@ -52,7 +52,7 @@
         "rule": "overused-font",
         "value": "fraunces",
         "files": [
-          "frontend/public/architecture.html"
+          "frontend/public/docs/index.html"
         ],
         "createdAt": "2026-09-10T19:55:17.249Z",
         "reason": "user directed: match frontend/src/theme.css exactly, which already uses Fraunces as the product's display face"
@@ -61,7 +61,7 @@
         "rule": "cream-palette",
         "value": "*",
         "files": [
-          "frontend/public/architecture.html"
+          "frontend/public/docs/index.html"
         ],
         "createdAt": "2026-09-10T19:55:17.269Z",
         "reason": "user directed: match frontend/src/theme.css's --ground (#fbf9f3), the product's actual palette, not a default reached for independently"
