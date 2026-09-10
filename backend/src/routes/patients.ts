@@ -47,6 +47,39 @@ function toVisitWithLatestAssessment<T extends { risk_assessments: unknown[] }>(
   return { ...visit, risk_assessment: assessments[0] ?? null };
 }
 
+/**
+ * Reshapes one patient row carrying its visit count and its latest visit's
+ * latest assessment.
+ *
+ * The query embeds `visits` twice under two aliases - `visit_count` (a bare
+ * count aggregate) and `latest_visit` (the single most recent visit, itself
+ * embedding that visit's single most recent assessment) - because a
+ * PostgREST count embed and an order+limited embed of the same relation
+ * need separate aliases to carry different modifiers in one request
+ * (verified directly against local Postgres). Two nested one-element
+ * arrays collapse into one nullable "current risk" field, same reasoning
+ * as toVisitWithLatestAssessment one level up - null meaning either no
+ * visit yet, or a visit that hasn't been scored.
+ *
+ * This is the plain embed PostgREST already supports, not the
+ * patients_with_latest_risk view that sorting/filtering by risk would need
+ * - see context/tasks.md.
+ */
+function toPatientWithLatestAssessment<
+  T extends {
+    visit_count: { count: number }[];
+    latest_visit: { visit_date: string; risk_assessments: unknown[] }[];
+  },
+>(row: T) {
+  const { visit_count: visitCount, latest_visit: latestVisit, ...patient } = row;
+  return {
+    ...patient,
+    visit_count: visitCount[0]?.count ?? 0,
+    last_visit_date: latestVisit[0]?.visit_date ?? null,
+    risk_assessment: latestVisit[0]?.risk_assessments[0] ?? null,
+  };
+}
+
 export interface CreatePatientsRouterOptions {
   supabaseUrl: string;
   supabasePublishableKey: string;
@@ -85,9 +118,18 @@ export function createPatientsRouter({
 
     const { data, error, count } = await client
       .from("patients")
-      .select("*", { count: "exact" })
+      .select(
+        `*, visit_count:visits(count), latest_visit:visits(id, visit_date, created_at, risk_assessments(${LATEST_ASSESSMENT_FIELDS}))`,
+        { count: "exact" },
+      )
       .order("created_at", { ascending: false })
       .order("id", { ascending: false })
+      .order("visit_date", { ascending: false, referencedTable: "latest_visit" })
+      .order("created_at", { ascending: false, referencedTable: "latest_visit" })
+      .order("id", { ascending: false, referencedTable: "latest_visit" })
+      .limit(1, { referencedTable: "latest_visit" })
+      .order("created_at", { ascending: false, referencedTable: "latest_visit.risk_assessments" })
+      .limit(1, { referencedTable: "latest_visit.risk_assessments" })
       .range(from, to);
 
     if (error) {
@@ -96,7 +138,7 @@ export function createPatientsRouter({
       return;
     }
 
-    res.status(200).json({ data, page, limit, total: count });
+    res.status(200).json({ data: data.map(toPatientWithLatestAssessment), page, limit, total: count });
   });
 
   router.post("/", createPatientRateLimit, async (req, res) => {
@@ -122,6 +164,83 @@ export function createPatientsRouter({
     }
 
     res.status(201).json({ data });
+  });
+
+  // Same validation and rate limit as creating a patient - editing the same
+  // two fields carries the same duplicate-reference and shape rules.
+  router.patch("/:id", createPatientRateLimit, async (req, res) => {
+    const patientId = req.params.id;
+    if (!isUuid(patientId)) {
+      res.status(400).json({ error: "Invalid patient id" });
+      return;
+    }
+
+    const parsed = createPatientSchema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: "Invalid patient data" });
+      return;
+    }
+
+    const { accessToken } = req.user!;
+    const client = createRequestClient(supabaseUrl, supabasePublishableKey, accessToken);
+
+    const { data, error } = await client
+      .from("patients")
+      .update(parsed.data)
+      .eq("id", patientId)
+      .select()
+      .maybeSingle();
+
+    if (error) {
+      if (error.code === UNIQUE_VIOLATION) {
+        res.status(409).json(DUPLICATE_REFERENCE_BODY);
+        return;
+      }
+      logInternalError("PATCH /api/patients/:id", error);
+      res.status(500).json(INTERNAL_ERROR_BODY);
+      return;
+    }
+    if (!data) {
+      res.status(404).json(PATIENT_NOT_FOUND_BODY);
+      return;
+    }
+
+    res.status(200).json({ data });
+  });
+
+  // Hard delete, not an archive/soft-delete: visits and risk_assessments
+  // already cascade away with the patient at the database level (see the
+  // patients/visits/risk_assessments migrations), so this permanently
+  // erases the whole chart. That is a deliberate choice, not an oversight -
+  // see the "patient delete" decision recorded when this route was added.
+  router.delete("/:id", createPatientRateLimit, async (req, res) => {
+    const patientId = req.params.id;
+    if (!isUuid(patientId)) {
+      res.status(400).json({ error: "Invalid patient id" });
+      return;
+    }
+
+    const { accessToken } = req.user!;
+    const client = createRequestClient(supabaseUrl, supabasePublishableKey, accessToken);
+
+    const { data, error } = await client
+      .from("patients")
+      .delete()
+      .eq("id", patientId)
+      .select("id")
+      .maybeSingle();
+
+    if (error) {
+      logInternalError("DELETE /api/patients/:id", error);
+      res.status(500).json(INTERNAL_ERROR_BODY);
+      return;
+    }
+    if (!data) {
+      res.status(404).json(PATIENT_NOT_FOUND_BODY);
+      return;
+    }
+
+    res.status(204).send();
   });
 
   router.get("/:id", async (req, res) => {
