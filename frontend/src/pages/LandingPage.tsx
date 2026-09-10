@@ -14,10 +14,8 @@ import {
 
 /**
  * The public front door. Every claim here is one the codebase can back:
- * PRODUCT.md forbids standing in evidence (screenshots, testimonials, demo
- * data) that does not exist yet, so the page argues from what was built,
- * with no hero graphic standing in for evidence that doesn't exist —
- * headline, subhead, and CTA carry the hero on their own.
+ * no screenshots, testimonials, or demo data standing in for evidence that
+ * does not exist yet — headline, subhead, and CTA carry the hero on their own.
  */
 const HOW_IT_WORKS = [
   {
@@ -92,7 +90,7 @@ export function LandingPage() {
         </section>
 
         <h2 className="t-title" style={{ marginBottom: "1.5rem" }}>
-          Five fields, one answer.
+          How it works.
         </h2>
         <div className="tiles">
           {HOW_IT_WORKS.map((tile) => (
@@ -120,7 +118,7 @@ export function LandingPage() {
 
         <footer className="site-footer">
           <Wordmark />
-          <span className="t-caption">© 2026 Diacify · Not a diagnostic device</span>
+          <span className="t-caption">© 2026 Diacify</span>
         </footer>
       </main>
     </>
