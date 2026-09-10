@@ -1,0 +1,9 @@
+{
+  "name": "diacify",
+  "private": true,
+  "workspaces": [
+    "shared",
+    "backend",
+    "frontend"
+  ]
+}

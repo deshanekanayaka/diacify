@@ -1,7 +1,10 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import type { CreateVisitInput } from "@diacify/shared";
 
 import { apiFetch } from "../lib/apiClient";
 import { PATIENTS_QUERY_KEY } from "./patients";
+
+export type { CreateVisitInput };
 
 // Matches usePatients' own limit in api/patients.ts - the patient list's
 // visit_count/last_visit_date/risk_assessment are the same "current risk"
@@ -43,22 +46,6 @@ interface VisitListResponse {
   page: number;
   limit: number;
   total: number;
-}
-
-export interface CreateVisitInput {
-  /** Omitted means "today" — the backend column defaults to the current date. */
-  visit_date?: string;
-  age: number;
-  systolic: number;
-  diastolic: number;
-  bmi: number;
-  hba1c: number;
-  rbs?: number;
-  cholesterol?: number;
-  triglycerides?: number;
-  hdl?: number;
-  ldl?: number;
-  vldl?: number;
 }
 
 function visitsQueryKey(patientId: string) {

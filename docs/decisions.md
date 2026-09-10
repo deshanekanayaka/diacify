@@ -1408,3 +1408,50 @@ already per-clinician everywhere else in this schema.
 `supabase gen types typescript --local` against the reset local stack, not
 hand-edited. `createPatientSchema` now requires `reference` (trimmed,
 1-40 chars) alongside `sex`.
+
+---
+
+## ADR-041 — Sharing Zod schemas: npm workspaces, not path aliases or duplication
+
+**Status:** Accepted — 2026-09-10
+
+**Context:** ADR-004 decided *what* to share (one Zod schema module) but
+not *how* — `backend/` and `frontend/` were two unrelated npm projects
+with no root `package.json`, divergent toolchains (TypeScript 5.6 vs 6.0,
+Vitest 2 vs 5, eslint vs oxlint), and the backend's `tsconfig.json`
+(`rootDir: "src"`) meant it could not import a file from outside
+`backend/src` without breaking its build. `createPatientSchema.ts` and
+`createVisitSchema.ts` sat unreachable in `backend/src/routes/`, and the
+frontend hand-duplicated their shapes as `CreatePatientInput`/
+`CreateVisitInput` — with no range validation at all client-side, so an
+implausible value (e.g. BMI 700) only surfaced as an unlabelled
+`"Invalid visit data"` after a round trip to the server.
+
+**Decision:** A root `package.json` with npm workspaces
+(`shared`, `backend`, `frontend`) and one root lockfile. `shared/` owns
+`zod` and the two schema modules, compiled to `dist/` via its own `tsc`
+build step (no other tooling); `backend` and `frontend` depend on
+`@diacify/shared` like any other npm package and consume the compiled
+output, avoiding the `rootDir` conflict a raw source import would hit
+in the backend's build.
+
+**Rejected:** A `shared/` folder reached via a Vite alias and a backend
+path mapping, no workspace tooling (Option B) — smaller diff, but two
+different resolution mechanisms for the same import, configured in two
+places, with `zod` still declared twice and free to drift in version;
+confusing to debug, not simplifying anything. Leaving the duplication in
+place and adding a CI check that the two definitions agree (Option C) —
+no packaging work, but institutionalises exactly the duplication ADR-004
+was written to make impossible, and a Zod-schema-equivalence check is
+not an honest one-liner to write.
+
+**Consequences:** `zod` is now hoisted once at the workspace root rather
+than declared separately by backend and frontend, so the two sides
+cannot silently diverge onto different `zod` majors. CI gained a fourth
+job (`shared`, mirroring backend/frontend's lint/typecheck/test/build)
+and the backend/frontend jobs now `npm ci` from the root and build
+`shared` before using it, since it ships as a compiled dependency, not
+raw TypeScript source. Response types (`Visit`, `PatientListItem`,
+`RiskAssessment`) are unaffected — they remain hand-written on the
+frontend, shaped from Supabase's generated `database.types.ts`; sharing
+those is a separate decision, not bundled into this one.
