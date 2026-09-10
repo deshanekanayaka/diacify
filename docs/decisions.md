@@ -1455,3 +1455,61 @@ raw TypeScript source. Response types (`Visit`, `PatientListItem`,
 `RiskAssessment`) are unaffected — they remain hand-written on the
 frontend, shaped from Supabase's generated `database.types.ts`; sharing
 those is a separate decision, not bundled into this one.
+
+---
+
+## ADR-042 — Server-side patient risk filter/sort: `patients_with_latest_risk` view
+
+**Status:** Accepted — 2026-09-10
+
+**Context:** `GET /api/patients` already embeds each patient's latest visit's
+latest risk assessment for display (a plain PostgREST embed). The patient
+list's risk filter pills and "highest risk first" sort ran entirely
+client-side over one fetched page of up to 100 patients - correct at a
+solo clinician's realistic patient count, but silently wrong past it: a
+High-risk patient at position 150 (by created_at) would never be fetched
+at all, so a "High" filter or a risk sort would neither find nor mention
+them. PostgREST can embed a child's value for display but cannot order or
+filter *patients* by it - "patients ordered by their newest visit's newest
+risk_score" needs that chain collapsed into one row per patient first.
+
+**Decision:** A plain (non-materialized) view, `patients_with_latest_risk`,
+one row per patient: id/reference/sex/created_at, `visit_count` (all of a
+patient's visits), and the risk fields from only their single most recent
+visit's most recent assessment. Built with `LEFT JOIN LATERAL`, not
+`DISTINCT ON` - the count and the "latest row" pick are two different
+aggregation scopes a single `DISTINCT ON` pass can't express together.
+`security_invoker = true` so RLS on `patients`/`visits`/`risk_assessments`
+still applies through the view exactly as if queried directly - verified
+directly against local Postgres (two clinicians, `set local role
+authenticated` + `request.jwt.claims`) before any route code was written.
+`GET /api/patients` grew two query params, `risk`
+(`low`/`medium`/`high`/`unscored`) and `sort` (`newest`/`risk`), both
+optional, both validated by a new `parsePatientRiskQuery` (same
+ok/error-result shape as `parseDateRange`/`parsePagination`), and now reads
+from the view unconditionally rather than branching between it and the
+plain embed - one query path, not two.
+
+**Rejected:** A materialized view (Option B, decided against before
+implementation) - would need a refresh schedule and could show a stale
+risk score right after it's recorded, the wrong trade for a clinical tool.
+A second endpoint reading the view instead of growing `GET /api/patients`'s
+own query params (Option B2) - two URLs for "the patient list" is more
+surface than one route with two optional params.
+
+**Consequences:** The frontend's risk filter pills lost their previous
+"every pill shows its count at once" display - true counts for every
+*other* bucket would need either 5 requests or a counts endpoint, neither
+justified by this task's scope. Only the currently active pill shows a
+count now (the size of what's actually on screen). The reference-text
+search box stays a client-side substring filter over the fetched batch,
+unaffected - it never needed to see rows outside it. `visit_count` and
+`last_visit_date` moved from the old double-embed's array-collapsing
+reshape (`toPatientWithLatestAssessment`) to a flat-row reshape
+(`toPatientListItem`) reading the view's columns directly.
+
+**Full reasoning / verification:** context/tasks.md's now-resolved
+"patient list risk column" entry; `supabase/migrations/
+20260910180000_create_patients_with_latest_risk_view.sql`;
+`backend/src/routes/patients.test.ts`'s "GET /api/patients — risk filter
+and sort" block.

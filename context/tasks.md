@@ -6,7 +6,6 @@ Don't track workflow steps here. "Open a PR for slice N", "merge X", "push the m
 
 ## Now
 
-- [ ] The patient list's risk column, its High/Medium/Low/Not-scored filter pills, and its "highest risk first" sort all run client-side over one fetched page (`usePatients`' `LIST_ALL_LIMIT = 100`) rather than as server-side filter/sort params (2026-09-10) — correct at a solo clinician's realistic patient count, but only reflects the first 100 patients (newest first) past that. Real server-side sort-by-risk and filter-by-category needs a new Postgres view (e.g. `patients_with_latest_risk`, `DISTINCT ON` per patient ordered by visit/assessment recency, its own RLS): PostgREST can embed a patient's latest risk for display, but cannot order or filter *patients* by a nested child's value, confirmed against local Postgres while building the embed. This is a real schema decision (view shape, RLS, whether the existing `GET /api/patients` route grows a query param or a second endpoint reads the view), not implementation detail — decide together before building it.
 - [ ] Appointments and analytics: both exist in legacy, neither is planned here. Open scope question — the rebuilt frontend ships neither, so decide deliberately rather than letting the omission stand by default.
 
 ## Later — after all phases are complete

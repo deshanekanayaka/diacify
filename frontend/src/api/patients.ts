@@ -38,25 +38,41 @@ interface PatientListResponse {
   total: number;
 }
 
-// The list's risk filter/sort/counts (see PatientListPage) run entirely in
-// the browser over this one fetched page, not against the server — there
-// is no backend sort-by-risk or filter-by-category yet (that needs a new
-// Postgres view; context/tasks.md tracks it). Fetching the backend's own
-// max page size is the honest way to make that correct for a solo
-// clinician's realistic patient count; past 100 patients the list and its
-// filter counts would only reflect the first 100, newest first.
+// The reference search box (see PatientListPage) stays a client-side
+// substring filter over whatever this fetches - it's a small, already-
+// fetched batch, and there's no reason to round-trip the backend for a
+// filter that never needs to see rows outside that batch. Fetching the
+// backend's own max page size, already filtered/sorted by risk server-side
+// (patients_with_latest_risk, ADR: context/tasks.md), is what keeps that
+// correct past a solo clinician's realistic patient count - the fetched
+// 100 are the right 100 for the current risk filter and sort, not just
+// the newest 100 overall.
 const LIST_ALL_LIMIT = 100;
+
+export type PatientRiskFilter = "low" | "medium" | "high" | "unscored";
+export type PatientSort = "newest" | "risk";
 
 /** Exported so other mutations (e.g. recording a visit) that change what
  *  this list shows for a patient can invalidate it without redeclaring
  *  the same literal key. */
 export const PATIENTS_QUERY_KEY = ["patients"] as const;
 
-/** Fetches the caller's own patients, newest first, up to LIST_ALL_LIMIT of them. */
-export function usePatients() {
+/**
+ * Fetches the caller's own patients, up to LIST_ALL_LIMIT of them.
+ *
+ * @param risk Server-side risk-category filter; omitted means every
+ *   patient regardless of risk.
+ * @param sort "newest" (default) or "risk" (highest score first, unscored
+ *   patients last).
+ */
+export function usePatients({ risk, sort }: { risk?: PatientRiskFilter; sort?: PatientSort } = {}) {
+  const params = new URLSearchParams({ limit: String(LIST_ALL_LIMIT) });
+  if (risk !== undefined) params.set("risk", risk);
+  if (sort !== undefined) params.set("sort", sort);
+
   return useQuery({
-    queryKey: PATIENTS_QUERY_KEY,
-    queryFn: () => apiFetch<PatientListResponse>(`/api/patients?limit=${LIST_ALL_LIMIT}`),
+    queryKey: [...PATIENTS_QUERY_KEY, { risk, sort }] as const,
+    queryFn: () => apiFetch<PatientListResponse>(`/api/patients?${params}`),
   });
 }
 

@@ -1,8 +1,7 @@
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 
-import { usePatients, type PatientListItem } from "../api/patients";
-import type { RiskCategory } from "../api/visits";
+import { usePatients, type PatientListItem, type PatientRiskFilter, type PatientSort } from "../api/patients";
 import { DeletePatientButton } from "../components/DeletePatientButton";
 import { RiskBadge } from "../components/RiskBadge";
 import { IconPencil } from "../components/icons";
@@ -10,8 +9,7 @@ import { formatDate } from "../lib/format";
 
 const PAGE_SIZE = 20;
 
-type RiskFilter = "all" | RiskCategory | "unscored";
-type SortOption = "newest" | "risk";
+type RiskFilter = "all" | PatientRiskFilter;
 
 const RISK_FILTERS: { value: RiskFilter; label: string }[] = [
   { value: "all", label: "All" },
@@ -24,29 +22,26 @@ const RISK_FILTERS: { value: RiskFilter; label: string }[] = [
 /**
  * The patient list: the signed-in home screen.
  *
- * The risk column, filter pills, and sort control all run over one fetched
- * page of patients (see usePatients' LIST_ALL_LIMIT) rather than against
- * the backend — there is no server-side sort/filter by risk yet, since
- * "this patient's current risk" isn't a plain column Postgres can order or
- * filter by without a new view (context/tasks.md tracks that as a
- * follow-up slice). At a solo clinician's realistic patient count this is
- * correct; past that ceiling it would only reflect the first page fetched.
+ * The risk filter and sort are server-side params (patients_with_latest_risk,
+ * usePatients) — the fetched batch is already the right up-to-100 patients
+ * for the current filter/sort, not just the newest 100 overall. Only the
+ * reference search box stays client-side, over that already-small fetched
+ * batch.
  */
 export function PatientListPage() {
-  const { data, isPending, isError, error } = usePatients();
   const [riskFilter, setRiskFilter] = useState<RiskFilter>("all");
   const [referenceQuery, setReferenceQuery] = useState("");
-  const [sort, setSort] = useState<SortOption>("newest");
+  const [sort, setSort] = useState<PatientSort>("newest");
   const [page, setPage] = useState(1);
+
+  const { data, isPending, isError, error } = usePatients({
+    risk: riskFilter === "all" ? undefined : riskFilter,
+    sort: sort === "risk" ? "risk" : undefined,
+  });
 
   const patients = useMemo(() => data?.data ?? [], [data]);
 
-  const counts = useMemo(() => countByRisk(patients), [patients]);
-
-  const visible = useMemo(
-    () => selectPatients(patients, { riskFilter, referenceQuery, sort }),
-    [patients, riskFilter, referenceQuery, sort],
-  );
+  const visible = useMemo(() => filterByReference(patients, referenceQuery), [patients, referenceQuery]);
 
   const totalPages = Math.max(1, Math.ceil(visible.length / PAGE_SIZE));
   const currentPage = Math.min(page, totalPages);
@@ -111,7 +106,7 @@ export function PatientListPage() {
               aria-label="Sort"
               value={sort}
               onChange={(event) => {
-                setSort(event.target.value as SortOption);
+                setSort(event.target.value as PatientSort);
                 setPage(1);
               }}
               style={{
@@ -137,7 +132,8 @@ export function PatientListPage() {
                 aria-pressed={riskFilter === option.value}
                 onClick={() => updateFilter(option.value)}
               >
-                {option.label} {counts[option.value]}
+                {option.label}
+                {riskFilter === option.value ? ` ${visible.length}` : ""}
               </button>
             ))}
           </div>
@@ -265,46 +261,9 @@ function PageNav({
   );
 }
 
-/** Counts patients per risk filter bucket, for the pill row's numbers. */
-function countByRisk(patients: PatientListItem[]): Record<RiskFilter, number> {
-  return {
-    all: patients.length,
-    high: patients.filter((patient) => patient.risk_assessment?.risk_category === "high").length,
-    medium: patients.filter((patient) => patient.risk_assessment?.risk_category === "medium").length,
-    low: patients.filter((patient) => patient.risk_assessment?.risk_category === "low").length,
-    unscored: patients.filter((patient) => patient.risk_assessment === null).length,
-  };
-}
-
-/** Applies the reference search, risk filter, and sort — in that order — to one fetched page of patients. */
-function selectPatients(
-  patients: PatientListItem[],
-  { riskFilter, referenceQuery, sort }: { riskFilter: RiskFilter; referenceQuery: string; sort: SortOption },
-): PatientListItem[] {
+/** Applies the reference search to the already server-filtered/sorted batch. */
+function filterByReference(patients: PatientListItem[], referenceQuery: string): PatientListItem[] {
   const query = referenceQuery.trim().toLowerCase();
-  let result = query
-    ? patients.filter((patient) => patient.reference.toLowerCase().includes(query))
-    : patients;
-
-  if (riskFilter === "unscored") {
-    result = result.filter((patient) => patient.risk_assessment === null);
-  } else if (riskFilter !== "all") {
-    result = result.filter((patient) => patient.risk_assessment?.risk_category === riskFilter);
-  }
-
-  if (sort === "risk") {
-    // Backend order (newest first) is already what "newest" wants, so only
-    // "highest risk first" needs an actual sort - unscored patients sink to
-    // the bottom rather than being treated as risk 0.
-    result = [...result].sort((a, b) => {
-      const scoreA = a.risk_assessment?.risk_score;
-      const scoreB = b.risk_assessment?.risk_score;
-      if (scoreA === undefined && scoreB === undefined) return 0;
-      if (scoreA === undefined) return 1;
-      if (scoreB === undefined) return -1;
-      return scoreB - scoreA;
-    });
-  }
-
-  return result;
+  if (!query) return patients;
+  return patients.filter((patient) => patient.reference.toLowerCase().includes(query));
 }
