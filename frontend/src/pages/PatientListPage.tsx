@@ -74,12 +74,7 @@ export function PatientListPage() {
           <p className="t-section" style={{ color: "var(--ink)" }}>
             No patients yet
           </p>
-          <p className="t-body" style={{ marginBottom: "1.5rem" }}>
-            Add your first patient, then record their visit to get a risk score.
-          </p>
-          <Link to="/patients/new" className="btn">
-            New patient
-          </Link>
+          <p className="t-body">Add your first patient, then record their visit to get a risk score.</p>
         </div>
       ) : null}
 
