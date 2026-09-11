@@ -17,9 +17,15 @@
  * at night.
  */
 :root {
-  --ground: #fbf9f3;
+  /* White ground rather than the app's warm #fbf9f3: this page is long-form
+     reading, and the cream was tiring over that distance. Cards are defined
+     by their borders, not by contrasting against the page, so a white
+     surface on a white ground still reads as separate. */
+  --ground: #ffffff;
   --surface: #ffffff;
-  --sunken: #f4f1e9;
+  /* A near-white with a slight green cast, so fills stay in the accent's
+     family instead of reading as a neutral grey dropped in from elsewhere. */
+  --sunken: #f4f7f4;
   --separator: rgba(22, 40, 31, 0.1);
   --separator-strong: rgba(22, 40, 31, 0.2);
 
@@ -70,24 +76,48 @@ body {
 
 /* ---------- shell ---------- */
 
+:root {
+  --rail-w: 18rem;
+}
+@media (min-width: 1400px) {
+  :root { --rail-w: 20rem; }
+}
+
 .doc {
-  display: grid;
-  grid-template-columns: 1fr;
-  gap: var(--s6);
-  max-width: 1180px;
-  margin: 0 auto;
   padding: var(--s6) var(--s5) var(--s7);
 }
 @media (min-width: 1000px) {
-  .doc { grid-template-columns: 15rem minmax(0, 1fr); gap: var(--s7); }
+  /* The rail is fixed to the true viewport edge (below) and no longer
+     shares .doc's box, so .doc reserves that width as padding and the
+     content column (.body, below) centers independently within what's
+     left - that keeps it centered in the remaining space at any viewport
+     width, rather than centered as if the rail were still part of the box. */
+  .doc { padding-left: calc(var(--rail-w) + var(--s6)); }
 }
 
 .rail { align-self: start; }
 @media (min-width: 1000px) {
-  .rail { position: sticky; top: var(--s5); }
+  /* Anchored to the browser's left edge, independent of .doc's own
+     max-width and centering - a docs sidebar reads as part of the window
+     chrome, not as a column inside the article. Full-height with its own
+     scroll: thirteen sections don't fit a short viewport, and a sidebar
+     that scrolls the page away as you look for section 11 is worse than
+     no sidebar. */
+  .rail {
+    position: fixed;
+    left: 0;
+    top: 0;
+    width: var(--rail-w);
+    height: 100vh;
+    overflow-y: auto;
+    padding: var(--s6) var(--s5);
+    background: var(--ground);
+    border-right: 1px solid var(--separator-strong);
+    z-index: 5;
+  }
 }
 .rail__label {
-  font-size: 0.75rem;
+  font-size: 0.8125rem;
   font-weight: 600;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -106,21 +136,52 @@ body {
 .rail a {
   display: flex;
   gap: var(--s3);
-  padding: var(--s3) 0;
+  padding: var(--s3);
   color: var(--ink-secondary);
   text-decoration: none;
-  font-size: 0.875rem;
+  font-size: 1rem;
   line-height: 1.35;
+  border-left: 2px solid transparent;
 }
-.rail a:hover { color: var(--accent); }
-.rail a span:first-child {
+.rail a:hover { color: var(--accent); background: var(--sunken); text-decoration: none; }
+.rail a:hover .rail__term { color: var(--accent); }
+
+/* Which section you are actually in, tracked while scrolling. Without it a
+   thirteen-item list gives you no sense of place on a page this long. */
+.rail a[aria-current="true"] {
+  background: var(--accent-wash);
+  border-left-color: var(--accent);
+  color: var(--accent);
+  font-weight: 600;
+}
+.rail a[aria-current="true"] .num,
+.rail a[aria-current="true"] .rail__term { color: var(--accent); }
+.rail a .num {
   font-family: var(--font-mono);
-  font-size: 0.75rem;
+  font-size: 0.875rem;
   color: var(--ink-tertiary);
   padding-top: 0.15em;
+  flex: none;
 }
 
-.body { min-width: 0; }
+/* The plain-English lesson name is what makes the page approachable; the
+   technical term under it is the word an interviewer will actually use,
+   so both are shown rather than picking one. */
+.rail__term {
+  display: block;
+  font-size: 0.8125rem;
+  line-height: 1.3;
+  color: var(--ink-tertiary);
+  margin-top: 2px;
+}
+
+.rail__rule {
+  border: none;
+  border-top: 1px solid var(--separator-strong);
+  margin: var(--s5) 0;
+}
+
+.body { min-width: 0; max-width: 1180px; margin: 0 auto; }
 .prose { max-width: 68ch; }
 
 /* ---------- type ---------- */
@@ -323,6 +384,25 @@ figure.diagram pre.mermaid {
   overflow-x: auto;
   background: none;
   border: none;
+  /* Browsers apply `pre { font-family: monospace }` by default, which
+     inherits through the SVG into mermaid's foreignObject label text and
+     overrides the Inter set in each diagram's themeVariables. */
+  font-family: var(--font-text);
+}
+/* Mermaid pre-computes each label's box width from its own internal
+   character-width table before laying out the diagram - verified directly
+   (via getBoundingClientRect vs the foreignObject's own width attribute)
+   that this estimate runs 4-17% narrower than Inter's real rendered width,
+   consistently, regardless of font-size/padding config. Rather than trust
+   that estimate, let each label's own box size itself to its real content:
+   modern browsers let CSS width override an SVG geometry attribute, so this
+   wins over whatever (too-narrow) width mermaid wrote onto the element. */
+figure.diagram foreignObject {
+  overflow: visible;
+}
+figure.diagram foreignObject > div {
+  width: max-content !important;
+  max-width: none !important;
 }
 figure.diagram figcaption {
   border-top: 1px solid var(--separator);
@@ -330,6 +410,233 @@ figure.diagram figcaption {
   font-size: 0.875rem;
   color: var(--ink-secondary);
   background: var(--sunken);
+}
+
+/* ---------- concepts covered ---------- */
+
+/* The vocabulary for the lesson, stated up front. An interviewer asks
+   about "row-level security", not about "the data being separated" - so
+   the exact terms are listed rather than left implicit in the prose. */
+.covers {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s2);
+  align-items: baseline;
+  padding: var(--s3) var(--s4);
+  background: var(--sunken);
+  border: 1px solid var(--separator);
+}
+.covers__label {
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-tertiary);
+  margin-right: var(--s1);
+}
+.covers span.concept {
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: var(--accent);
+  background: var(--surface);
+  border: 1px solid var(--separator-strong);
+  padding: 0.2em 0.6em;
+}
+
+/* ---------- drills ---------- */
+
+/* The practice unit: a question you answer out loud, a command you run,
+   then the real result. The question comes first on purpose - predicting
+   before running is what turns reading into recall. */
+.drill {
+  border: 1px solid var(--separator-strong);
+  background: var(--surface);
+}
+.drill + .drill { margin-top: var(--s3); }
+.drill__ask {
+  padding: var(--s4);
+  font-weight: 600;
+  border-bottom: 1px solid var(--separator);
+}
+.drill__ask .tag {
+  display: block;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-tertiary);
+  margin-bottom: var(--s1);
+}
+
+.cmd { background: var(--accent); }
+.cmd__bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--s2) var(--s3);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.15);
+  font-family: var(--font-mono);
+  font-size: 0.6875rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--mint-200);
+}
+.cmd__copy {
+  font: inherit;
+  font-size: 0.6875rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  background: transparent;
+  color: var(--mint-200);
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  padding: 0.2em 0.7em;
+  cursor: pointer;
+}
+.cmd__copy:hover { background: rgba(255, 255, 255, 0.12); color: #ffffff; }
+.cmd pre {
+  margin: 0;
+  padding: var(--s4);
+  overflow-x: auto;
+  font-family: var(--font-mono);
+  font-size: 0.9375rem;
+  line-height: 1.6;
+  color: #f3f7ee;
+}
+/* The page-wide `code` rule gives inline code a light chip background,
+   which would land light-on-light inside a dark terminal block. */
+.cmd pre code {
+  background: none;
+  border: none;
+  padding: 0;
+  color: inherit;
+  font-size: inherit;
+}
+
+/* ---------- verb card ---------- */
+
+/* One method per card: what it does in a line, then the request and the
+   response as two labelled halves, so the shape of a call is readable
+   without first reading a paragraph about it. */
+.verb {
+  background: var(--surface);
+  border: 1px solid var(--separator-strong);
+  padding: var(--s4) var(--s5) var(--s5);
+}
+.verb__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s2) var(--s3);
+  padding-bottom: var(--s3);
+  border-bottom: 1px solid var(--separator);
+}
+.verb__method {
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: var(--accent-ink);
+  background: var(--accent);
+  padding: 0.25em 0.65em;
+}
+.verb__path {
+  font-family: var(--font-mono);
+  font-size: 0.9375rem;
+  color: var(--ink);
+}
+.verb__promise {
+  margin-left: auto;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-tertiary);
+}
+.verb__line {
+  margin: var(--s4) 0 0;
+  font-size: 1.0625rem;
+  max-width: 60ch;
+}
+.verb .sublabel { margin: var(--s4) 0 var(--s2); }
+/* No max-width: the rule above this line is the card's own divider, so it
+   has to span the full card. The text under it is a sentence or two, short
+   enough that the wider measure costs nothing. */
+.verb__twice {
+  margin: var(--s4) 0 0;
+  padding-top: var(--s3);
+  border-top: 1px dashed var(--separator);
+  font-size: 0.9375rem;
+  color: var(--ink-secondary);
+}
+
+/* The response reads in the same monospace as the request, but on paper
+   rather than terminal ink, so a glance says which half you are looking at. */
+.out {
+  margin: 0;
+  border: 1px solid var(--separator-strong);
+  background: var(--sunken);
+  padding: var(--s3) var(--s4);
+  overflow-x: auto;
+  font-family: var(--font-mono);
+  font-size: 0.9375rem;
+  line-height: 1.6;
+  color: var(--ink-secondary);
+}
+.out__status {
+  display: block;
+  margin-bottom: var(--s2);
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: var(--accent);
+}
+
+.drill__reveal { border-top: 1px solid var(--separator); }
+.drill__reveal > summary {
+  cursor: pointer;
+  padding: var(--s3) var(--s4);
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--accent);
+  list-style: none;
+  display: flex;
+  gap: var(--s2);
+  align-items: center;
+}
+.drill__reveal > summary::-webkit-details-marker { display: none; }
+.drill__reveal > summary::before { content: "＋"; font-weight: 400; }
+.drill__reveal[open] > summary::before { content: "－"; }
+.drill__reveal > summary:hover { background: var(--accent-wash); }
+.drill__body { padding: 0 var(--s4) var(--s4); }
+.drill__body > * + * { margin-top: var(--s3); }
+
+.result {
+  display: inline-block;
+  font-family: var(--font-mono);
+  font-size: 1.125rem;
+  font-weight: 600;
+  padding: 0.15em 0.6em;
+  border: 1px solid currentColor;
+}
+.result--ok { color: var(--risk-low); background: var(--mint-100); }
+.result--stop { color: var(--risk-high); background: #fbeae7; }
+.result--warn { color: var(--risk-medium); background: #fbf0dc; }
+
+/* The whole point of the doc: a sentence he can actually say out loud in
+   an interview, not a mechanism he can only recognise on the page. */
+.say {
+  border: 1px solid var(--accent);
+  background: var(--accent-wash);
+  padding: var(--s4);
+  font-size: 0.9375rem;
+}
+.say strong {
+  display: block;
+  font-size: 0.6875rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--accent);
+  margin-bottom: var(--s1);
 }
 
 /* ---------- bullets ---------- */
@@ -700,23 +1007,42 @@ footer {
 
 <div class="doc">
   <nav class="rail" aria-label="Contents">
-    <p class="rail__label">High level</p>
+    <p class="rail__label">The concepts</p>
     <ol>
-      <li><a href="#what"><span>1</span><span>What Diacify is</span></a></li>
-      <li><a href="#lifecycles"><span>2</span><span>Two lifecycles, one file</span></a></li>
-      <li><a href="#map"><span>3</span><span>The map</span></a></li>
-      <li><a href="#domain"><span>4</span><span>The domain</span></a></li>
-      <li><a href="#ownership"><span>5</span><span>The one idea</span></a></li>
+      <li><a href="#what"><span class="num">1</span><span>What Diacify is
+        <span class="rail__term">Domain &amp; scope</span></span></a></li>
+      <li><a href="#lifecycles"><span class="num">2</span><span>Two lifecycles, one file
+        <span class="rail__term">Training vs. inference</span></span></a></li>
+      <li><a href="#map"><span class="num">3</span><span>The map
+        <span class="rail__term">System architecture</span></span></a></li>
+      <li><a href="#domain"><span class="num">4</span><span>The domain
+        <span class="rail__term">Data modelling</span></span></a></li>
+      <li><a href="#ownership"><span class="num">5</span><span>The one idea
+        <span class="rail__term">Authorization model</span></span></a></li>
     </ol>
-    <p class="rail__label" style="margin-top: var(--s5)">Low level</p>
+    <hr class="rail__rule">
+    <p class="rail__label">How it actually works</p>
     <ol>
-      <li><a href="#request"><span>6</span><span>One request, end to end</span></a></li>
-      <li><a href="#gates"><span>7</span><span>The gates</span></a></li>
-      <li><a href="#security"><span>8</span><span>Data and security</span></a></li>
-      <li><a href="#serving"><span>9</span><span>ML serving</span></a></li>
-      <li><a href="#training"><span>10</span><span>ML training</span></a></li>
-      <li><a href="#seams"><span>11</span><span>The seams</span></a></li>
-      <li><a href="#checks"><span>12</span><span>Check yourself</span></a></li>
+      <li><a href="#setup"><span class="num">6</span><span>Set up, once
+        <span class="rail__term">Local environment, JWTs</span></span></a></li>
+      <li><a href="#api"><span class="num">7</span><span>The API surface
+        <span class="rail__term">REST design, HTTP semantics, CORS</span></span></a></li>
+      <li><a href="#stopped"><span class="num">8</span><span>Watch a request get stopped
+        <span class="rail__term">API authentication, rate limiting, validation</span></span></a></li>
+      <li><a href="#isolation"><span class="num">9</span><span>Prove the data is separated
+        <span class="rail__term">Row-level security, multi-tenancy</span></span></a></li>
+      <li><a href="#database"><span class="num">10</span><span>The database underneath
+        <span class="rail__term">Schema, indexes, constraints, migrations</span></span></a></li>
+      <li><a href="#scoring"><span class="num">11</span><span>Watch the model decide
+        <span class="rail__term">ML inference &amp; model serving</span></span></a></li>
+      <li><a href="#training"><span class="num">12</span><span>How the model learned
+        <span class="rail__term">ML training pipeline</span></span></a></li>
+      <li><a href="#testing"><span class="num">13</span><span>How it's tested
+        <span class="rail__term">Integration testing &amp; CI</span></span></a></li>
+      <li><a href="#improve"><span class="num">14</span><span>What you'd improve
+        <span class="rail__term">Known limitations</span></span></a></li>
+      <li><a href="#checks"><span class="num">15</span><span>Check yourself
+        <span class="rail__term">Recall practice</span></span></a></li>
     </ol>
   </nav>
 
@@ -730,19 +1056,19 @@ footer {
       <p class="lede">
         A clinician records what they measured at a patient visit. Diacify
         answers with a diabetes risk assessment. Everything below explains
-        how that sentence turns into a running system — no prior knowledge
-        of this codebase assumed.
+        how that sentence turns into a running system, assuming no prior
+        knowledge of this codebase.
       </p>
       <div class="part-strip">
         <a class="part" href="#what">
-          <strong>High level</strong>
+          <strong>The concepts</strong>
           The shape of the system and the five ideas you need before any
-          code makes sense. Readable start to finish in about ten minutes.
+          code makes sense. Read this start to finish, about ten minutes.
         </a>
-        <a class="part" href="#request">
-          <strong>Low level</strong>
-          One request traced end to end, the gates, RLS in detail, ML
-          serving, the training pipeline, and the seams.
+        <a class="part" href="#setup">
+          <strong>How it actually works</strong>
+          Commands you run against your own machine to watch it accept,
+          refuse, separate and score, then say what happened, out loud.
         </a>
       </div>
     </header>
@@ -788,11 +1114,11 @@ footer {
               <tr>
                 <td>Adds a patient with a chart reference</td>
                 <td>A <span class="mono">patients</span> row: reference, sex</td>
-                <td>A patient in their list — no name, no date of birth</td>
+                <td>A patient in their list, no name, no date of birth</td>
               </tr>
               <tr>
                 <td>Records a visit: age, blood pressure, BMI, HbA1c, and optionally a lipid panel</td>
-                <td>A <span class="mono">visits</span> row — measurements only</td>
+                <td>A <span class="mono">visits</span> row, measurements only</td>
                 <td>A risk assessment, scored immediately</td>
               </tr>
               <tr>
@@ -804,8 +1130,8 @@ footer {
           </table>
         </div>
         <p class="note">
-          A patient is identified by a clinician-chosen <em>reference</em> —
-          a chart label like <span class="mono">JD-0412</span> — not by a
+          A patient is identified by a clinician-chosen <em>reference</em>
+          (a chart label like <span class="mono">JD-0412</span>), not by a
           legal name. Diacify never stores one
           <a class="adr" href="#" data-adr="038">ADR-038</a>.
         </p>
@@ -821,14 +1147,14 @@ footer {
       <p class="prose">
         Diacify has two separate lifecycles. One <strong>trains</strong> a
         model; the other <strong>serves</strong> it. Different languages,
-        different workspaces, different times, no shared code — meeting at
+        different workspaces, different times, no shared code, meeting at
         exactly one file.
       </p>
 
       <div class="box">
         <div class="lc__controls" role="group" aria-label="Choose a lifecycle">
-          <button type="button" data-lc="training" aria-pressed="true">Training — offline</button>
-          <button type="button" data-lc="serving" aria-pressed="false">Serving — every request</button>
+          <button type="button" data-lc="training" aria-pressed="true">Training · offline</button>
+          <button type="button" data-lc="serving" aria-pressed="false">Serving · every request</button>
         </div>
 
         <div class="lc__stage">
@@ -875,7 +1201,7 @@ footer {
         <div class="term">
           <dt>The serving model</dt>
           <dd>
-            A trained model flattened into plain data — no code, no runtime,
+            A trained model flattened into plain data: no code, no runtime,
             nothing to execute. Just the numbers a prediction needs.
           </dd>
           <dd>
@@ -884,8 +1210,8 @@ footer {
             nested thresholds, the feature order, the class names
             <span class="mono">["low","medium","high"]</span>, and the
             imputation medians learned during training. It is committed to
-            git alongside the code that reads it, and stamped with a version
-            — currently <span class="mono">rf-098c19d0afc9</span>. The Python
+            git alongside the code that reads it, and stamped with a version,
+            currently <span class="mono">rf-098c19d0afc9</span>. The Python
             side writes it; the Node side only ever reads it
             <a class="adr" href="#" data-adr="025">ADR-025</a>.
           </dd>
@@ -918,7 +1244,7 @@ footer {
               <tr>
                 <td>So the schema needed</td>
                 <td>A <span class="mono">'pending'</span> state on every visit</td>
-                <td>Nothing — no row means not scored</td>
+                <td>Nothing: no row means not scored</td>
               </tr>
             </tbody>
           </table>
@@ -926,7 +1252,7 @@ footer {
         <p class="note">
           Two runtimes became one <a class="adr" href="#" data-adr="001">ADR-001</a>.
           Training stayed in Python because scikit-learn, cross-validation and
-          bias-audit tooling live there — and it runs on a laptop, not in
+          bias-audit tooling live there, and it runs on a laptop, not in
           production.
         </p>
       </div>
@@ -945,7 +1271,7 @@ footer {
 
       <figure class="diagram">
 <pre class="mermaid">
-%%{init: {'theme':'base','themeVariables':{'primaryColor':'#eaf5ee','primaryTextColor':'#16261e','primaryBorderColor':'#16382b','secondaryColor':'#f4f1e9','secondaryTextColor':'#16261e','secondaryBorderColor':'#c9d6cb','tertiaryColor':'#ffffff','tertiaryTextColor':'#16261e','tertiaryBorderColor':'#c9d6cb','lineColor':'#435146','textColor':'#16261e','attributeBackgroundColorOdd':'#ffffff','attributeBackgroundColorEven':'#f4f1e9','nodeBorder':'#16382b','mainBkg':'#eaf5ee','edgeLabelBackground':'#fbf9f3','fontFamily':'Inter, system-ui, sans-serif','fontSize':'13px'}}}%%
+%%{init: {'theme':'base','themeVariables':{'primaryColor':'#eaf5ee','primaryTextColor':'#16261e','primaryBorderColor':'#16382b','secondaryColor':'#f4f1e9','secondaryTextColor':'#16261e','secondaryBorderColor':'#c9d6cb','tertiaryColor':'#ffffff','tertiaryTextColor':'#16261e','tertiaryBorderColor':'#c9d6cb','lineColor':'#435146','textColor':'#16261e','attributeBackgroundColorOdd':'#ffffff','attributeBackgroundColorEven':'#f4f1e9','nodeBorder':'#16382b','mainBkg':'#eaf5ee','edgeLabelBackground':'#ffffff','fontFamily':'Inter, system-ui, sans-serif','fontSize':'13px'}}}%%
 flowchart LR
     C["Clinician's browser"]
     F["frontend&lt;br/&gt;Vercel"]
@@ -965,7 +1291,7 @@ flowchart LR
 </pre>
         <figcaption>
           Solid lines are the request path. Dashed lines never run while a
-          clinician is using Diacify — that whole branch happens beforehand,
+          clinician is using Diacify; that whole branch happens beforehand,
           on someone's laptop.
         </figcaption>
       </figure>
@@ -974,7 +1300,7 @@ flowchart LR
         <div class="map__cell">
           <span class="mono">frontend/</span>
           <p>
-            Eight pages a clinician actually uses — landing, sign in, sign up,
+            Eight pages a clinician actually uses: landing, sign in, sign up,
             patient list, new and edit patient, patient detail, record visit.
             Fetches from the backend and renders; holds no business rules.
           </p>
@@ -1014,7 +1340,7 @@ flowchart LR
         <div class="map__cell map__cell--platform">
           <span class="mono">Supabase</span>
           <p>
-            Not a workspace — a managed platform. Provides identity (Auth),
+            Not a workspace: a managed platform. Provides identity (Auth),
             the database (Postgres), and, critically, the authorization rules
             that decide who can see which rows.
           </p>
@@ -1052,7 +1378,7 @@ flowchart LR
 
       <figure class="diagram">
 <pre class="mermaid">
-%%{init: {'theme':'base','themeVariables':{'primaryColor':'#eaf5ee','primaryTextColor':'#16261e','primaryBorderColor':'#16382b','secondaryColor':'#f4f1e9','secondaryTextColor':'#16261e','secondaryBorderColor':'#c9d6cb','tertiaryColor':'#ffffff','tertiaryTextColor':'#16261e','tertiaryBorderColor':'#c9d6cb','lineColor':'#435146','textColor':'#16261e','attributeBackgroundColorOdd':'#ffffff','attributeBackgroundColorEven':'#f4f1e9','nodeBorder':'#16382b','mainBkg':'#eaf5ee','edgeLabelBackground':'#fbf9f3','fontFamily':'Inter, system-ui, sans-serif','fontSize':'13px'}}}%%
+%%{init: {'theme':'base','themeVariables':{'primaryColor':'#eaf5ee','primaryTextColor':'#16261e','primaryBorderColor':'#16382b','secondaryColor':'#f4f1e9','secondaryTextColor':'#16261e','secondaryBorderColor':'#c9d6cb','tertiaryColor':'#ffffff','tertiaryTextColor':'#16261e','tertiaryBorderColor':'#c9d6cb','lineColor':'#435146','textColor':'#16261e','attributeBackgroundColorOdd':'#ffffff','attributeBackgroundColorEven':'#f4f1e9','nodeBorder':'#16382b','mainBkg':'#eaf5ee','edgeLabelBackground':'#ffffff','fontFamily':'Inter, system-ui, sans-serif','fontSize':'13px'}}}%%
 erDiagram
     AUTH_USERS ||--o{ PATIENTS : "owns"
     PATIENTS ||--o{ VISITS : "accumulates"
@@ -1080,7 +1406,7 @@ erDiagram
     }
 </pre>
         <figcaption>
-          One visit can carry several assessments — one per model version,
+          One visit can carry several assessments, one per model version,
           never overwritten. That crow's foot on the right is the whole
           facts-versus-judgements idea in one mark.
         </figcaption>
@@ -1093,7 +1419,7 @@ erDiagram
           <dd>
             <span class="in-diacify">In Diacify</span>
             A Supabase Auth user. There is no <span class="mono">clinicians</span>
-            table of our own — <span class="mono">patients.clinician_id</span>
+            table of our own: <span class="mono">patients.clinician_id</span>
             references <span class="mono">auth.users(id)</span> directly.
           </dd>
         </div>
@@ -1105,7 +1431,7 @@ erDiagram
             <span class="in-diacify">In Diacify</span>
             A <span class="mono">patients</span> row holding a
             <span class="mono">reference</span> (1–40 characters, unique per
-            clinician) and <span class="mono">sex</span> — which is here for
+            clinician) and <span class="mono">sex</span>, which is here for
             one reason only: it is the single patient-level attribute the
             trained model actually consumes
             <a class="adr" href="#" data-adr="014">ADR-014</a>. Everything
@@ -1114,7 +1440,7 @@ erDiagram
         </div>
 
         <div class="term">
-          <dt>Visit — a <em>fact</em></dt>
+          <dt>Visit: a <em>fact</em></dt>
           <dd>An observation. What was measured, on a given date. True regardless of what anyone concludes from it.</dd>
           <dd>
             <span class="in-diacify">In Diacify</span>
@@ -1127,7 +1453,7 @@ erDiagram
         </div>
 
         <div class="term">
-          <dt>Risk assessment — a <em>judgement</em></dt>
+          <dt>Risk assessment: a <em>judgement</em></dt>
           <dd>A conclusion drawn from a fact by a particular model at a particular time. Can be revisited; can be wrong; can be superseded.</dd>
           <dd>
             <span class="in-diacify">In Diacify</span>
@@ -1161,14 +1487,14 @@ erDiagram
           Every assessment carries both a <span class="mono">risk_score</span>
           (0–100) and a <span class="mono">risk_category</span>
           (low / medium / high). It is natural to assume one is derived from
-          the other. It isn't — and the reason is the most instructive thing
+          the other. It isn't, and the reason is the most instructive thing
           in the domain.
         </p>
         <p>
           The model outputs three probabilities that sum to 1. The
           <strong>category</strong> is simply whichever is largest. The
-          <strong>score</strong> is a weighted sum — medium counts half, high
-          counts fully — designed for <em>ranking one patient against
+          <strong>score</strong> is a weighted sum (medium counts half, high
+          counts fully), designed for <em>ranking one patient against
           another</em>. Move the sliders and watch them disagree.
         </p>
       </div>
@@ -1205,20 +1531,20 @@ erDiagram
             </div>
 
             <p class="sx__derived">
-              Low is whatever remains — the three always sum to 1, so it isn't
+              Low is whatever remains; the three always sum to 1, so it isn't
               independently adjustable.
             </p>
           </div>
 
           <div class="sx__out" id="sx-out" data-cat="low">
             <div class="sx__readout">
-              <span class="sublabel">risk_category — what is this patient?</span>
+              <span class="sublabel">risk_category: what is this patient?</span>
               <div class="sx__big" id="out-cat">low</div>
               <p class="sx__formula">argmax(low, medium, high)</p>
             </div>
 
             <div class="sx__readout">
-              <span class="sublabel">risk_score — how urgently, versus others?</span>
+              <span class="sublabel">risk_score: how urgently, versus others?</span>
               <div class="sx__big" id="out-score">47.50</div>
               <p class="sx__formula">(0.5 × medium + 1 × high) × 100</p>
             </div>
@@ -1272,8 +1598,8 @@ erDiagram
             <div class="why__body">
               <p>
                 A carries a 40% chance of high risk, so A is worth looking at
-                first — the score doing its job. But the model's single best
-                guess for A is still "low", and B's is "medium" — the category
+                first: the score doing its job. But the model's single best
+                guess for A is still "low", and B's is "medium": the category
                 doing its job.
               </p>
               <p>
@@ -1294,7 +1620,7 @@ erDiagram
             <span class="in-diacify">In Diacify</span>
             Set when the highest of the three probabilities falls below
             <span class="mono">0.55</span>. The threshold has to sit above
-            <span class="mono">1/3</span> to mean anything at all — with three
+            <span class="mono">1/3</span> to mean anything at all: with three
             classes the top probability can never be lower than that, so an
             earlier <span class="mono">0.40</span> threshold was advertised
             but literally unreachable.
@@ -1315,7 +1641,7 @@ erDiagram
           <strong>The backend does not decide who owns what data.</strong>
           It forwards the clinician's own token to Postgres and lets the
           database answer. No route handler in Diacify contains a
-          <span class="mono">clinician_id</span> filter — not one — and that
+          <span class="mono">clinician_id</span> filter, not one, and that
           is not an oversight.
         </p>
       </div>
@@ -1335,7 +1661,7 @@ erDiagram
             <a class="adr" href="#" data-adr="013">ADR-013</a>. A
             <span class="mono">SELECT * FROM patients</span> with no
             <span class="mono">WHERE</span> clause returns only their
-            patients — because Postgres silently adds the condition.
+            patients, because Postgres silently adds the condition.
           </dd>
         </div>
       </dl>
@@ -1406,14 +1732,14 @@ erDiagram
 
       <figure class="diagram">
 <pre class="mermaid">
-%%{init: {'theme':'base','themeVariables':{'primaryColor':'#eaf5ee','primaryTextColor':'#16261e','primaryBorderColor':'#16382b','secondaryColor':'#f4f1e9','secondaryTextColor':'#16261e','secondaryBorderColor':'#c9d6cb','tertiaryColor':'#ffffff','tertiaryTextColor':'#16261e','tertiaryBorderColor':'#c9d6cb','lineColor':'#435146','textColor':'#16261e','attributeBackgroundColorOdd':'#ffffff','attributeBackgroundColorEven':'#f4f1e9','nodeBorder':'#16382b','mainBkg':'#eaf5ee','edgeLabelBackground':'#fbf9f3','fontFamily':'Inter, system-ui, sans-serif','fontSize':'13px'}}}%%
+%%{init: {'theme':'base','themeVariables':{'primaryColor':'#eaf5ee','primaryTextColor':'#16261e','primaryBorderColor':'#16382b','secondaryColor':'#f4f1e9','secondaryTextColor':'#16261e','secondaryBorderColor':'#c9d6cb','tertiaryColor':'#ffffff','tertiaryTextColor':'#16261e','tertiaryBorderColor':'#c9d6cb','lineColor':'#435146','textColor':'#16261e','attributeBackgroundColorOdd':'#ffffff','attributeBackgroundColorEven':'#f4f1e9','nodeBorder':'#16382b','mainBkg':'#eaf5ee','edgeLabelBackground':'#ffffff','fontFamily':'Inter, system-ui, sans-serif','fontSize':'13px'}}}%%
 flowchart TD
     W["Clinician A inserts a visit&lt;br/&gt;patient_id points at Clinician B's patient"]
     W --> D["Denormalized&lt;br/&gt;clinician_id column"]
     W --> J["Join-based policy&lt;br/&gt;what Diacify does"]
 
     D --> D1["WITH CHECK: clinician_id = A ✓&lt;br/&gt;A did set their own id"]
-    D1 --> D2["Foreign key: does that patient row exist? ✓&lt;br/&gt;it does — it is just not A's"]
+    D1 --> D2["Foreign key: does that patient row exist? ✓&lt;br/&gt;it does, it is just not A's"]
     D2 --> D3["Visit written onto B's patient"]:::bad
 
     J --> J1["WITH CHECK: does this patient belong to A?"]
@@ -1433,7 +1759,7 @@ flowchart TD
         <div class="why__body">
           <p>
             Closing that write hole requires the join check anyway. Once it is
-            there, the denormalized column adds nothing to enforcement — it
+            there, the denormalized column adds nothing to enforcement: it
             just becomes a second place ownership is recorded, and therefore a
             second place it can disagree with itself.
           </p>
@@ -1449,552 +1775,1581 @@ flowchart TD
       <p class="sublabel">What follows from this one decision</p>
       <ul class="bullets">
         <li><span>No route handler mentions a clinician. There is nothing to forget to filter by.</span></li>
-        <li><span>Another clinician's patient returns <strong>404, not 403</strong> — invisible rather than forbidden, so the API never confirms someone else's record exists.</span></li>
+        <li><span>Another clinician's patient returns <strong>404, not 403</strong>: invisible rather than forbidden, so the API never confirms someone else's record exists.</span></li>
         <li><span>A bad <span class="mono">patient_id</span> surfaces as a Postgres <span class="mono">42501</span> rather than a clean validation error <a class="adr" href="#" data-adr="008">ADR-008</a>.</span></li>
       </ul>
     </section>
 
-    <section id="request">
+    <section id="setup">
       <div class="section-head">
         <span class="num">06</span>
-        <h2>One request, end to end</h2>
+        <h2>Set up, once</h2>
       </div>
 
+      <div class="covers">
+        <span class="covers__label">Concepts</span>
+        <span class="concept">JWT (JSON Web Token)</span>
+        <span class="concept">Access token</span>
+        <span class="concept">Bearer auth</span>
+        <span class="concept">Local dev stack</span>
+      </div>
+
+
       <p class="prose">
-        Everything in Part 1 shows up in one call. Recording a visit is the
-        only endpoint that touches all four workspaces and both ML
-        lifecycles' meeting point in a single round trip, so it is the one
-        worth tracing in full — real status codes, real function names.
+        Everything below this point is something you run. Three terminals,
+        then a token you keep for the rest of the page. Every command here
+        was run against this project before it was written down.
+      </p>
+
+      <div class="drill">
+        <p class="drill__ask"><span class="tag">Terminal 1</span>Start the database and auth service</p>
+        <div class="cmd">
+          <div class="cmd__bar"><span>bash</span><button class="cmd__copy" type="button">Copy</button></div>
+          <pre><code>supabase start</code></pre>
+        </div>
+      </div>
+
+      <div class="drill">
+        <p class="drill__ask"><span class="tag">Terminal 2</span>Start the API</p>
+        <div class="cmd">
+          <div class="cmd__bar"><span>bash</span><button class="cmd__copy" type="button">Copy</button></div>
+          <pre><code>npm run dev --workspace backend</code></pre>
+        </div>
+      </div>
+
+      <div class="drill">
+        <p class="drill__ask"><span class="tag">Terminal 3</span>Become a clinician, and keep the token</p>
+        <div class="cmd">
+          <div class="cmd__bar"><span>bash</span><button class="cmd__copy" type="button">Copy</button></div>
+          <pre><code>export ANON_KEY=$(supabase status -o env | grep '^ANON_KEY' | cut -d= -f2- | tr -d '"')
+
+# Creates the practice clinician the first time; harmlessly does nothing after that.
+curl -s http://127.0.0.1:54321/auth/v1/signup \
+  -H "apikey: $ANON_KEY" -H "Content-Type: application/json" \
+  -d '{"email":"practice-a@example.com","password":"practice-password-123"}' &gt; /dev/null
+
+# Signing in is what actually gets the token, so this works every time you come back.
+export TOKEN=$(curl -s "http://127.0.0.1:54321/auth/v1/token?grant_type=password" \
+  -H "apikey: $ANON_KEY" -H "Content-Type: application/json" \
+  -d '{"email":"practice-a@example.com","password":"practice-password-123"}' \
+  | python3 -c "import sys,json; print(json.load(sys.stdin)['access_token'])")
+
+echo "${TOKEN:0:24}..."</code></pre>
+        </div>
+        <details class="drill__reveal">
+          <summary>What just happened</summary>
+          <div class="drill__body">
+            <p>
+              You signed up as a clinician and got back a JWT, the same
+              thing the real frontend holds after someone signs in. Every
+              command from here on sends it, and everything the API does
+              is decided by what is inside it.
+            </p>
+            <p class="say">
+              <strong>Say it like this</strong>
+              "Signing in gets you a signed token. The backend never stores
+              a session; the token itself carries who you are, and the
+              backend checks the signature on every request."
+            </p>
+          </div>
+        </details>
+      </div>
+    </section>
+
+    <section id="api">
+      <div class="section-head">
+        <span class="num">07</span>
+        <h2>The API surface</h2>
+      </div>
+
+      <div class="covers">
+        <span class="covers__label">Concepts</span>
+        <span class="concept">HTTP methods</span>
+        <span class="concept">Safe vs. idempotent</span>
+        <span class="concept">REST resource nesting</span>
+        <span class="concept">HTTP status semantics</span>
+        <span class="concept">Pagination</span>
+        <span class="concept">Query-param filtering</span>
+        <span class="concept">CORS</span>
+        <span class="concept">Idempotency</span>
+      </div>
+
+      <h3>The verbs, before the endpoints</h3>
+
+      <p class="prose">
+        Two words describe what a method promises. Both are about the
+        effect on the server, not about the status code that comes back.
+      </p>
+
+      <dl>
+        <div class="term">
+          <dt>Safe</dt>
+          <dd>The call only reads. Nothing on the server changes.</dd>
+        </div>
+
+        <div class="term">
+          <dt>Idempotent</dt>
+          <dd>
+            Call it once or call it five times: the server ends up in the
+            same state either way.
+          </dd>
+        </div>
+      </dl>
+
+      <p class="prose">
+        Four methods, one card each: what it does in a line, what you
+        send, and what comes back.
+      </p>
+
+      <div class="verb">
+        <div class="verb__head">
+          <span class="verb__method">GET</span>
+          <span class="verb__path">/api/patients/:id</span>
+          <span class="verb__promise">Safe</span>
+        </div>
+        <p class="verb__line">Reads one patient. It changes nothing.</p>
+
+        <p class="sublabel">You send</p>
+        <div class="cmd">
+          <div class="cmd__bar"><span>bash</span><button class="cmd__copy" type="button">Copy</button></div>
+          <pre><code>curl -s http://localhost:3000/api/patients/$PID \
+  -H "Authorization: Bearer $TOKEN"</code></pre>
+        </div>
+
+        <p class="sublabel">You get back</p>
+        <pre class="out"><span class="out__status">200 OK</span>{
+  "data": {
+    "id": "3f9a1c7e-...",
+    "clinician_id": "b21d4e60-...",
+    "created_at": "2026-09-11T09:14:22.418Z",
+    "sex": "male",
+    "reference": "PRAC-001"
+  }
+}</pre>
+
+        <p class="verb__twice">
+          Read it 100 times and the 100th call returns the same row as the
+          first.
+        </p>
+      </div>
+
+      <div class="verb">
+        <div class="verb__head">
+          <span class="verb__method">POST</span>
+          <span class="verb__path">/api/patients/:id/visits</span>
+          <span class="verb__promise">Not safe · Not idempotent</span>
+        </div>
+        <p class="verb__line">
+          Records a new visit, and scores it in the same call.
+        </p>
+
+        <p class="sublabel">You send</p>
+        <div class="cmd">
+          <div class="cmd__bar"><span>bash</span><button class="cmd__copy" type="button">Copy</button></div>
+          <pre><code>curl -s -X POST http://localhost:3000/api/patients/$PID/visits \
+  -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+  -d '{"visit_date":"2026-08-15","age":50,"systolic":120,
+       "diastolic":80,"bmi":25,"hba1c":5.5}'</code></pre>
+        </div>
+
+        <p class="sublabel">You get back</p>
+        <pre class="out"><span class="out__status">201 CREATED</span>{
+  "data": {
+    "id": "c48b0d12-...",
+    "patient_id": "3f9a1c7e-...",
+    "visit_date": "2026-08-15",
+    "age": 50,
+    "risk_assessment": {
+      "model_version": "...",
+      "risk_score": 8,
+      "risk_category": "low",
+      "low_confidence": false,
+      "created_at": "2026-09-11T09:15:03.902Z"
+    }
+  }
+}</pre>
+
+        <p class="verb__twice">
+          Send that same body twice and you get two visits, not one. A
+          client that retries after a dropped response double-records a
+          real visit.
+        </p>
+      </div>
+
+      <div class="verb">
+        <div class="verb__head">
+          <span class="verb__method">PATCH</span>
+          <span class="verb__path">/api/patients/:id</span>
+          <span class="verb__promise">Idempotent</span>
+        </div>
+        <p class="verb__line">Edits a patient who already exists.</p>
+
+        <p class="sublabel">You send</p>
+        <div class="cmd">
+          <div class="cmd__bar"><span>bash</span><button class="cmd__copy" type="button">Copy</button></div>
+          <pre><code>curl -s -X PATCH http://localhost:3000/api/patients/$PID \
+  -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+  -d '{"reference":"PRAC-001","sex":"female"}'</code></pre>
+        </div>
+
+        <p class="sublabel">You get back</p>
+        <pre class="out"><span class="out__status">200 OK</span>{
+  "data": {
+    "id": "3f9a1c7e-...",
+    "clinician_id": "b21d4e60-...",
+    "created_at": "2026-09-11T09:14:22.418Z",
+    "sex": "female",
+    "reference": "PRAC-001"
+  }
+}</pre>
+
+        <p class="verb__twice">
+          Send that body twice and the patient ends up the same. But you
+          have to send every field, not only the one you are changing.
+          The box below explains why that is a gap.
+        </p>
+      </div>
+
+      <div class="verb">
+        <div class="verb__head">
+          <span class="verb__method">DELETE</span>
+          <span class="verb__path">/api/patients/:id</span>
+          <span class="verb__promise">Idempotent</span>
+        </div>
+        <p class="verb__line">
+          Removes a patient, and every visit and assessment under them.
+        </p>
+
+        <p class="sublabel">You send</p>
+        <div class="cmd">
+          <div class="cmd__bar"><span>bash</span><button class="cmd__copy" type="button">Copy</button></div>
+          <pre><code>curl -s -o /dev/null -w "%{http_code}\n" \
+  -X DELETE http://localhost:3000/api/patients/$PID \
+  -H "Authorization: Bearer $TOKEN"</code></pre>
+        </div>
+
+        <p class="sublabel">You get back</p>
+        <pre class="out"><span class="out__status">204 NO CONTENT</span>(empty body)</pre>
+
+        <p class="verb__twice">
+          The first call returns 204 and the second returns 404. Different
+          codes, same end state: no such patient. Idempotent is about the
+          effect, not about the response.
+        </p>
+      </div>
+
+      <div class="box box--blue">
+        <p>
+          Not PUT, because PUT can create a resource at an id that does not
+          exist yet, and this endpoint returns 404 instead. The name is only
+          half earned though: the body reuses the create schema, so both
+          fields are required and a one-field edit is rejected with 400.
+        </p>
+      </div>
+
+      <h3>The endpoints</h3>
+
+      <p class="prose">
+        Eight endpoints, two routers. Every path is nested under the thing
+        it belongs to, which is what makes ownership checkable at every
+        level.
+      </p>
+
+      <div class="scroll-x">
+        <table>
+          <thead>
+            <tr><th>Method &amp; path</th><th>Does</th><th>Success</th></tr>
+          </thead>
+          <tbody>
+            <tr><td class="mono">GET /api/patients</td><td>List your patients, paginated, filterable by risk</td><td class="mono">200</td></tr>
+            <tr><td class="mono">POST /api/patients</td><td>Create a patient</td><td class="mono">201</td></tr>
+            <tr><td class="mono">GET /api/patients/:id</td><td>One patient</td><td class="mono">200</td></tr>
+            <tr><td class="mono">PATCH /api/patients/:id</td><td>Edit reference or sex</td><td class="mono">200</td></tr>
+            <tr><td class="mono">DELETE /api/patients/:id</td><td>Remove a patient and everything under them</td><td class="mono">204</td></tr>
+            <tr><td class="mono">GET /api/patients/:id/visits</td><td>Visit history, each with its latest assessment</td><td class="mono">200</td></tr>
+            <tr><td class="mono">POST /api/patients/:id/visits</td><td>Record a visit, scored inline</td><td class="mono">201</td></tr>
+            <tr><td class="mono">POST /api/visits/:id/predict</td><td>Score a visit that already exists</td><td class="mono">200</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <p class="sublabel">What each failure code means here</p>
+      <div class="scroll-x">
+        <table>
+          <thead><tr><th>Code</th><th>Means</th><th>Triggered by</th></tr></thead>
+          <tbody>
+            <tr><td class="mono">400</td><td>Your data is wrong</td><td>Impossible value, unknown field, bad query param</td></tr>
+            <tr><td class="mono">401</td><td>We don't know who you are</td><td>Missing, forged or expired token</td></tr>
+            <tr><td class="mono">404</td><td>Not yours, or not there</td><td>Another clinician's record, deliberately not 403</td></tr>
+            <tr><td class="mono">409</td><td>Conflicts with something that exists</td><td>Reusing a patient reference you already used</td></tr>
+            <tr><td class="mono">429</td><td>Too many writes</td><td>Over 20 in the last minute</td></tr>
+            <tr><td class="mono">503</td><td>Our problem, not yours</td><td>The token-verification service is unreachable</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="drill">
+        <p class="drill__ask"><span class="tag">Drill A</span>Ask for two patients. What comes back besides the two?</p>
+        <div class="cmd">
+          <div class="cmd__bar"><span>bash</span><button class="cmd__copy" type="button">Copy</button></div>
+          <pre><code>curl -s "http://localhost:3000/api/patients?limit=2" \
+  -H "Authorization: Bearer $TOKEN" | python3 -m json.tool | head -4</code></pre>
+        </div>
+        <details class="drill__reveal">
+          <summary>What you should see</summary>
+          <div class="drill__body">
+            <p>
+              <span class="mono">{ data, page, limit, total }</span>: two
+              rows, but <span class="mono">total</span> counts every patient
+              matching the query, not the page.
+            </p>
+            <p class="say">
+              <strong>Say it like this</strong>
+              "List endpoints return the page plus the total count, so the
+              client can render pagination without a second request to ask
+              how many there are."
+            </p>
+          </div>
+        </details>
+      </div>
+
+      <div class="drill">
+        <p class="drill__ask"><span class="tag">Drill B</span>Ask for 9999 patients, then ask for "abc" of them. Should either be an error?</p>
+        <div class="cmd">
+          <div class="cmd__bar"><span>bash</span><button class="cmd__copy" type="button">Copy</button></div>
+          <pre><code>curl -s "http://localhost:3000/api/patients?limit=9999" \
+  -H "Authorization: Bearer $TOKEN" | python3 -c "import sys,json; print('limit:', json.load(sys.stdin)['limit'])"
+
+curl -s -o /dev/null -w "limit=abc -> %{http_code}\n" \
+  "http://localhost:3000/api/patients?limit=abc" -H "Authorization: Bearer $TOKEN"</code></pre>
+        </div>
+        <details class="drill__reveal">
+          <summary>What you should see: they are treated differently on purpose</summary>
+          <div class="drill__body">
+            <p>
+              9999 comes back as <span class="mono">100</span>
+              <span class="result result--ok">clamped</span>, but
+              <span class="mono">abc</span> is
+              <span class="result result--stop">400</span>.
+            </p>
+            <p>
+              "Give me everything" is a reasonable thing to want, so it is
+              quietly capped rather than refused. "Give me abc" is not a
+              request anyone meant to make; it is a bug in the caller, and
+              silently defaulting it would hide that bug.
+            </p>
+            <p class="say">
+              <strong>Say it like this</strong>
+              "An out-of-range value gets clamped because the intent is
+              clear; a malformed one gets rejected, because guessing what
+              the caller meant would mask a client bug."
+            </p>
+          </div>
+        </details>
+      </div>
+
+      <div class="drill">
+        <p class="drill__ask"><span class="tag">Drill C</span>Filter the list server-side. Does <span class="mono">total</span> follow the filter, or ignore it?</p>
+        <div class="cmd">
+          <div class="cmd__bar"><span>bash</span><button class="cmd__copy" type="button">Copy</button></div>
+          <pre><code>for q in "risk=high" "risk=unscored" "sort=risk"; do
+  echo -n "?$q -> "
+  curl -s "http://localhost:3000/api/patients?$q" -H "Authorization: Bearer $TOKEN" \
+    | python3 -c "import sys,json; print('total', json.load(sys.stdin)['total'])"
+done</code></pre>
+        </div>
+        <details class="drill__reveal">
+          <summary>What you should see</summary>
+          <div class="drill__body">
+            <p>
+              Each filter reports its own total. Filtering happens in the
+              database, not in the browser.
+            </p>
+            <p>
+              That distinction is the whole point: filtering a fetched page
+              in JavaScript would only ever search the twenty rows already
+              downloaded, so a high-risk patient sitting at position 400
+              would never appear.
+            </p>
+            <p class="say">
+              <strong>Say it like this</strong>
+              "Filtering and sorting are done in the database so they apply
+              to the whole table. Doing it client-side only filters the page
+              you already fetched, which quietly gives wrong answers once
+              the data outgrows one page."
+            </p>
+          </div>
+        </details>
+      </div>
+
+      <div class="drill">
+        <p class="drill__ask"><span class="tag">Drill D</span>Send a PATCH with only one field. Does it apply just that field, or refuse the whole request?</p>
+        <div class="cmd">
+          <div class="cmd__bar"><span>bash</span><button class="cmd__copy" type="button">Copy</button></div>
+          <pre><code>curl -s -w "\n%{http_code}\n" -X PATCH http://localhost:3000/api/patients/$PID \
+  -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+  -d '{"sex":"female"}'</code></pre>
+        </div>
+        <details class="drill__reveal">
+          <summary>What you should see</summary>
+          <div class="drill__body">
+            <p><span class="result result--stop">400</span> Invalid patient data</p>
+            <p>
+              Refused outright, not partially applied. A caller has to
+              resend <span class="mono">reference</span> too, even to
+              change nothing about it, which is the PUT behaviour the
+              article you're checking this against describes, wearing a
+              PATCH label.
+            </p>
+            <p class="say">
+              <strong>Say it like this</strong>
+              "We use PATCH instead of PUT mainly because PUT implies the
+              endpoint can create a resource at that id, and this one
+              can't: a missing patient 404s rather than being created.
+              But the request body itself isn't genuinely partial yet; it
+              reuses the create schema, so you have to resend both fields.
+              That's a real gap between the verb and the behaviour, not a
+              considered trade-off."
+            </p>
+          </div>
+        </details>
+      </div>
+
+      <div class="drill">
+        <p class="drill__ask"><span class="tag">Drill E</span>Two POST endpoints exist for the same visit: creating it, and re-scoring it. Do they agree on idempotency?</p>
+        <div class="cmd">
+          <div class="cmd__bar"><span>bash</span><button class="cmd__copy" type="button">Copy</button></div>
+          <pre><code># create the same visit twice
+curl -s -o /dev/null -w "create #1 -> %{http_code}\n" http://localhost:3000/api/patients/$PID/visits \
+  -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+  -d '{"visit_date":"2026-08-15","age":50,"systolic":120,"diastolic":80,"bmi":25,"hba1c":5.5}'
+curl -s -o /dev/null -w "create #2 -> %{http_code}\n" http://localhost:3000/api/patients/$PID/visits \
+  -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+  -d '{"visit_date":"2026-08-15","age":50,"systolic":120,"diastolic":80,"bmi":25,"hba1c":5.5}'
+curl -s "http://localhost:3000/api/patients/$PID/visits" -H "Authorization: Bearer $TOKEN" \
+  | python3 -c "import sys,json; print('total visits:', json.load(sys.stdin)['total'])"</code></pre>
+        </div>
+        <details class="drill__reveal">
+          <summary>What you should see</summary>
+          <div class="drill__body">
+            <p>
+              <span class="result result--stop">201</span> twice, and
+              <span class="mono">total visits: 2</span>. Not one, two.
+            </p>
+            <p>
+              Compare that against Drill F, immediately below: scoring the
+              same visit twice with <span class="mono">POST /visits/:id/predict</span>
+              produced exactly <strong>one</strong> row, not two. Both
+              endpoints use the same HTTP method. One is idempotent, one
+              isn't, because idempotency isn't a property of the verb,
+              it's a property of what the handler does. Scoring was
+              deliberately made idempotent with a database constraint;
+              creating a visit never was, because two visits on the same
+              day are a real, legitimate thing a clinician might do.
+            </p>
+            <p class="say">
+              <strong>Say it like this</strong>
+              "POST isn't idempotent by default; it's idempotent only
+              where we've deliberately made it so, like the scoring
+              endpoint's unique constraint. Recording a visit stays
+              non-idempotent on purpose, because a clinician genuinely
+              might record two real visits with the same measurements."
+            </p>
+          </div>
+        </details>
+      </div>
+
+      <div class="drill">
+        <p class="drill__ask"><span class="tag">Drill F</span>Score the same visit twice. Two assessments, or one?</p>
+        <div class="cmd">
+          <div class="cmd__bar"><span>bash</span><button class="cmd__copy" type="button">Copy</button></div>
+          <pre><code>export VID=$(curl -s "http://localhost:3000/api/patients/$PID/visits" \
+  -H "Authorization: Bearer $TOKEN" \
+  | python3 -c "import sys,json; print(json.load(sys.stdin)['data'][0]['id'])")
+
+curl -s -X POST "http://localhost:3000/api/visits/$VID/predict" -H "Authorization: Bearer $TOKEN" &gt; /dev/null
+curl -s -X POST "http://localhost:3000/api/visits/$VID/predict" -H "Authorization: Bearer $TOKEN" &gt; /dev/null
+
+docker exec supabase_db_diacify psql -U postgres -tAX \
+  -c "select count(*) from risk_assessments where visit_id='$VID';"</code></pre>
+        </div>
+        <details class="drill__reveal">
+          <summary>What you should see</summary>
+          <div class="drill__body">
+            <p><span class="result result--ok">1</span></p>
+            <p>
+              Scoring is deterministic: the same visit under the same model
+              always gives the same answer, so a repeat is a duplicate, not
+              new information. A unique constraint on
+              <span class="mono">(visit, model version)</span> makes the
+              second write collide, and the existing row is read back and
+              returned instead.
+            </p>
+            <p class="say">
+              <strong>Say it like this</strong>
+              "Re-scoring is idempotent. The database has a unique
+              constraint on the visit and model version, so a retry
+              collides and we return the row that's already there rather
+              than writing a second one."
+            </p>
+          </div>
+        </details>
+      </div>
+
+      <div class="drill">
+        <p class="drill__ask"><span class="tag">Drill G</span>The CORS one. Request the API pretending to be a malicious website. Does it get the data?</p>
+        <div class="cmd">
+          <div class="cmd__bar"><span>bash</span><button class="cmd__copy" type="button">Copy</button></div>
+          <pre><code># the browser's preflight question
+curl -s -D - -o /dev/null -X OPTIONS http://localhost:3000/api/patients \
+  -H "Origin: https://evil.example.com" | grep -iE "^HTTP|access-control-allow-origin"
+
+# now an actual request claiming that origin
+curl -s -o /dev/null -w "real request -> %{http_code}\n" http://localhost:3000/api/patients \
+  -H "Origin: https://evil.example.com" -H "Authorization: Bearer $TOKEN"</code></pre>
+        </div>
+        <details class="drill__reveal">
+          <summary>What you should see, and the misconception it kills</summary>
+          <div class="drill__body">
+            <p>
+              The header comes back as
+              <span class="mono">Access-Control-Allow-Origin: http://localhost:5173</span>
+              (the one allowed origin, <em>not</em> the evil one). But the
+              real request still returns
+              <span class="result result--ok">200</span> with the data.
+            </p>
+            <p>
+              <strong>CORS did not block anything.</strong> The server
+              answered normally; it simply declined to grant permission. A
+              <em>browser</em> would refuse to hand that response to the
+              malicious page's JavaScript. <span class="mono">curl</span>
+              has no such rule, so it reads the body happily.
+            </p>
+            <p>
+              This is why CORS is not access control. The thing actually
+              protecting that data is the bearer token, which the evil page
+              does not have.
+            </p>
+            <p class="say">
+              <strong>Say it like this</strong>
+              "CORS is enforced by the browser, not the server; it stops a
+              malicious page reading a response using someone's logged-in
+              session. It's not authentication, and it does nothing against
+              a direct server-side request. We pin it to one origin rather
+              than using a wildcard because every request carries a bearer
+              token."
+            </p>
+          </div>
+        </details>
+      </div>
+    </section>
+
+    <section id="stopped">
+      <div class="section-head">
+        <span class="num">08</span>
+        <h2>Watch a request get stopped</h2>
+      </div>
+
+      <div class="covers">
+        <span class="covers__label">Concepts</span>
+        <span class="concept">Middleware</span>
+        <span class="concept">JWT signature verification</span>
+        <span class="concept">Public-key crypto (JWKS)</span>
+        <span class="concept">Rolling-window rate limiting</span>
+        <span class="concept">Schema validation</span>
+        <span class="concept">HTTP status codes</span>
+      </div>
+
+
+      <p class="prose">
+        A write passes four checks before anything is saved. Each one
+        refuses with a different status code, and each refusal is
+        something you can trigger on purpose.
       </p>
 
       <figure class="diagram">
 <pre class="mermaid">
-%%{init: {'theme':'base','themeVariables':{'primaryColor':'#eaf5ee','primaryTextColor':'#16261e','primaryBorderColor':'#16382b','secondaryColor':'#f4f1e9','secondaryTextColor':'#16261e','secondaryBorderColor':'#c9d6cb','tertiaryColor':'#ffffff','tertiaryTextColor':'#16261e','tertiaryBorderColor':'#c9d6cb','lineColor':'#435146','textColor':'#16261e','attributeBackgroundColorOdd':'#ffffff','attributeBackgroundColorEven':'#f4f1e9','nodeBorder':'#16382b','mainBkg':'#eaf5ee','edgeLabelBackground':'#fbf9f3','actorBkg':'#eaf5ee','actorBorder':'#16382b','actorTextColor':'#16261e','signalColor':'#435146','signalTextColor':'#16261e','labelBoxBkgColor':'#f4f1e9','labelBoxBorderColor':'#c9d6cb','labelTextColor':'#16261e','noteBkgColor':'#cfe3e8','noteBorderColor':'#16382b','noteTextColor':'#16261e','fontFamily':'Inter, system-ui, sans-serif','fontSize':'12px'}}}%%
-sequenceDiagram
-    participant B as Browser
-    participant S as Backend
-    participant P as Postgres
+%%{init: {'theme':'base','themeVariables':{'primaryColor':'#eaf5ee','primaryTextColor':'#16261e','primaryBorderColor':'#16382b','lineColor':'#435146','textColor':'#16261e','edgeLabelBackground':'#ffffff','fontFamily':'Inter, system-ui, sans-serif','fontSize':'13px'}}}%%
+flowchart TD
+    R["A write request arrives"] --> A{"Is the token real?"}
+    A -- no --> A1["401: who are you?"]:::stop
+    A -- yes --> B{"Under 20 writes&lt;br/&gt;this minute?"}
+    B -- no --> B1["429: slow down"]:::stop
+    B -- yes --> C{"Do the numbers&lt;br/&gt;make sense?"}
+    C -- no --> C1["400: bad data"]:::stop
+    C -- yes --> D{"Is this patient yours?"}
+    D -- no --> D1["404: not found"]:::stop
+    D -- yes --> E["201: saved and scored"]:::ok
 
-    B->>S: POST /api/patients/:id/visits&lt;br/&gt;Bearer JWT, JSON body
-    activate S
-    S->>S: requireAuth — verify JWT locally
-    Note right of S: 401 bad token&lt;br/&gt;503 JWKS unreachable
-    S->>S: rateLimit — 20 writes/min, keyed by clinician id
-    Note right of S: 429 over budget
-    S->>S: createVisitSchema().safeParse(body)
-    Note right of S: 400 invalid shape
-    S->>P: insert into visits (as the caller's own JWT)
-    activate P
-    P-->>S: 42501 if the patient isn't the caller's → 404
-    P-->>S: inserted visit, plus patients(sex)
-    deactivate P
-    S->>S: assessRisk() — in-process, no network hop
-    S->>P: insert into risk_assessments
-    activate P
-    P-->>S: stored assessment (or the existing one, on a retry)
-    deactivate P
-    S-->>B: 201 { visit, risk_assessment }
-    deactivate S
-    B->>B: invalidate cached queries, navigate to the patient
+    classDef stop fill:#fbeae7,stroke:#a32d21,color:#a32d21
+    classDef ok fill:#eaf5ee,stroke:#1c7a33,color:#1c7a33
 </pre>
         <figcaption>
-          Four rejection points, four different status codes — each one
-          the earliest point that request could safely be refused.
+          The order matters: the rate limiter counts per clinician, so it
+          cannot run until the token has told it who is asking.
         </figcaption>
       </figure>
 
-      <p class="sublabel">Where each step actually lives</p>
-      <div class="scroll-x">
-        <table>
-          <thead>
-            <tr><th>Step</th><th>File</th></tr>
-          </thead>
-          <tbody>
-            <tr><td>Form submit</td><td class="mono">frontend/src/pages/RecordVisitPage.tsx</td></tr>
-            <tr><td>Request shape (compile-time only, see below)</td><td class="mono">shared/src/createVisitSchema.ts</td></tr>
-            <tr><td>requireAuth</td><td class="mono">backend/src/middleware/requireAuth.ts</td></tr>
-            <tr><td>rateLimit</td><td class="mono">backend/src/middleware/rateLimit.ts</td></tr>
-            <tr><td>Route handler, validation, insert</td><td class="mono">backend/src/routes/patients.ts</td></tr>
-            <tr><td>Feature vector → forest → verdict</td><td class="mono">backend/src/ml/features.ts, forest.ts, riskAssessment.ts</td></tr>
-            <tr><td>Persist the assessment</td><td class="mono">backend/src/db/riskAssessments.ts</td></tr>
-          </tbody>
-        </table>
-      </div>
-
-      <div class="box box--blue">
-        <p>
-          <strong>The shared schema runs at two different times.</strong>
-          <span class="mono">createVisitSchema()</span> lives in
-          <span class="mono">shared/</span> so both sides agree on one
-          definition — but the frontend never calls
-          <span class="mono">.safeParse()</span> on it, only imports the
-          inferred <span class="mono">CreateVisitInput</span> type. The
-          backend is the only place it actually runs, on the real body: one
-          definition, a compile-time contract on one side, a runtime gate
-          on the other.
-        </p>
-      </div>
-
-      <details class="why">
-        <summary>Why the visit is committed before it's scored</summary>
-        <div class="why__body">
-          <p>
-            The insert and the scoring are two separate calls, not one
-            transaction. If <span class="mono">assessRisk()</span> or the
-            assessment insert fails, the visit — a clinical fact that already
-            happened — stays saved, with
-            <span class="mono">risk_assessment: null</span> in the response.
-            <span class="mono">POST /api/visits/:id/predict</span> can score
-            it later.
-          </p>
-          <p>
-            The alternative — one transaction covering both — would roll the
-            visit back if scoring failed for any reason, including a bug in
-            the scoring code that has nothing to do with whether the
-            measurement itself was real
-            <a class="adr" href="#" data-adr="032">ADR-032</a>.
-          </p>
+      <div class="drill">
+        <p class="drill__ask"><span class="tag">Drill 1</span>Send no token at all. What comes back?</p>
+        <div class="cmd">
+          <div class="cmd__bar"><span>bash</span><button class="cmd__copy" type="button">Copy</button></div>
+          <pre><code>curl -s -o /dev/null -w "%{http_code}\n" http://localhost:3000/api/patients</code></pre>
         </div>
-      </details>
+        <details class="drill__reveal">
+          <summary>What you should see</summary>
+          <div class="drill__body">
+            <p><span class="result result--stop">401</span></p>
+            <p>
+              The request never reaches any patient code. The first gate
+              looks for an <span class="mono">Authorization</span> header,
+              finds nothing, and answers immediately.
+            </p>
+            <p class="say">
+              <strong>Say it like this</strong>
+              "Authentication is middleware; it runs before any route
+              handler, so an unauthenticated request never touches the
+              database at all."
+            </p>
+          </div>
+        </details>
+      </div>
+
+      <div class="drill">
+        <p class="drill__ask"><span class="tag">Drill 2</span>Send a token that is real text but not a real token.</p>
+        <div class="cmd">
+          <div class="cmd__bar"><span>bash</span><button class="cmd__copy" type="button">Copy</button></div>
+          <pre><code>curl -s -o /dev/null -w "%{http_code}\n" http://localhost:3000/api/patients \
+  -H "Authorization: Bearer not-a-real-token"</code></pre>
+        </div>
+        <details class="drill__reveal">
+          <summary>What you should see, and the bit that matters</summary>
+          <div class="drill__body">
+            <p><span class="result result--stop">401</span></p>
+            <p>
+              This is the answer to <em>"how does the backend actually
+              validate the token?"</em>, and it does it <strong>without
+              calling the auth service</strong>. A token is signed with a
+              private key. The backend holds the matching public key
+              (fetched once and cached), and checks the signature by maths,
+              locally.
+            </p>
+            <p>
+              That is why a forged token fails instantly: you cannot produce
+              a valid signature without the private key, which only the auth
+              service has.
+            </p>
+            <p class="say">
+              <strong>Say it like this</strong>
+              "The backend verifies the token's signature locally against
+              the auth provider's public key. There's no lookup and no
+              network call on the hot path: a tampered token fails the
+              signature check, and an expired one fails on the expiry claim
+              inside it."
+            </p>
+          </div>
+        </details>
+      </div>
+
+      <div class="drill">
+        <p class="drill__ask"><span class="tag">Drill 3</span>Now send your real token.</p>
+        <div class="cmd">
+          <div class="cmd__bar"><span>bash</span><button class="cmd__copy" type="button">Copy</button></div>
+          <pre><code>curl -s -o /dev/null -w "%{http_code}\n" http://localhost:3000/api/patients \
+  -H "Authorization: Bearer $TOKEN"</code></pre>
+        </div>
+        <details class="drill__reveal">
+          <summary>What you should see</summary>
+          <div class="drill__body">
+            <p><span class="result result--ok">200</span></p>
+            <p>
+              Same URL, same server, three different outcomes decided
+              entirely by one header.
+            </p>
+          </div>
+        </details>
+      </div>
+
+      <div class="drill">
+        <p class="drill__ask"><span class="tag">Drill 4</span>Create a patient, then send a visit with an impossible HbA1c of 99.</p>
+        <div class="cmd">
+          <div class="cmd__bar"><span>bash</span><button class="cmd__copy" type="button">Copy</button></div>
+          <pre><code>export PID=$(curl -s http://localhost:3000/api/patients \
+  -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+  -d '{"reference":"PRAC-001","sex":"male"}' \
+  | python3 -c "import sys,json; print(json.load(sys.stdin)['data']['id'])")
+
+curl -s -o /dev/null -w "%{http_code}\n" http://localhost:3000/api/patients/$PID/visits \
+  -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+  -d '{"age":58,"systolic":148,"diastolic":94,"bmi":33.2,"hba1c":99}'</code></pre>
+        </div>
+        <details class="drill__reveal">
+          <summary>What you should see</summary>
+          <div class="drill__body">
+            <p><span class="result result--stop">400</span></p>
+            <p>
+              HbA1c is a percentage; 99 is not a possible human reading. The
+              schema caps it at 20, so this never reaches the database.
+              Validation happens once, at the edge; after that, the rest of
+              the code trusts the values.
+            </p>
+            <p class="say">
+              <strong>Say it like this</strong>
+              "Untrusted input is parsed once at the boundary into a typed
+              shape. Nothing downstream re-checks it, because nothing
+              downstream can receive anything that didn't pass."
+            </p>
+          </div>
+        </details>
+      </div>
+
+      <div class="drill">
+        <p class="drill__ask"><span class="tag">Drill 5</span>Try to smuggle in a field the API never asked for.</p>
+        <div class="cmd">
+          <div class="cmd__bar"><span>bash</span><button class="cmd__copy" type="button">Copy</button></div>
+          <pre><code>curl -s -o /dev/null -w "%{http_code}\n" http://localhost:3000/api/patients/$PID/visits \
+  -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+  -d '{"age":58,"systolic":148,"diastolic":94,"bmi":33.2,"hba1c":7.1,
+       "patient_id":"someone-elses-patient-id"}'</code></pre>
+        </div>
+        <details class="drill__reveal">
+          <summary>What you should see</summary>
+          <div class="drill__body">
+            <p><span class="result result--stop">400</span></p>
+            <p>
+              Rejected, not ignored. The schema is strict, so an unexpected
+              field is an error rather than something quietly dropped. That
+              matters here specifically: which patient a visit belongs to
+              comes from the URL and the database's own ownership rule,
+              never from the body.
+            </p>
+            <p class="say">
+              <strong>Say it like this</strong>
+              "The schema rejects unknown fields rather than stripping them,
+              so an attacker gets told no instead of guessing which fields
+              silently do something."
+            </p>
+          </div>
+        </details>
+      </div>
+
+      <div class="drill">
+        <p class="drill__ask"><span class="tag">Drill 6</span>Send 22 writes in a row. Where does it break, and what does that tell you?</p>
+        <div class="cmd">
+          <div class="cmd__bar"><span>bash</span><button class="cmd__copy" type="button">Copy</button></div>
+          <pre><code>for i in $(seq 1 22); do
+  curl -s -o /dev/null -w "%{http_code} " http://localhost:3000/api/patients \
+    -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+    -d "{\"reference\":\"RL-$i\",\"sex\":\"female\"}"
+done; echo</code></pre>
+        </div>
+        <details class="drill__reveal">
+          <summary>What you should see</summary>
+          <div class="drill__body">
+            <p>
+              A run of <span class="result result--ok">201</span> then
+              <span class="result result--warn">429</span> for the rest,
+              with a <span class="mono">Retry-After: 60</span> header on the
+              refusals.
+            </p>
+            <p>
+              <strong>Count them: you get nineteen, not twenty.</strong> The
+              budget is twenty writes per rolling minute, and you already
+              spent one creating <span class="mono">PRAC-001</span> two
+              drills ago. It is not a counter that resets on the hour; it
+              genuinely means "how many in the last sixty seconds", so
+              anything you did a moment ago still counts.
+            </p>
+            <p>
+              The budget is also counted <em>per clinician</em>, not per IP
+              address. A whole clinic behind one office router shares one
+              IP, and keying on that would let one busy clinician lock out
+              their colleagues.
+            </p>
+            <p class="say">
+              <strong>Say it like this</strong>
+              "Rate limiting is keyed on the authenticated user id, which is
+              exactly why it has to run after authentication: the limiter
+              literally can't count until it knows whose requests it's
+              counting."
+            </p>
+          </div>
+        </details>
+      </div>
     </section>
 
-    <section id="gates">
+    <section id="isolation">
       <div class="section-head">
-        <span class="num">07</span>
-        <h2>The gates</h2>
+        <span class="num">09</span>
+        <h2>Prove one clinician can't see another's data</h2>
+      </div>
+
+      <div class="covers">
+        <span class="covers__label">Concepts</span>
+        <span class="concept">Row-level security (RLS)</span>
+        <span class="concept">Multi-tenant isolation</span>
+        <span class="concept">USING vs WITH CHECK</span>
+        <span class="concept">404 vs 403</span>
+        <span class="concept">Foreign keys don't authorize</span>
+      </div>
+
+
+      <p class="prose">
+        This is the drill that answers <em>"how does that protect the API
+        routes?"</em>, because the protection is not in the routes at all.
+      </p>
+
+      <figure class="diagram">
+<pre class="mermaid">
+%%{init: {'theme':'base','themeVariables':{'primaryColor':'#eaf5ee','primaryTextColor':'#16261e','primaryBorderColor':'#16382b','lineColor':'#435146','textColor':'#16261e','edgeLabelBackground':'#ffffff','fontFamily':'Inter, system-ui, sans-serif','fontSize':'13px'}}}%%
+flowchart LR
+    A["Clinician A asks for&lt;br/&gt;all patients"] --> P{"The database checks&lt;br/&gt;who is asking"}
+    B["Clinician B asks for&lt;br/&gt;the exact same thing"] --> P
+    P --> R1["A gets A's patients"]:::ok
+    P --> R2["B gets B's patients"]:::ok
+
+    classDef ok fill:#eaf5ee,stroke:#1c7a33,color:#1c7a33
+</pre>
+        <figcaption>
+          One query, written once, with no mention of any clinician in it.
+          The database narrows it, per caller.
+        </figcaption>
+      </figure>
+
+      <div class="drill">
+        <p class="drill__ask"><span class="tag">Setup</span>Become a second, different clinician.</p>
+        <div class="cmd">
+          <div class="cmd__bar"><span>bash</span><button class="cmd__copy" type="button">Copy</button></div>
+          <pre><code>curl -s http://127.0.0.1:54321/auth/v1/signup \
+  -H "apikey: $ANON_KEY" -H "Content-Type: application/json" \
+  -d '{"email":"practice-b@example.com","password":"practice-password-123"}' &gt; /dev/null
+
+export TOKEN_B=$(curl -s "http://127.0.0.1:54321/auth/v1/token?grant_type=password" \
+  -H "apikey: $ANON_KEY" -H "Content-Type: application/json" \
+  -d '{"email":"practice-b@example.com","password":"practice-password-123"}' \
+  | python3 -c "import sys,json; print(json.load(sys.stdin)['access_token'])")</code></pre>
+        </div>
+      </div>
+
+      <div class="drill">
+        <p class="drill__ask"><span class="tag">Drill 7</span>Ask for the patient list as clinician B. You created patients a moment ago: how many come back?</p>
+        <div class="cmd">
+          <div class="cmd__bar"><span>bash</span><button class="cmd__copy" type="button">Copy</button></div>
+          <pre><code>curl -s http://localhost:3000/api/patients \
+  -H "Authorization: Bearer $TOKEN_B"</code></pre>
+        </div>
+        <details class="drill__reveal">
+          <summary>What you should see</summary>
+          <div class="drill__body">
+            <p><span class="mono">{"data":[],"page":1,"limit":20,"total":0}</span></p>
+            <p>
+              Zero, and note it is an ordinary empty list, not an error.
+              B's rows genuinely do not include A's. The backend ran the
+              same query for both of them.
+            </p>
+          </div>
+        </details>
+      </div>
+
+      <div class="drill">
+        <p class="drill__ask"><span class="tag">Drill 8</span>B knows A's patient id exactly. Fetch it directly. 403 or 404?</p>
+        <div class="cmd">
+          <div class="cmd__bar"><span>bash</span><button class="cmd__copy" type="button">Copy</button></div>
+          <pre><code>curl -s -o /dev/null -w "%{http_code}\n" http://localhost:3000/api/patients/$PID \
+  -H "Authorization: Bearer $TOKEN_B"</code></pre>
+        </div>
+        <details class="drill__reveal">
+          <summary>What you should see</summary>
+          <div class="drill__body">
+            <p><span class="result result--stop">404</span></p>
+            <p>
+              Not 403. A 403 would mean "this exists, but it's not yours",
+              which confirms the record exists. 404 is both honest and safer:
+              the query genuinely returned nothing, because the row was
+              filtered out before the backend ever saw it.
+            </p>
+            <p class="say">
+              <strong>Say it like this</strong>
+              "Another user's record returns 404, not 403, because the row is
+              invisible to the query rather than blocked after the fact, so
+              the API never reveals that someone else's record exists."
+            </p>
+          </div>
+        </details>
+      </div>
+
+      <div class="drill">
+        <p class="drill__ask"><span class="tag">Drill 9</span>The important one. B tries to <em>write</em> a visit onto A's patient.</p>
+        <div class="cmd">
+          <div class="cmd__bar"><span>bash</span><button class="cmd__copy" type="button">Copy</button></div>
+          <pre><code>curl -s -w "\n%{http_code}\n" http://localhost:3000/api/patients/$PID/visits \
+  -H "Authorization: Bearer $TOKEN_B" -H "Content-Type: application/json" \
+  -d '{"age":58,"systolic":148,"diastolic":94,"bmi":33.2,"hba1c":7.1}'</code></pre>
+        </div>
+        <details class="drill__reveal">
+          <summary>What you should see, and why this is the one to remember</summary>
+          <div class="drill__body">
+            <p><span class="mono">{"error":"Patient not found"}</span> <span class="result result--stop">404</span></p>
+            <p>
+              Reads being filtered is the easy half. This is the half most
+              designs get wrong: B supplied a perfectly valid visit and a
+              real patient id, and was still refused, because the write rule
+              asks "does this patient belong to you?", not "did you fill the
+              form in correctly?"
+            </p>
+            <p>
+              A foreign key would <em>not</em> have caught this. It only
+              confirms the patient exists. It never asks who owns it.
+            </p>
+            <p class="say">
+              <strong>Say it like this</strong>
+              "Ownership is enforced by the database on both reads and
+              writes. The write rule re-checks ownership through the parent
+              record, so you can't attach data to someone else's patient even
+              with a valid id; a foreign key alone would have allowed that."
+            </p>
+          </div>
+        </details>
+      </div>
+    </section>
+
+    <section id="database">
+      <div class="section-head">
+        <span class="num">10</span>
+        <h2>The database underneath</h2>
+      </div>
+
+      <div class="covers">
+        <span class="covers__label">Concepts</span>
+        <span class="concept">Schema design</span>
+        <span class="concept">UUID primary keys</span>
+        <span class="concept">Foreign keys &amp; cascade</span>
+        <span class="concept">Composite indexes</span>
+        <span class="concept">Unique &amp; CHECK constraints</span>
+        <span class="concept">Numeric precision</span>
+        <span class="concept">Migrations</span>
       </div>
 
       <p class="prose">
-        Three checks run before a write ever reaches a route handler's own
-        logic. The order they run in isn't a convention — one of them is a
-        literal data dependency on the one before it.
+        Three tables. Every column type and every index is a decision, and
+        most of them are defending against something specific.
       </p>
 
+      <figure class="diagram">
+<pre class="mermaid">
+%%{init: {'theme':'base','themeVariables':{'primaryColor':'#eaf5ee','primaryTextColor':'#16261e','primaryBorderColor':'#16382b','lineColor':'#435146','textColor':'#16261e','edgeLabelBackground':'#ffffff','fontFamily':'Inter, system-ui, sans-serif','fontSize':'13px'}}}%%
+flowchart LR
+    A["auth.users&lt;br/&gt;the clinician"] -->|"owns"| P["patients&lt;br/&gt;reference, sex"]
+    P -->|"has many"| V["visits&lt;br/&gt;the measurements"]
+    V -->|"judged by"| R["risk_assessments&lt;br/&gt;the model's verdict"]
+
+    classDef default fill:#eaf5ee,stroke:#16382b,color:#16261e
+</pre>
+        <figcaption>
+          Delete a clinician and everything below them goes too: each arrow
+          is a foreign key with <span class="mono">on delete cascade</span>.
+        </figcaption>
+      </figure>
+
+      <p class="sublabel">Choices worth being able to defend</p>
       <div class="scroll-x">
         <table>
-          <thead>
-            <tr><th>Gate</th><th>Rejects with</th><th>Keyed by</th></tr>
-          </thead>
+          <thead><tr><th>Choice</th><th>Why not the alternative</th></tr></thead>
           <tbody>
             <tr>
-              <td>requireAuth</td>
-              <td><span class="mono">401</span> bad/missing token<br><span class="mono">503</span> JWKS unreachable</td>
-              <td>The <span class="mono">Authorization</span> header</td>
+              <td><span class="mono">uuid</span> primary keys</td>
+              <td>An auto-incrementing integer leaks how many patients exist and makes ids guessable. With ids appearing in URLs, that invites probing for other clinicians' records</td>
             </tr>
             <tr>
-              <td>rateLimit</td>
-              <td><span class="mono">429</span>, with <span class="mono">Retry-After</span></td>
-              <td><span class="mono">req.user.id</span></td>
+              <td><span class="mono">numeric(4,2)</span> for HbA1c</td>
+              <td>A float can't store 5.7 exactly. For a clinical measurement that gets compared against a diagnostic threshold, that rounding is not acceptable</td>
             </tr>
             <tr>
-              <td>Zod validation</td>
-              <td><span class="mono">400</span></td>
-              <td>The request body</td>
+              <td><span class="mono">double precision</span> for probabilities</td>
+              <td>The opposite case: these must reproduce scikit-learn's float64 output <em>exactly</em>, and a fixed-scale numeric would round it away</td>
+            </tr>
+            <tr>
+              <td>One index on <span class="mono">(patient_id, visit_date)</span></td>
+              <td>A separate <span class="mono">patient_id</span> index would be redundant: a composite index already serves lookups on its leading column, so the extra one costs write speed for nothing</td>
+            </tr>
+            <tr>
+              <td>Nullable lipid columns</td>
+              <td>A clinician doesn't draw a full panel every visit. NOT NULL would force fake values into clinical records</td>
             </tr>
           </tbody>
         </table>
       </div>
 
-      <div class="keystone">
-        <span class="sublabel">The ordering is mechanical, not defensive</span>
-        <p>
-          <span class="mono">rateLimit</span> keys its lookup on
-          <span class="mono">req.user.id</span>. That field does not exist
-          until <span class="mono">requireAuth</span> sets it. Rate limiting
-          is scoped per clinician, so it cannot even ask "how many requests
-          has this caller made" before it knows who the caller is —
-          swapping the two wouldn't just be less safe, it would throw.
-        </p>
+      <div class="drill">
+        <p class="drill__ask"><span class="tag">Drill H</span>Look at what indexes actually exist. Predict how many before you run it.</p>
+        <div class="cmd">
+          <div class="cmd__bar"><span>bash</span><button class="cmd__copy" type="button">Copy</button></div>
+          <pre><code>docker exec supabase_db_diacify psql -U postgres -tAX -c \
+  "select tablename, indexname from pg_indexes
+   where schemaname='public'
+     and tablename in ('patients','visits','risk_assessments')
+   order by tablename;"</code></pre>
+        </div>
+        <details class="drill__reveal">
+          <summary>What you should see</summary>
+          <div class="drill__body">
+            <p>Seven, and only three were written by hand:</p>
+            <ul class="bullets">
+              <li><span><span class="mono">idx_patients_clinician_id</span>: every query filters by owner, so this is the one that matters most</span></li>
+              <li><span><span class="mono">idx_patients_clinician_id_reference</span>: unique, which is what makes a reference unique <em>per clinician</em> rather than globally</span></li>
+              <li><span><span class="mono">idx_visits_patient_date</span>: composite, serving both "this patient's visits" and "newest first" from one index</span></li>
+            </ul>
+            <p>
+              The other four are the three primary keys plus the unique
+              constraint on <span class="mono">risk_assessments</span>, which
+              Postgres backs with an index automatically.
+            </p>
+            <p class="say">
+              <strong>Say it like this</strong>
+              "Indexes follow the access patterns: everything is read
+              filtered by owner, and visits are read newest-first per
+              patient, so there's a composite index covering both. We
+              deliberately didn't add a standalone patient_id index because
+              the composite's leading column already serves it."
+            </p>
+          </div>
+        </details>
       </div>
 
-      <details class="why">
-        <summary>Why a timed-out JWKS fetch is 503, not 401</summary>
-        <div class="why__body">
-          <p>
-            <span class="mono">JWKSTimeout</span> extends the same
-            <span class="mono">JOSEError</span> base class every bad-token
-            error does, so it would fall into the general 401 branch by
-            default. <span class="mono">requireAuth</span> checks for it
-            explicitly, first, and maps it to 503 instead
-            <a class="adr" href="#" data-adr="033">ADR-033</a>.
-          </p>
-          <p>
-            The distinction matters to the person on the other end: a bad
-            token means "log in again," something a clinician can act on.
-            A verification service being unreachable is an outage they
-            cannot fix by logging in again — telling them to would be
-            actively wrong.
-          </p>
+      <div class="drill">
+        <p class="drill__ask"><span class="tag">Drill I</span>Reuse a patient reference you already used. Which code: 400, 409, or 500?</p>
+        <div class="cmd">
+          <div class="cmd__bar"><span>bash</span><button class="cmd__copy" type="button">Copy</button></div>
+          <pre><code>curl -s -w "\n%{http_code}\n" http://localhost:3000/api/patients \
+  -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+  -d '{"reference":"PRAC-001","sex":"male"}'</code></pre>
         </div>
-      </details>
-
-      <details class="why">
-        <summary>Why rateLimit is in-memory, and what that costs</summary>
-        <div class="why__body">
-          <p>
-            Each clinician's recent write timestamps live in a
-            <span class="mono">Map</span> inside the backend process. Correct
-            for one running instance; a second instance would keep its own,
-            separate count, so a clinician split across two instances by a
-            load balancer effectively gets twice the budget. A shared store
-            (Postgres, Redis) would fix that — not needed yet at Diacify's
-            per-clinic scale, and documented as a real limitation rather than
-            hidden.
-          </p>
-        </div>
-      </details>
-    </section>
-
-    <section id="security">
-      <div class="section-head">
-        <span class="num">08</span>
-        <h2>Data and security, in detail</h2>
+        <details class="drill__reveal">
+          <summary>What you should see</summary>
+          <div class="drill__body">
+            <p><span class="result result--warn">409</span> Reference already in use</p>
+            <p>
+              The database raises a unique-violation; the route recognises
+              that specific error and turns it into 409. Without that
+              mapping it would surface as a generic 500, technically "an
+              error happened", but useless to the person who just needs to
+              pick a different label.
+            </p>
+            <p>
+              Note the constraint is on
+              <span class="mono">(clinician_id, reference)</span>, not on
+              <span class="mono">reference</span> alone: another clinician
+              can use <span class="mono">PRAC-001</span> quite happily.
+            </p>
+            <p class="say">
+              <strong>Say it like this</strong>
+              "Uniqueness is enforced by a composite database constraint, so
+              it holds even under concurrent requests: checking first and
+              then inserting would leave a race between the two. The route
+              maps the constraint violation to a 409 so the client gets a
+              useful answer instead of a 500."
+            </p>
+          </div>
+        </details>
       </div>
 
-      <p class="prose">
-        Part 1 covered <em>who owns a row</em>. This is <em>who is allowed to
-        touch the database at all</em>, and it turns out Diacify answers that
-        question more strictly than most Supabase projects do by default.
-      </p>
+      <div class="drill">
+        <p class="drill__ask"><span class="tag">Drill J</span>Delete a patient who has a visit and an assessment. What happens to them?</p>
+        <div class="cmd">
+          <div class="cmd__bar"><span>bash</span><button class="cmd__copy" type="button">Copy</button></div>
+          <pre><code>export CID=$(curl -s http://localhost:3000/api/patients \
+  -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+  -d '{"reference":"CASCADE-DEMO","sex":"female"}' \
+  | python3 -c "import sys,json; print(json.load(sys.stdin)['data']['id'])")
 
-      <p class="sublabel">Table grants, by role</p>
-      <div class="scroll-x">
-        <table>
-          <thead>
-            <tr><th>Role</th><th>On <span class="mono">patients</span> / <span class="mono">visits</span></th><th>On <span class="mono">risk_assessments</span></th></tr>
-          </thead>
-          <tbody>
-            <tr><td class="mono">anon</td><td>Nothing — revoked at the role level, including future tables <a class="adr" href="#" data-adr="012">ADR-012</a></td><td>Nothing</td></tr>
-            <tr><td class="mono">authenticated</td><td>select, insert, update, delete</td><td>select, insert only — an assessment is never edited or deleted, only added <a class="adr" href="#" data-adr="029">ADR-029</a></td></tr>
-            <tr><td class="mono">service_role</td><td>Nothing — revoked entirely <a class="adr" href="#" data-adr="035">ADR-035</a></td><td>Nothing</td></tr>
-          </tbody>
-        </table>
+curl -s -o /dev/null http://localhost:3000/api/patients/$CID/visits \
+  -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+  -d '{"age":58,"systolic":148,"diastolic":94,"bmi":33.2,"hba1c":7.1}'
+
+COUNT="select (select count(*) from visits where patient_id='$CID') as visits,
+       (select count(*) from risk_assessments a join visits v on v.id=a.visit_id
+        where v.patient_id='$CID') as assessments;"
+
+docker exec supabase_db_diacify psql -U postgres -tAX -c "$COUNT"
+curl -s -o /dev/null -X DELETE http://localhost:3000/api/patients/$CID -H "Authorization: Bearer $TOKEN"
+docker exec supabase_db_diacify psql -U postgres -tAX -c "$COUNT"</code></pre>
+        </div>
+        <details class="drill__reveal">
+          <summary>What you should see</summary>
+          <div class="drill__body">
+            <p>
+              <span class="mono">1|1</span> before the delete,
+              <span class="mono">0|0</span> after, and the API returned
+              <span class="result result--ok">204</span>, no body.
+            </p>
+            <p>
+              One <span class="mono">DELETE</span> against one table removed
+              rows from three, because each foreign key declares
+              <span class="mono">on delete cascade</span>. The application
+              never wrote any cleanup code, and so it cannot forget to.
+            </p>
+            <p class="say">
+              <strong>Say it like this</strong>
+              "Cleanup is declared in the schema with cascading foreign
+              keys, not written in application code, so there's no path
+              that deletes a patient and leaves orphaned visits behind."
+            </p>
+          </div>
+        </details>
+      </div>
+
+      <div class="drill">
+        <p class="drill__ask"><span class="tag">Drill K</span>Send a 41-character reference. The database allows 40. Where does it get caught?</p>
+        <div class="cmd">
+          <div class="cmd__bar"><span>bash</span><button class="cmd__copy" type="button">Copy</button></div>
+          <pre><code>curl -s -o /dev/null -w "%{http_code}\n" http://localhost:3000/api/patients \
+  -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+  -d '{"reference":"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA","sex":"male"}'</code></pre>
+        </div>
+        <details class="drill__reveal">
+          <summary>What you should see</summary>
+          <div class="drill__body">
+            <p><span class="result result--stop">400</span>, not 500.</p>
+            <p>
+              Two layers agree on the same rule. The schema rejects it at
+              the edge, so the request never reaches Postgres, but the
+              table also carries a
+              <span class="mono">CHECK (char_length(reference) between 1 and 40)</span>
+              constraint as a backstop, for anything that ever reaches the
+              database by another route.
+            </p>
+            <p class="say">
+              <strong>Say it like this</strong>
+              "Validation lives at the edge so the caller gets a clean 400,
+              and the same rule is a database constraint underneath, so the
+              data can't become invalid even if something bypasses the
+              API."
+            </p>
+          </div>
+        </details>
       </div>
 
       <div class="box box--mint">
         <p>
-          <strong>service_role usually means "bypass RLS."</strong> Supabase
-          grants it that by default. Diacify revoked its table privileges to
-          zero anyway: nothing currently needs to act across every
-          clinician's rows at once, and a credential that <em>can</em>
-          bypass every check is a bigger attack surface than the
-          convenience is worth while nothing uses it.
+          <strong>Migrations are forward-only, one concern each, committed to git.</strong>
+          There is no "edit the schema in a dashboard" step: the thirteen
+          files in <span class="mono">supabase/migrations/</span> are the
+          schema's whole history, applied in filename order. CI replays all
+          of them against an empty database before any test runs, so a
+          migration that only works on <em>your</em> machine fails the pull
+          request rather than production.
         </p>
       </div>
-
-      <p class="sublabel">Migrations that assert their own end state</p>
-      <p class="prose">
-        Several grant migrations end with a <span class="mono">do $$ ...
-        end $$</span> block that queries Postgres's own catalog and raises an
-        exception if the role still holds a privilege it shouldn't. A future
-        migration that accidentally re-grants something fails immediately,
-        in CI, rather than silently widening access.
-      </p>
-
-      <div class="chain__pred" style="max-width: 60ch">select string_agg(...) from pg_class c
-cross join lateral aclexplode(c.relacl) a
-where pg_get_userbyid(a.grantee) = 'service_role';
-
-if offending is not null then
-  raise exception 'service_role holds table privileges it should not: %', offending;
-end if;</div>
-
-      <p class="sublabel" style="margin-top: var(--s6)">The list view's RLS gotcha</p>
-      <p class="prose">
-        <span class="mono">patients_with_latest_risk</span> — behind the
-        patient list's server-side risk filter/sort — joins all three
-        tables. A Postgres view runs with its <em>creator's</em> privileges
-        by default, which would silently bypass RLS underneath it.
-      </p>
-      <p class="prose">
-        It's declared <span class="mono">with (security_invoker = true)</span>,
-        so it runs as the querying clinician instead — one line standing
-        between "this view respects RLS" and "this view is a hole in it"
-        <a class="adr" href="#" data-adr="042">ADR-042</a>.
-      </p>
     </section>
 
-    <section id="serving">
+    <section id="scoring">
       <div class="section-head">
-        <span class="num">09</span>
-        <h2>ML serving</h2>
+        <span class="num">11</span>
+        <h2>Watch the model decide</h2>
       </div>
 
-      <p class="prose">
-        <span class="mono">model.json</span> is plain data — no code. Loaded
-        once at boot, validated against a Zod schema before the server
-        accepts a single request, per the project rule that a model
-        artifact is untrusted input like any other.
-      </p>
-
-      <div class="chain__pred">{
-  "version": "rf-098c19d0afc9",
-  "featureNames": ["hba1c", "age", "sex_encoded", ...],  // 13 total
-  "classes": ["low", "medium", "high"],
-  "medians": { "age": ..., "hba1c": ..., ... },   // training-set medians
-  "ratioMedians": { "tg_hdl_ratio": ..., "ldl_hdl_ratio": ... },
-  "trees": [ { "left": [...], "right": [...],
-               "feature": [...], "threshold": [...],
-               "value": [...] }, ... ]              // 100 of these
-}</div>
-
-      <p class="sublabel">13 features, built from a visit and a patient</p>
-      <p class="prose">
-        Nine are read straight off the visit. Four are derived:
-      </p>
-      <ul class="bullets">
-        <li><span><strong>hypertension_flag</strong> — 1 if systolic ≥ 140 mmHg or diastolic ≥ 90 mmHg, else 0.</span></li>
-        <li><span><strong>tg_hdl_ratio</strong>, <strong>ldl_hdl_ratio</strong> — triglycerides/HDL and LDL/HDL, or a training-time median ratio when HDL is 0 (can't divide by it).</span></li>
-        <li><span><strong>age_bmi_interaction</strong> — age × BMI, a single term letting the forest see the two together rather than only separately.</span></li>
-      </ul>
-      <p class="note prose">
-        A missing optional lab (RBS, triglycerides, HDL, LDL) is filled with
-        the median <em>from the training set</em>, not zero and not omitted
-        — the same treatment a blank value got when the model learned, so
-        serving and training stay consistent.
-      </p>
-
-      <div class="box box--blue">
-        <p>
-          <strong>Why the code compares <span class="mono">Math.fround(value)</span>, not the raw number.</strong>
-          scikit-learn casts every feature to 32-bit float before comparing
-          it to a threshold; JavaScript numbers are 64-bit.
-          <span class="mono">Math.fround</span> reproduces that rounding
-          first, so the Node traversal is bit-exact with the Python model —
-          not approximately equal, exactly equal.
-        </p>
+      <div class="covers">
+        <span class="covers__label">Concepts</span>
+        <span class="concept">Model inference</span>
+        <span class="concept">Feature engineering</span>
+        <span class="concept">Median imputation</span>
+        <span class="concept">Random forest</span>
+        <span class="concept">Argmax classification</span>
+        <span class="concept">Confidence threshold</span>
       </div>
 
-      <details class="why">
-        <summary>What breaks without it</summary>
-        <div class="why__body">
-          <p>
-            A value can sit between a threshold and the next representable
-            float32 above it — close enough to be "the same number" at
-            float64 precision, but on the other side of the split once cast
-            to float32. Without rounding first, that value takes the
-            <em>other</em> branch, lands in a different leaf, and can change
-            the predicted category. Confirmed with a real near-threshold
-            case in <span class="mono">forest.test.ts</span>, not just
-            reasoned about.
-          </p>
+
+      <figure class="diagram">
+<pre class="mermaid">
+%%{init: {'theme':'base','themeVariables':{'primaryColor':'#eaf5ee','primaryTextColor':'#16261e','primaryBorderColor':'#16382b','lineColor':'#435146','textColor':'#16261e','edgeLabelBackground':'#ffffff','fontFamily':'Inter, system-ui, sans-serif','fontSize':'13px'}}}%%
+flowchart LR
+    V["What the clinician typed&lt;br/&gt;age, blood pressure,&lt;br/&gt;BMI, HbA1c, labs"] --> F["13 numbers&lt;br/&gt;9 measured,&lt;br/&gt;4 calculated"]
+    F --> T["100 small decision trees&lt;br/&gt;each one votes"]
+    T --> P["3 probabilities&lt;br/&gt;low / medium / high"]
+    P --> S["A 0–100 score&lt;br/&gt;for ranking patients"]:::out
+    P --> C["A category&lt;br/&gt;the highest one"]:::out
+
+    classDef out fill:#cfe3e8,stroke:#16382b,color:#16261e
+</pre>
+        <figcaption>
+          The score and the category come from the same three probabilities,
+          but they are calculated separately; neither is derived from the
+          other.
+        </figcaption>
+      </figure>
+
+      <div class="drill">
+        <p class="drill__ask"><span class="tag">Drill 10</span>Record a visit for someone in poor health. Predict the category before you run it.</p>
+        <div class="cmd">
+          <div class="cmd__bar"><span>bash</span><button class="cmd__copy" type="button">Copy</button></div>
+          <pre><code>curl -s http://localhost:3000/api/patients/$PID/visits \
+  -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+  -d '{"age":58,"systolic":148,"diastolic":94,"bmi":33.2,"hba1c":7.1,
+       "hdl":38,"ldl":150,"triglycerides":220,"rbs":190}' \
+  | python3 -m json.tool | grep -A5 risk_assessment</code></pre>
         </div>
-      </details>
+        <details class="drill__reveal">
+          <summary>What you should see</summary>
+          <div class="drill__body">
+            <p>
+              <span class="result result--stop">high</span>
+              score <span class="mono">100</span>,
+              <span class="mono">low_confidence: false</span>
+            </p>
+            <p>
+              HbA1c 7.1 is in the diabetic range, blood pressure is
+              hypertensive, BMI is obese, and the lipids are poor. Every
+              tree agrees, so the probability of "high" is 1.0 and the score
+              maxes out.
+            </p>
+            <p>
+              Notice the scoring happened <em>in the same request</em> that
+              saved the visit: there is no separate ML service to call.
+            </p>
+          </div>
+        </details>
+      </div>
 
-      <p class="sublabel">Walking the forest</p>
-      <p class="prose">
-        Each of the 100 trees is walked root to leaf — at every node,
-        compare one feature to a threshold, go left or right. The leaf
-        holds a probability distribution over the three classes.
-      </p>
-      <p class="prose">
-        The forest's answer is the plain average of all 100 leaves — where
-        <span class="mono">riskAssessment.ts</span> picks up: score,
-        category, and confidence, exactly as walked through in Part 1.
-      </p>
+      <div class="drill">
+        <p class="drill__ask"><span class="tag">Drill 11</span>Now a healthy 29-year-old. Same endpoint.</p>
+        <div class="cmd">
+          <div class="cmd__bar"><span>bash</span><button class="cmd__copy" type="button">Copy</button></div>
+          <pre><code>curl -s http://localhost:3000/api/patients/$PID/visits \
+  -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+  -d '{"visit_date":"2026-09-01","age":29,"systolic":112,"diastolic":70,
+       "bmi":22.4,"hba1c":5.1,"hdl":62,"ldl":90,"triglycerides":80,"rbs":92}' \
+  | python3 -m json.tool | grep -A5 risk_assessment</code></pre>
+        </div>
+        <details class="drill__reveal">
+          <summary>What you should see</summary>
+          <div class="drill__body">
+            <p>
+              <span class="result result--ok">low</span>
+              score <span class="mono">0</span>,
+              <span class="mono">low_confidence: false</span>
+            </p>
+          </div>
+        </details>
+      </div>
+
+      <div class="drill">
+        <p class="drill__ask"><span class="tag">Drill 12</span>A middle case: HbA1c 5.9, BMI 27.5, neither diabetic nor obese. Guess the category first.</p>
+        <div class="cmd">
+          <div class="cmd__bar"><span>bash</span><button class="cmd__copy" type="button">Copy</button></div>
+          <pre><code>curl -s http://localhost:3000/api/patients/$PID/visits \
+  -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+  -d '{"visit_date":"2026-08-01","age":45,"systolic":128,"diastolic":82,
+       "bmi":27.5,"hba1c":5.9,"hdl":48,"ldl":120,"triglycerides":150,"rbs":110}' \
+  | python3 -m json.tool | grep -A5 risk_assessment</code></pre>
+        </div>
+        <details class="drill__reveal">
+          <summary>What you should see, this one is worth sitting with</summary>
+          <div class="drill__body">
+            <p>
+              <span class="result result--stop">high</span>
+              score <span class="mono">78.77</span>
+            </p>
+            <p>
+              Probably not what you guessed. Read only the HbA1c and you
+              would call this borderline. The model is not reading a
+              threshold: it learned combinations, and this patient's
+              lipid ratios and blood pressure together push it up.
+            </p>
+            <p>
+              This is exactly why the category comes from the model rather
+              than from a rule someone wrote afterwards. And it is why the
+              confidence flag exists: when the model is genuinely torn,
+              a clinician should be told that.
+            </p>
+            <p class="say">
+              <strong>Say it like this</strong>
+              "The category is whatever the model thinks is most likely; we
+              never re-derive it from a threshold. If we banded the score
+              into categories instead, we'd be overruling the model with a
+              rule we made up."
+            </p>
+          </div>
+        </details>
+      </div>
+
+      <div class="drill">
+        <p class="drill__ask"><span class="tag">Drill 13</span>Leave out every optional lab. Does it refuse, or score anyway?</p>
+        <div class="cmd">
+          <div class="cmd__bar"><span>bash</span><button class="cmd__copy" type="button">Copy</button></div>
+          <pre><code>curl -s http://localhost:3000/api/patients/$PID/visits \
+  -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+  -d '{"visit_date":"2026-07-01","age":58,"systolic":148,
+       "diastolic":94,"bmi":33.2,"hba1c":7.1}' \
+  | python3 -m json.tool | grep -A5 risk_assessment</code></pre>
+        </div>
+        <details class="drill__reveal">
+          <summary>What you should see</summary>
+          <div class="drill__body">
+            <p>It scores anyway.</p>
+            <p>
+              A clinician does not draw a full lipid panel at every visit.
+              A blank lab is filled with the median value from the training
+              data, the same treatment a blank got while the model was
+              learning, so the model sees the kind of input it was trained
+              on.
+            </p>
+            <p class="say">
+              <strong>Say it like this</strong>
+              "Missing values are filled with medians computed during
+              training and shipped inside the model file, so preprocessing
+              is identical at training time and at prediction time. If we
+              recomputed medians from live data instead, the model would
+              slowly drift away from what it learned."
+            </p>
+          </div>
+        </details>
+      </div>
     </section>
 
     <section id="training">
       <div class="section-head">
-        <span class="num">10</span>
-        <h2>ML training</h2>
+        <span class="num">12</span>
+        <h2>How the model learned</h2>
       </div>
 
+      <div class="covers">
+        <span class="covers__label">Concepts</span>
+        <span class="concept">Train/test split</span>
+        <span class="concept">Data leakage</span>
+        <span class="concept">Stratified sampling</span>
+        <span class="concept">Cross-validation</span>
+        <span class="concept">Hyperparameter tuning</span>
+        <span class="concept">Bias audit</span>
+      </div>
+
+
       <p class="prose">
-        Fifteen single-purpose Python modules, run top to bottom by
-        <span class="mono">train.py</span>, each depending only on the ones
-        above it.
+        This part runs on a laptop, not in production. It reads a CSV of
+        662 real patients and writes the model file the API loads at
+        startup.
       </p>
 
       <figure class="diagram">
 <pre class="mermaid">
-%%{init: {'theme':'base','themeVariables':{'primaryColor':'#eaf5ee','primaryTextColor':'#16261e','primaryBorderColor':'#16382b','lineColor':'#435146','fontFamily':'Inter, system-ui, sans-serif','fontSize':'13px'}}}%%
+%%{init: {'theme':'base','themeVariables':{'primaryColor':'#eaf5ee','primaryTextColor':'#16261e','primaryBorderColor':'#16382b','lineColor':'#435146','textColor':'#16261e','edgeLabelBackground':'#ffffff','fontFamily':'Inter, system-ui, sans-serif','fontSize':'13px'}}}%%
 flowchart TD
-    A["dataset.py + clinical_fields.py + assemble.py&lt;br/&gt;load raw CSV, parse each field, assemble a clean row"]
-    B["split.py&lt;br/&gt;stratified split, BEFORE imputation"]
-    C["imputation.py + features.py&lt;br/&gt;medians fit on train rows only, applied to both"]
-    D["labels.py&lt;br/&gt;ADA 2025 base label + 5-flag upgrade rule"]
-    E["feature_matrix.py&lt;br/&gt;rows to the model's numeric vector"]
-    F["model.py + hyperparameter_search.py + cross_validation.py&lt;br/&gt;fit, tune, 5-fold stratified CV"]
-    G["feature_importance.py + bias_audit.py&lt;br/&gt;rank features, check sex/age subgroups"]
-    H["persistence.py + serving_export.py&lt;br/&gt;save the model, write model.json"]
+    A["Read the CSV,&lt;br/&gt;clean up each column"] --> B["Split into&lt;br/&gt;training and test sets"]
+    B --> C["Fill blanks using&lt;br/&gt;TRAINING data only"]
+    C --> D["Label each patient&lt;br/&gt;low / medium / high"]
+    D --> E["Grow 100 trees,&lt;br/&gt;tune, cross-validate"]
+    E --> F["Check fairness&lt;br/&gt;by sex and age"]
+    F --> G["Write model.json"]:::out
 
-    A --> B --> C --> D --> E --> F --> G --> H
+    classDef out fill:#cfe3e8,stroke:#16382b,color:#16261e
 </pre>
         <figcaption>
-          Each module has one job and a matching test file. Real modules
-          named, not a paraphrase — open any box above and that is the file.
+          Splitting before filling blanks is the one step people get wrong.
         </figcaption>
       </figure>
 
       <div class="box box--mint">
         <p>
-          <strong>The split happens before imputation, on purpose.</strong>
-          Rows split into train/test first, stratified by HbA1c alone (the
-          one field guaranteed present before cleanup) — then imputation
-          medians are fit on training rows only, applied to both splits.
+          <strong>Why split first?</strong> If you filled in missing values
+          using the whole dataset, the averages would be partly computed
+          from the test patients. The model would then be tested on data it
+          had already peeked at, and its accuracy would look better than it
+          really is.
         </p>
       </div>
 
-      <details class="why">
-        <summary>Why fitting medians on the full dataset first would be wrong</summary>
-        <div class="why__body">
-          <p>
-            It would leak information from the test set into what the model
-            learned — a median computed partly from rows the model is later
-            "tested" against, inflating its apparent accuracy on data it
-            never really saw cold.
-          </p>
-        </div>
-      </details>
-
-      <p class="sublabel">The label itself: a two-stage clinical rule, not a model output</p>
+      <p class="sublabel">The labels are a clinical rule, not a guess</p>
       <p class="prose">
-        This is worth pausing on, because it is not obvious from the module
-        list: the training labels aren't scraped from the dataset, they're
-        <em>computed</em> by a hand-written clinical rule, cited to real
-        guidelines.
+        Nobody hand-labelled 662 patients. A rule assigns each one, in two
+        stages:
       </p>
 
       <div class="chain">
         <div class="chain__row">
           <div>
-            <span class="chain__table">Stage A</span>
-            <span class="chain__depth">Base label, from HbA1c alone</span>
+            <span class="chain__table">Stage 1</span>
+            <span class="chain__depth">Start from HbA1c</span>
           </div>
           <div>
             <p class="chain__gloss">
-              <span class="mono">&lt;5.7%</span> low ·
-              <span class="mono">5.7–6.4%</span> medium ·
-              <span class="mono">≥6.5%</span> high — the ADA 2025
-              Standards of Care diagnostic thresholds.
+              Under 5.7% is low, 5.7–6.4% is medium, 6.5% and above is high:
+              the diabetes diagnostic thresholds from the ADA 2025
+              Standards of Care.
             </p>
           </div>
         </div>
-
         <div class="chain__row">
           <div>
-            <span class="chain__table">Stage B</span>
-            <span class="chain__depth">Upgrade rule, never downgrades</span>
+            <span class="chain__table">Stage 2</span>
+            <span class="chain__depth">Upgrade if other things are wrong</span>
           </div>
           <div>
             <p class="chain__gloss">
-              Count five secondary flags — hypertension, obesity
-              (BMI ≥ 30), elevated RBS (≥ 126), high TG/HDL (≥ 2.8),
-              high LDL/HDL (≥ 3.5). Two or more raised: the base label
-              moves up one tier, capped at high.
+              Count five warning signs: high blood pressure, obesity, high
+              blood sugar, and two bad cholesterol ratios. Two or more, and
+              the patient moves up one level. It never moves anyone down.
             </p>
           </div>
         </div>
       </div>
 
       <p class="note prose">
-        Four of those five flags are the same ones
-        <span class="mono">features.ts</span> builds for the model to read —
-        the labelling rule and the model's own features are drawn from the
-        same clinical reasoning, just used two different ways: one decides
-        what a training row is called, the other is a number the forest
-        learns a weight for.
+        Four of those five warning signs are also fed to the model as
+        inputs. The rule decides what a training patient is <em>called</em>;
+        the model learns to predict that call from the numbers.
       </p>
-
-      <p class="sublabel">Evaluation</p>
-      <ul class="bullets">
-        <li><span>5-fold stratified cross-validation and a held-out test set, both reported in <span class="mono">model_metadata.json</span> alongside the exact thresholds used to produce that run's labels — a retrain's audit trail, not just its accuracy number.</span></li>
-        <li><span><span class="mono">bias_audit.py</span> breaks performance down by sex and by age band (under 40 / 40–60 / over 60), checking for a group the model is systematically less reliable for.</span></li>
-      </ul>
     </section>
 
-    <section id="seams">
+    <section id="testing">
       <div class="section-head">
-        <span class="num">11</span>
-        <h2>The seams</h2>
+        <span class="num">13</span>
+        <h2>How it's tested</h2>
       </div>
+
+      <div class="covers">
+        <span class="covers__label">Concepts</span>
+        <span class="concept">Integration vs unit tests</span>
+        <span class="concept">Testing against a real database</span>
+        <span class="concept">Parity fixture</span>
+        <span class="concept">Regression prevention</span>
+        <span class="concept">CI gates</span>
+      </div>
+
 
       <p class="prose">
-        Where the design deliberately draws its lines, and what crossing
-        each one would cost.
+        Two questions worth being able to answer about any fix you make:
+        how do you know it works, and what stops it breaking again later?
       </p>
 
-      <dl>
-        <div class="term">
-          <dt>Parse untrusted data once, at the boundary</dt>
-          <dd>
-            Zod schemas sit at the HTTP edge. After
-            <span class="mono">.safeParse()</span> succeeds, the rest of the
-            request works with typed data and never re-checks it.
-            <span class="mono">.strict()</span> means the accepted field set
-            is explicit — an unexpected field is rejected, not silently
-            dropped.
-          </dd>
+      <div class="drill">
+        <p class="drill__ask"><span class="tag">Drill 14</span>Run the backend suite. It needs the database running: that is deliberate.</p>
+        <div class="cmd">
+          <div class="cmd__bar"><span>bash</span><button class="cmd__copy" type="button">Copy</button></div>
+          <pre><code>npm test --workspace backend</code></pre>
         </div>
+        <details class="drill__reveal">
+          <summary>What you should see</summary>
+          <div class="drill__body">
+            <p><span class="result result--ok">175 passed</span> across 19 files</p>
+            <p>
+              These run against a real Postgres, not a fake one. That is the
+              only way to test the ownership rules at all: a mocked
+              database would happily return whatever the test told it to,
+              including rows the real database would have hidden.
+            </p>
+            <p class="say">
+              <strong>Say it like this</strong>
+              "The security tests run against a real database, because the
+              thing being tested <em>is</em> a database rule. Mocking it
+              would test the mock."
+            </p>
+          </div>
+        </details>
+      </div>
 
-        <div class="term">
-          <dt>The ML modules know nothing about the web</dt>
-          <dd>
-            <span class="mono">assessRisk(model, visit, sex)</span> takes
-            plain values and returns a plain object — no database, no
-            <span class="mono">req</span>, no clock. The same function would
-            work unchanged from a batch backfill script. One call hides
-            feature engineering, a 100-tree traversal, a float32 parity
-            subtlety, and three business rules behind three arguments — a
-            deep module, in the sense that matters: the interface is far
-            simpler than what it does.
-          </dd>
+      <div class="drill">
+        <p class="drill__ask"><span class="tag">Drill 15</span>Run the machine-learning suite.</p>
+        <div class="cmd">
+          <div class="cmd__bar"><span>bash</span><button class="cmd__copy" type="button">Copy</button></div>
+          <pre><code>cd machine-learning && python3 -m pytest -q</code></pre>
         </div>
+        <details class="drill__reveal">
+          <summary>What you should see</summary>
+          <div class="drill__body">
+            <p><span class="result result--ok">96 passed</span></p>
+          </div>
+        </details>
+      </div>
 
-        <div class="term">
-          <dt>Authorization lives in Postgres, not in application code</dt>
-          <dd>
-            Handlers pass the caller's own token down and let RLS filter.
-            The honest trade-off: this leaks upward in places. Route code
-            still has to know that <span class="mono">42501</span> means
-            "not your patient," and that a failed read and a failed write
-            surface differently. Real coupling to the database's behaviour —
-            accepted because the alternative, every handler remembering to
-            filter by <span class="mono">clinician_id</span>, fails open the
-            moment one of them forgets.
-          </dd>
-        </div>
-
-        <div class="term">
-          <dt>One composition root</dt>
-          <dd>
-            <span class="mono">server.ts</span> is the only file that reads
-            <span class="mono">process.env</span>, reads the filesystem, or
-            constructs anything. Everything else takes its dependencies as
-            arguments — <span class="mono">createRequireAuth(getKey)</span>,
-            <span class="mono">createRateLimiter({ now })</span>. That is
-            why the rate limiter can be tested with a fake clock and no
-            server running at all.
-          </dd>
-        </div>
-      </dl>
+      <p class="sublabel">What each layer of testing is actually protecting</p>
+      <div class="scroll-x">
+        <table>
+          <thead>
+            <tr><th>The worry</th><th>What catches it</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>A clinician could see someone else's patient</td>
+              <td>Tests that sign up two real clinicians and assert the second one gets nothing, on reads <em>and</em> writes</td>
+            </tr>
+            <tr>
+              <td>The Node model gives different answers than the Python one</td>
+              <td>A saved fixture of known inputs and their exact Python outputs; the Node code must reproduce them precisely</td>
+            </tr>
+            <tr>
+              <td>A bad migration reaches production</td>
+              <td>CI applies every migration to a fresh database before any test runs</td>
+            </tr>
+            <tr>
+              <td>Someone re-grants a permission that was deliberately removed</td>
+              <td>Migrations that query the permission tables and fail loudly if the wrong role has access</td>
+            </tr>
+            <tr>
+              <td>A change breaks the build only on the deploy server</td>
+              <td>CI runs lint, typecheck, tests and build on every pull request</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
 
       <div class="box box--blue">
-        <p class="sublabel" style="margin-bottom: var(--s3)">Where it's thinner than it looks</p>
-        <p style="margin-bottom: var(--s3)">
-          Worth having an opinion on, not just accepting:
+        <p>
+          <strong>The honest gap.</strong> The frontend has only
+          <strong>4 tests</strong>, against 175 on the backend. The logic
+          that matters (ownership, scoring, validation) lives on the
+          backend, so that is where the effort went. But it does mean a
+          broken form or a mis-rendered risk badge would not be caught
+          automatically. That is the first thing worth fixing.
         </p>
-        <ul class="bullets">
-          <li><span>A new Supabase client is built on every request, for RLS to work correctly — real, deliberate object-construction cost.</span></li>
-          <li><span>The rate limiter is per-process — correct for one backend instance, and documented as a limitation rather than solved.</span></li>
-          <li><span>No structured logging — a 500 currently leaves a trace only where <span class="mono">logInternalError</span> is explicitly called.</span></li>
-          <li><span><span class="mono">db/</span> isn't really a repository layer. Only <span class="mono">riskAssessments.ts</span> lives there; patient and visit queries are written inline in the routes that use them once each — defensible, but an asymmetry worth being able to justify.</span></li>
-        </ul>
       </div>
+    </section>
+
+    <section id="improve">
+      <div class="section-head">
+        <span class="num">14</span>
+        <h2>What you'd improve</h2>
+      </div>
+
+      <div class="covers">
+        <span class="covers__label">Concepts</span>
+        <span class="concept">Horizontal scaling</span>
+        <span class="concept">Observability</span>
+        <span class="concept">Test coverage gaps</span>
+        <span class="concept">Shared state</span>
+      </div>
+
+
+      <p class="prose">
+        Being able to name the weak spots is worth more than pretending
+        there aren't any. Four real ones, and what each would take.
+      </p>
+
+      <ul class="bullets">
+        <li><span><strong>Frontend test coverage.</strong> Four tests. The forms and the risk display have no safety net: a rendering regression ships silently.</span></li>
+        <li><span><strong>The rate limiter only works on one server.</strong> It counts in memory, so running two copies of the backend would give every clinician double the budget. Fixing it means moving the count into the database or a shared cache.</span></li>
+        <li><span><strong>Errors are logged but not searchable.</strong> A failure writes a line to the console. There is no way to ask "how often did this happen last week" without structured logging.</span></li>
+        <li><span><strong>Database queries are written inline in the route handlers</strong>, except for one. It's fine while each query is used once, but it means there's no single place to look when you want to know how a table is read.</span></li>
+      </ul>
+
+      <p class="say">
+        <strong>Say it like this</strong>
+        "The biggest gap is frontend test coverage. The backend is well
+        covered because that's where the ownership and scoring logic is, but
+        a UI regression wouldn't be caught. After that, the rate limiter is
+        per-process, so it only holds correctly on a single instance."
+      </p>
     </section>
 
     <section id="checks">
       <div class="section-head">
-        <span class="num">12</span>
+        <span class="num">15</span>
         <h2>Check yourself</h2>
       </div>
 
       <div class="prose">
         <p>
-          If this landed, these should be answerable before you open the
-          answer. If one isn't, the section it came from is worth a second
-          pass.
+          Answer these out loud, in full sentences, before opening them.
+          Saying it is the skill being practised; recognising the right
+          answer when you read it is not the same thing.
         </p>
       </div>
 
@@ -2007,7 +3362,7 @@ flowchart TD
               is Python and runs offline on a laptop, rarely, by hand.
               <strong>Serving</strong> is TypeScript and runs in the backend
               on every prediction. The running application in production
-              contains no Python at all — it reads
+              contains no Python at all: it reads
               <span class="mono">model.json</span>, which Python produced
               earlier. The correct answer is "Node in production; Python
               produced the model it serves."
@@ -2019,8 +3374,8 @@ flowchart TD
           <summary><span class="q">Q2</span><span>Why doesn't the <span class="mono">visits</span> table have a <span class="mono">risk_score</span> column?</span></summary>
           <div class="check__answer">
             <p>
-              A visit is a <strong>fact</strong> — what was measured. A score
-              is a <strong>judgement</strong> — what one model concluded about
+              A visit is a <strong>fact</strong>: what was measured. A score
+              is a <strong>judgement</strong>: what one model concluded about
               those measurements. Storing them on one row means re-scoring
               overwrites the previous conclusion, which destroys the ability
               to compare model versions and makes the stored
@@ -2035,13 +3390,13 @@ flowchart TD
           <summary><span class="q">Q3</span><span>Patient A's score is 47.5 and category is <em>low</em>; patient B's score is 45.0 and category is <em>medium</em>. Is that a bug?</span></summary>
           <div class="check__answer">
             <p>
-              No — they answer different questions. The category is the
+              No, they answer different questions. The category is the
               model's single most likely class (<span class="mono">argmax</span>).
               The score is a ranking number weighting medium at half and high
               at full. A is a genuinely split case carrying 40% probability of
               high risk, so it ranks above B for attention, while its single
               best guess is still "low". <strong>Deriving</strong> the category
-              by banding the score is the actual bug — it would report A as
+              by banding the score is the actual bug: it would report A as
               higher-risk than B, contradicting the model.
             </p>
           </div>
@@ -2054,7 +3409,7 @@ flowchart TD
               That it shouldn't need to. Queries run through a Supabase client
               built from the caller's own JWT, so RLS already restricts every
               statement to that clinician's rows. A hand-written filter is at
-              best redundant, and at worst misleading — it implies the
+              best redundant, and at worst misleading: it implies the
               application is the thing enforcing ownership, which invites
               someone later to write an endpoint that forgets. The database is
               the enforcement point; the application never gets a vote.
@@ -2066,7 +3421,7 @@ flowchart TD
           <summary><span class="q">Q5</span><span>Why does requesting another clinician's patient by id return 404 rather than 403?</span></summary>
           <div class="check__answer">
             <p>
-              Because RLS doesn't hide the row from the response — it hides it
+              Because RLS doesn't hide the row from the response; it hides it
               from the <em>query</em>. The backend genuinely finds nothing, so
               "not found" is the honest answer. It's also the safer one: a 403
               would confirm that a record with that id exists and belongs to
@@ -2082,7 +3437,7 @@ flowchart TD
               Whether they're being routed to more than one backend instance.
               The rate limiter keys its count on
               <span class="mono">req.user.id</span> in an in-memory
-              <span class="mono">Map</span>, per process — two instances keep
+              <span class="mono">Map</span>, per process: two instances keep
               two separate counts, which doesn't explain <em>extra</em>
               rejections on its own, but does mean the limiter's real budget
               silently depends on how many instances are running. The fix, if
@@ -2099,7 +3454,7 @@ flowchart TD
               scikit-learn compares split thresholds in 32-bit float
               precision; a plain JavaScript number is 64-bit. A feature value
               can sit in the gap between a threshold and the nearest float32
-              above it — close enough to be "the same number" at float64
+              above it, close enough to be "the same number" at float64
               precision, but on the other side of the split once cast to
               float32. Without <span class="mono">Math.fround</span> first,
               that value walks a different path through the tree and can
@@ -2116,7 +3471,7 @@ flowchart TD
           <div class="check__answer">
             <p>
               Because nothing in the running application currently needs to
-              act across every clinician's rows at once — every real
+              act across every clinician's rows at once: every real
               operation is scoped to one authenticated clinician already. A
               credential that <em>can</em> ignore every ownership check is a
               standing attack surface (a leaked key, a compromised script)
@@ -2142,7 +3497,25 @@ flowchart TD
      loaded and started explicitly). One pinned UMD build, no bundler. -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/mermaid/11.15.0/mermaid.min.js"></script>
 <script>
-  mermaid.initialize({ startOnLoad: true, securityLevel: "strict" });
+  // startOnLoad:false deliberately - mermaid measures label text to size each
+  // node's box once, at render time. If Inter (loaded from Google Fonts,
+  // above) hasn't finished swapping in yet, it measures the fallback font,
+  // bakes a box to that width, and the real font then renders wider inside
+  // a box that's already fixed size - the text gets clipped by its own
+  // node. Waiting for document.fonts.ready guarantees the font actually
+  // used for measurement is the one that ends up on screen.
+  // flowchart.padding is cosmetic breathing room here, not the fix for
+  // clipped text - that's the CSS rule on foreignObject > div, below,
+  // which overrides mermaid's own (consistently 4-17% too narrow, verified
+  // directly) internal text-width estimate.
+  mermaid.initialize({
+    startOnLoad: false,
+    securityLevel: "strict",
+    flowchart: { htmlLabels: true, wrap: true, padding: 20 },
+  });
+  document.fonts.ready.then(function () {
+    mermaid.run();
+  });
 </script>
 
 <script>
@@ -2152,7 +3525,7 @@ flowchart TD
   /* ---------- lifecycle toggle ---------- */
 
   var CAPTIONS = {
-    training: "Run by hand, on a laptop, when the dataset or the model changes — which is rarely. It reads a CSV and writes model.json. Nothing here is deployed, and nothing here runs while a clinician is using Diacify.",
+    training: "Run by hand, on a laptop, when the dataset or the model changes, which is rarely. It reads a CSV and writes model.json. Nothing here is deployed, and nothing here runs while a clinician is using Diacify.",
     serving: "Runs inside the backend process. model.json is read and validated once at boot, so a malformed artifact stops the process immediately rather than surfacing as a failed prediction on someone's first real request."
   };
 
@@ -2238,13 +3611,96 @@ flowchart TD
   mediumInput.addEventListener("input", render);
   render();
 
+  /* ---------- which section am I in ---------- */
+
+  // Tracks the topmost section currently on screen rather than whichever
+  // one last crossed the threshold - with sections of very different
+  // heights, "last crossed" flickers backwards when a short one scrolls by.
+  var railLinks = new Map();
+  document.querySelectorAll(".rail a").forEach(function (link) {
+    var section = document.querySelector(link.getAttribute("href"));
+    if (section) railLinks.set(section, link);
+  });
+
+  var onScreen = new Set();
+  function markCurrent() {
+    var top = null;
+    onScreen.forEach(function (section) {
+      if (!top || section.offsetTop < top.offsetTop) top = section;
+    });
+    railLinks.forEach(function (link, section) {
+      if (section === top) link.setAttribute("aria-current", "true");
+      else link.removeAttribute("aria-current");
+    });
+  }
+
+  var spy = new IntersectionObserver(function (entries) {
+    entries.forEach(function (entry) {
+      if (entry.isIntersecting) onScreen.add(entry.target);
+      else onScreen.delete(entry.target);
+    });
+    markCurrent();
+  }, { rootMargin: "0px 0px -60% 0px" });
+
+  railLinks.forEach(function (_link, section) { spy.observe(section); });
+
+  /* ---------- copy buttons ---------- */
+
+  // clipboard.writeText needs a secure context - fine on localhost and on
+  // https, but a file:// open of this page has neither, so failures are
+  // reported in the button rather than thrown into the console.
+  document.querySelectorAll(".cmd__copy").forEach(function (button) {
+    button.addEventListener("click", async function () {
+      var code = button.closest(".cmd").querySelector("code").textContent;
+      try {
+        await navigator.clipboard.writeText(code);
+        button.textContent = "Copied";
+      } catch {
+        button.textContent = "Press ⌘C";
+        var range = document.createRange();
+        range.selectNodeContents(button.closest(".cmd").querySelector("code"));
+        var selection = window.getSelection();
+        selection.removeAllRanges();
+        selection.addRange(range);
+      }
+      setTimeout(function () { button.textContent = "Copy"; }, 1600);
+    });
+  });
+
   /* ---------- ADR links ---------- */
 
-  // The ADR log lives in the repo, not on this page. Until it is published
-  // somewhere linkable, these explain rather than 404.
+  // Each ADR heading's GitHub anchor slug, precomputed with the same
+  // github-slugger library GitHub uses to render docs/decisions.md. There is
+  // no reliable way to derive these client-side from the heading text alone
+  // (GitHub strips punctuation and em dashes in ways that are easy to get
+  // wrong), so the slugs are pinned here and must be re-checked if an ADR
+  // title in docs/decisions.md changes.
+  var adrSlugs = {
+    "001": "adr-001--one-application-nodejs-with-ml-training-staying-offline-python",
+    "006": "adr-006--deployment-topology-render-backend--vercel-frontend",
+    "008": "adr-008--backend-api-design-supabase-jwt--rls-no-api-key-system",
+    "013": "adr-013--request-scoped-supabasesupabase-js-client-not-raw-pg-with-role-impersonation",
+    "014": "adr-014--patientssex-is-the-only-patient-level-clinical-attribute-ported-from-legacy",
+    "017": "adr-017--visits-ownership-join-based-rls-policy-not-a-denormalized-clinician_id",
+    "018": "adr-018--visits-holds-clinical-facts-only-no-ml-output-columns",
+    "025": "adr-025--ml-inference-transport-exported-json-forest-traversed-in-the-backend",
+    "028": "adr-028--risk-assessments-are-append-only-one-row-per-visit-model-version",
+    "038": "adr-038--patient-identification-clinician-assigned-reference-not-a-legal-name",
+    "041": "adr-041--sharing-zod-schemas-npm-workspaces-not-path-aliases-or-duplication",
+    "043": "adr-043--scope-no-appointments-no-analytics"
+  };
+  var adrBaseUrl = "https://github.com/deshanekanayaka/diacify/blob/main/docs/decisions.md";
   document.querySelectorAll(".adr").forEach(function (link) {
-    link.setAttribute("title", "ADR-" + link.dataset.adr + " in docs/decisions.md");
-    link.addEventListener("click", function (event) { event.preventDefault(); });
+    var num = link.dataset.adr;
+    var slug = adrSlugs[num];
+    link.setAttribute("title", "ADR-" + num + " in docs/decisions.md");
+    if (slug) {
+      link.href = adrBaseUrl + "#" + slug;
+      link.target = "_blank";
+      link.rel = "noopener";
+    } else {
+      link.addEventListener("click", function (event) { event.preventDefault(); });
+    }
   });
 })();
 </script>
