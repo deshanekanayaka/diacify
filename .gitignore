@@ -27,3 +27,5 @@ docs/study/
 .agents/
 .claude/
 skills-lock.json
+.vercel
+.env*
