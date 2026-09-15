@@ -1734,19 +1734,19 @@ erDiagram
 <pre class="mermaid">
 %%{init: {'theme':'base','themeVariables':{'primaryColor':'#eaf5ee','primaryTextColor':'#16261e','primaryBorderColor':'#16382b','secondaryColor':'#f4f1e9','secondaryTextColor':'#16261e','secondaryBorderColor':'#c9d6cb','tertiaryColor':'#ffffff','tertiaryTextColor':'#16261e','tertiaryBorderColor':'#c9d6cb','lineColor':'#435146','textColor':'#16261e','attributeBackgroundColorOdd':'#ffffff','attributeBackgroundColorEven':'#f4f1e9','nodeBorder':'#16382b','mainBkg':'#eaf5ee','edgeLabelBackground':'#ffffff','fontFamily':'Inter, system-ui, sans-serif','fontSize':'13px'}}}%%
 flowchart TD
-    W["Clinician A inserts a visit&lt;br/&gt;patient_id points at Clinician B's patient"]
-    W --> D["Denormalized&lt;br/&gt;clinician_id column"]
-    W --> J["Join-based policy&lt;br/&gt;what Diacify does"]
+    W["Clinician A saves a visit&lt;br/&gt;pointing at Clinician B's patient"]
+    W --> D["Give visits its own clinician_id&lt;br/&gt;the obvious design, rejected"]
+    W --> J["Diacify: no such column&lt;br/&gt;look the patient up instead"]
 
-    D --> D1["WITH CHECK: clinician_id = A ✓&lt;br/&gt;A did set their own id"]
-    D1 --> D2["Foreign key: does that patient row exist? ✓&lt;br/&gt;it does, it is just not A's"]
-    D2 --> D3["Visit written onto B's patient"]:::bad
+    D --> D1["Did A sign the visit as A?&lt;br/&gt;YES - A wrote their own id"]
+    D1 --> D2["Does that patient row exist?&lt;br/&gt;YES - it exists, it is just B's"]
+    D2 --> D3["Neither question asked who owns the patient&lt;br/&gt;the visit lands on B's patient"]:::bad
 
-    J --> J1["WITH CHECK: does this patient belong to A?"]
-    J1 --> J2["Rejected"]:::good
+    J --> J1["Does that patient belong to A?&lt;br/&gt;NO - it belongs to B"]
+    J1 --> J2["Write refused"]:::blocked
 
     classDef bad fill:#fbeae7,stroke:#a32d21,color:#a32d21
-    classDef good fill:#eaf5ee,stroke:#1c7a33,color:#1c7a33
+    classDef blocked fill:#f4f1e9,stroke:#5f6d63,color:#435146
 </pre>
         <figcaption>
           A foreign key confirms the referenced row <em>exists</em>. It never
