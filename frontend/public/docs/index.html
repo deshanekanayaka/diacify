@@ -404,6 +404,18 @@ figure.diagram foreignObject > div {
   width: max-content !important;
   max-width: none !important;
 }
+/* The max-content rule above fixes clipped labels everywhere, but it can't
+   help the ER diagram: a flowchart node grows to fit its label, whereas an
+   entity's column grid is baked from mermaid's own (too-narrow) estimate
+   before any label exists, so real Inter text renders past the box border -
+   measured at +9.6px on RISK_ASSESSMENTS' longest comment. Mermaid exposes
+   no working width knob here (entityPadding only adds vertical space;
+   minEntityWidth is ignored once a box already exceeds it), so the one lever
+   left is the rendered text. A point smaller puts every row back inside its
+   box with >=10px to spare. */
+figure.diagram svg[aria-roledescription="er"] foreignObject > div {
+  font-size: 12px !important;
+}
 figure.diagram figcaption {
   border-top: 1px solid var(--separator);
   padding: var(--s3) var(--s4);
@@ -1310,9 +1322,10 @@ flowchart LR
         <div class="map__cell">
           <span class="mono">shared/</span>
           <p>
-            The request shapes both sides agree on, as Zod schemas. The
-            frontend validates a form against the same object the backend
-            validates the request against, so the two cannot drift.
+            The request shapes, written once as Zod schemas. The backend
+            parses every request body against them. The frontend imports the
+            types inferred from those same schemas, so a form that builds the
+            wrong shape fails to compile.
           </p>
           <span class="stack-tag">TypeScript · Zod · npm workspace</span>
         </div>
@@ -1385,20 +1398,25 @@ erDiagram
     VISITS ||--o{ RISK_ASSESSMENTS : "is judged by"
 
     AUTH_USERS {
-        uuid id "the clinician"
+        uuid id PK "the clinician, Supabase Auth owns this table"
     }
     PATIENTS {
-        uuid clinician_id "the only ownership column"
+        uuid id PK "gen_random_uuid(), no natural key"
+        uuid clinician_id FK "the only ownership column"
         text reference "chart label, not a name"
         text sex "the one attribute the model uses"
     }
     VISITS {
+        uuid id PK "gen_random_uuid()"
+        uuid patient_id FK "owned only through the patient"
         date visit_date "FACTS - what was measured"
         numeric hba1c "required"
         numeric bmi "required"
         numeric ldl "nullable - not always drawn"
     }
     RISK_ASSESSMENTS {
+        uuid id PK "gen_random_uuid()"
+        uuid visit_id FK "unique with model_version"
         text model_version "JUDGEMENTS - what a model concluded"
         numeric risk_score "0-100 ranking number"
         enum risk_category "low, medium, high"
