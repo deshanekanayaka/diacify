@@ -404,6 +404,18 @@ figure.diagram foreignObject > div {
   width: max-content !important;
   max-width: none !important;
 }
+/* The max-content rule above fixes clipped labels everywhere, but it can't
+   help the ER diagram: a flowchart node grows to fit its label, whereas an
+   entity's column grid is baked from mermaid's own (too-narrow) estimate
+   before any label exists, so real Inter text renders past the box border -
+   measured at +9.6px on RISK_ASSESSMENTS' longest comment. Mermaid exposes
+   no working width knob here (entityPadding only adds vertical space;
+   minEntityWidth is ignored once a box already exceeds it), so the one lever
+   left is the rendered text. A point smaller puts every row back inside its
+   box with >=10px to spare. */
+figure.diagram svg[aria-roledescription="er"] foreignObject > div {
+  font-size: 12px !important;
+}
 figure.diagram figcaption {
   border-top: 1px solid var(--separator);
   padding: var(--s3) var(--s4);
