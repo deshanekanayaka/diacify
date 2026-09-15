@@ -2411,11 +2411,11 @@ sequenceDiagram
 
     rect rgb(240, 247, 242)
     F-&gt;&gt;B: GET /api/patients&lt;br/&gt;signed token in the Authorization header
-    B-&gt;&gt;B: verify the signature locally
+    B-&gt;&gt;B: verify the signature&lt;br/&gt;locally
     B-&gt;&gt;P: the same token, forwarded
     Note over B,P: auth.uid() is this clinician&lt;br/&gt;so Postgres returns their rows only
     P--&gt;&gt;B: their rows only
-    B--&gt;&gt;F: 200 and the data
+    B--&gt;&gt;F: OK
     end
 </pre>
         <figcaption>
