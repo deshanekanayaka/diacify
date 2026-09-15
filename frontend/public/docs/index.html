@@ -1310,9 +1310,10 @@ flowchart LR
         <div class="map__cell">
           <span class="mono">shared/</span>
           <p>
-            The request shapes both sides agree on, as Zod schemas. The
-            frontend validates a form against the same object the backend
-            validates the request against, so the two cannot drift.
+            The request shapes, written once as Zod schemas. The backend
+            parses every request body against them. The frontend imports the
+            types inferred from those same schemas, so a form that builds the
+            wrong shape fails to compile.
           </p>
           <span class="stack-tag">TypeScript · Zod · npm workspace</span>
         </div>
