@@ -2381,17 +2381,17 @@ sequenceDiagram
     participant P as Postgres
 
     rect rgb(248, 246, 240)
-    Note over C,P: ONCE, WHEN THEY SIGN IN
+    Note over C,P: Once, at sign-in
     C-&gt;&gt;F: email and password
-    F-&gt;&gt;S: sign in
-    Note over C,S: the password goes straight to Supabase&lt;br/&gt;the Diacify backend never sees it
+    F-&gt;&gt;S: the same email and password
+    Note over C,S: the Diacify backend is not in this exchange
     S--&gt;&gt;F: a signed token
     end
 
     rect rgb(240, 247, 242)
-    Note over C,P: THEN ON EVERY REQUEST AFTER IT
-    F-&gt;&gt;B: GET /api/patients&lt;br/&gt;Authorization: Bearer the token
-    B-&gt;&gt;B: check the signature with a cached public key&lt;br/&gt;no call to Supabase on this path
+    Note over C,P: Then on every request after it
+    F-&gt;&gt;B: GET /api/patients&lt;br/&gt;signed token in the Authorization header
+    B-&gt;&gt;B: verify the signature locally
     B-&gt;&gt;P: the same token, forwarded
     Note over B,P: auth.uid() is this clinician&lt;br/&gt;so Postgres returns their rows only
     P--&gt;&gt;B: their rows only
