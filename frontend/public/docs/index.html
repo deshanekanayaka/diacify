@@ -2785,16 +2785,27 @@ done; echo</code></pre>
 <pre class="mermaid">
 %%{init: {'theme':'base','themeVariables':{'primaryColor':'#eaf5ee','primaryTextColor':'#16261e','primaryBorderColor':'#16382b','lineColor':'#435146','textColor':'#16261e','edgeLabelBackground':'#ffffff','fontFamily':'Inter, system-ui, sans-serif','fontSize':'13px'}}}%%
 flowchart LR
-    A["Clinician A asks for&lt;br/&gt;all patients"] --> P{"The database checks&lt;br/&gt;who is asking"}
-    B["Clinician B asks for&lt;br/&gt;the exact same thing"] --> P
-    P --> R1["A gets A's patients"]:::ok
-    P --> R2["B gets B's patients"]:::ok
+    subgraph STORED["every patients row on disk"]
+      direction TB
+      r1["PRAC-001 · clinician_id = A"]:::owna
+      r2["PRAC-002 · clinician_id = A"]:::owna
+      r3["PRAC-003 · clinician_id = B"]:::ownb
+    end
 
-    classDef ok fill:#eaf5ee,stroke:#1c7a33,color:#1c7a33
+    STORED --> GATE{"clinician_id = auth.uid()&lt;br/&gt;checked per row, by Postgres"}
+
+    GATE -->|"A is asking"| OUTA["A receives 2 rows&lt;br/&gt;PRAC-001, PRAC-002"]:::owna
+    GATE -->|"B is asking"| OUTB["B receives 1 row&lt;br/&gt;PRAC-003"]:::ownb
+
+    classDef owna fill:#eaf5ee,stroke:#1c7a33,color:#16261e
+    classDef ownb fill:#e6eef7,stroke:#2f5d8a,color:#16261e
 </pre>
         <figcaption>
-          One query, written once, with no mention of any clinician in it.
-          The database narrows it, per caller.
+          Both clinicians send the identical query,
+          <span class="mono">select * from patients</span>, with no mention
+          of any clinician in it. Postgres tests every row against the
+          policy and returns only the ones that pass, so the same query
+          yields a different set to each caller.
         </figcaption>
       </figure>
 
