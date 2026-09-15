@@ -2785,27 +2785,27 @@ done; echo</code></pre>
 <pre class="mermaid">
 %%{init: {'theme':'base','themeVariables':{'primaryColor':'#eaf5ee','primaryTextColor':'#16261e','primaryBorderColor':'#16382b','lineColor':'#435146','textColor':'#16261e','edgeLabelBackground':'#ffffff','fontFamily':'Inter, system-ui, sans-serif','fontSize':'13px'}}}%%
 flowchart LR
-    subgraph STORED["every patients row on disk"]
+    subgraph STORED["the patients table, every row together"]
       direction TB
-      r1["PRAC-001 · clinician_id = A"]:::owna
-      r2["PRAC-002 · clinician_id = A"]:::owna
-      r3["PRAC-003 · clinician_id = B"]:::ownb
+      r1["Patient 1, added by clinician A"]:::owna
+      r2["Patient 2, added by clinician A"]:::owna
+      r3["Patient 3, added by clinician B"]:::ownb
     end
 
-    STORED --> GATE{"clinician_id = auth.uid()&lt;br/&gt;checked per row, by Postgres"}
+    STORED --> GATE{"For every row the database asks:&lt;br/&gt;did the clinician asking add this one?"}
 
-    GATE -->|"A is asking"| OUTA["A receives 2 rows&lt;br/&gt;PRAC-001, PRAC-002"]:::owna
-    GATE -->|"B is asking"| OUTB["B receives 1 row&lt;br/&gt;PRAC-003"]:::ownb
+    GATE -->|"clinician A is asking"| OUTA["Clinician A gets back&lt;br/&gt;patients 1 and 2"]:::owna
+    GATE -->|"clinician B is asking"| OUTB["Clinician B gets back&lt;br/&gt;patient 3"]:::ownb
 
     classDef owna fill:#eaf5ee,stroke:#1c7a33,color:#16261e
     classDef ownb fill:#e6eef7,stroke:#2f5d8a,color:#16261e
 </pre>
         <figcaption>
           Both clinicians send the identical query,
-          <span class="mono">select * from patients</span>, with no mention
-          of any clinician in it. Postgres tests every row against the
-          policy and returns only the ones that pass, so the same query
-          yields a different set to each caller.
+          <span class="mono">select * from patients</span>, which names no
+          clinician at all. The database puts that question to every row
+          and hands back only the rows that pass, so one query gives each
+          caller a different answer.
         </figcaption>
       </figure>
 
