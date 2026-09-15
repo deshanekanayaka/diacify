@@ -404,6 +404,28 @@ figure.diagram foreignObject > div {
   width: max-content !important;
   max-width: none !important;
 }
+/* Mermaid scopes its own diagram styles by generated id (`#mermaid-123 .actor`),
+   so an id-level selector outranks anything reachable from here - these need
+   !important to land. Only the participants that should differ are listed: the
+   init directive's actorBkg already gives Frontend and Backend the shared green,
+   which is the point, since both are Diacify's own code. */
+figure.diagram svg[aria-roledescription="sequence"] rect.actor[name="C"] {
+  fill: #f4f1e9 !important;
+  stroke: #5f6d63 !important;
+}
+figure.diagram svg[aria-roledescription="sequence"] rect.actor[name="S"] {
+  fill: #f7ecd9 !important;
+  stroke: #a8834a !important;
+}
+figure.diagram svg[aria-roledescription="sequence"] rect.actor[name="P"] {
+  fill: #cfe3e8 !important;
+  stroke: #1f5a6b !important;
+}
+/* The step badge is drawn as an SVG marker, which mermaid's theme does not
+   reach, so its fill has no theme variable to set. */
+figure.diagram svg[aria-roledescription="sequence"] marker[id$="sequencenumber"] circle {
+  fill: #1f5a6b;
+}
 figure.diagram figcaption {
   border-top: 1px solid var(--separator);
   padding: var(--s3) var(--s4);
@@ -2371,7 +2393,7 @@ curl -s -o /dev/null -w "real request -> %{http_code}\n" http://localhost:3000/a
 
       <figure class="diagram">
 <pre class="mermaid">
-%%{init: {'theme':'base','themeVariables':{'primaryColor':'#eaf5ee','primaryTextColor':'#16261e','primaryBorderColor':'#16382b','lineColor':'#435146','textColor':'#16261e','signalColor':'#435146','signalTextColor':'#16261e','actorBkg':'#eaf5ee','actorBorder':'#16382b','actorTextColor':'#16261e','noteBkgColor':'#f4f1e9','noteBorderColor':'#5f6d63','noteTextColor':'#435146','edgeLabelBackground':'#ffffff','fontFamily':'Inter, system-ui, sans-serif','fontSize':'13px'}}}%%
+%%{init: {'theme':'base','themeVariables':{'primaryColor':'#eaf5ee','primaryTextColor':'#16261e','primaryBorderColor':'#16382b','lineColor':'#435146','textColor':'#16261e','signalColor':'#435146','signalTextColor':'#16261e','actorBkg':'#eaf5ee','actorBorder':'#16382b','actorTextColor':'#16261e','noteBkgColor':'#f4f1e9','noteBorderColor':'#5f6d63','noteTextColor':'#435146','sequenceNumberColor':'#ffffff','edgeLabelBackground':'#ffffff','fontFamily':'Inter, system-ui, sans-serif','fontSize':'13px'}}}%%
 sequenceDiagram
     autonumber
     participant C as Clinician
@@ -2381,7 +2403,6 @@ sequenceDiagram
     participant P as Postgres
 
     rect rgb(248, 246, 240)
-    Note over C,P: Once, at sign-in
     C-&gt;&gt;F: email and password
     F-&gt;&gt;S: the same email and password
     Note over C,S: the Diacify backend is not in this exchange
@@ -2389,7 +2410,6 @@ sequenceDiagram
     end
 
     rect rgb(240, 247, 242)
-    Note over C,P: Then on every request after it
     F-&gt;&gt;B: GET /api/patients&lt;br/&gt;signed token in the Authorization header
     B-&gt;&gt;B: verify the signature locally
     B-&gt;&gt;P: the same token, forwarded
