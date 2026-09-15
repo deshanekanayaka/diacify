@@ -2373,9 +2373,9 @@ curl -s -o /dev/null -w "real request -> %{http_code}\n" http://localhost:3000/a
 flowchart TD
     R["A write request arrives"] --> A{"Is the token real?"}
     A -- no --> A1["401: who are you?"]:::stop
-    A -- yes --> B{"Under 20 writes&lt;br/&gt;this minute?"}
+    A -- yes --> B{"Under 20 of these&lt;br/&gt;in the last 60 seconds?"}
     B -- no --> B1["429: slow down"]:::stop
-    B -- yes --> C{"Do the numbers&lt;br/&gt;make sense?"}
+    B -- yes --> C{"Is every value&lt;br/&gt;inside its allowed range?"}
     C -- no --> C1["400: bad data"]:::stop
     C -- yes --> D{"Is this patient yours?"}
     D -- no --> D1["404: not found"]:::stop
@@ -2386,7 +2386,9 @@ flowchart TD
 </pre>
         <figcaption>
           The order matters: the rate limiter counts per clinician, so it
-          cannot run until the token has told it who is asking.
+          cannot run until the token has told it who is asking. Each write
+          endpoint keeps its own count, and the window rolls continuously
+          rather than resetting on the minute.
         </figcaption>
       </figure>
 
