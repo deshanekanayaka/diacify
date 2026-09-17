@@ -426,6 +426,18 @@ figure.diagram svg[aria-roledescription="sequence"] rect.actor[name="P"] {
 figure.diagram svg[aria-roledescription="sequence"] marker[id$="sequencenumber"] circle {
   fill: #1f5a6b;
 }
+/* The max-content rule above fixes clipped labels everywhere, but it can't
+   help the ER diagram: a flowchart node grows to fit its label, whereas an
+   entity's column grid is baked from mermaid's own (too-narrow) estimate
+   before any label exists, so real Inter text renders past the box border -
+   measured at +9.6px on RISK_ASSESSMENTS' longest comment. Mermaid exposes
+   no working width knob here (entityPadding only adds vertical space;
+   minEntityWidth is ignored once a box already exceeds it), so the one lever
+   left is the rendered text. A point smaller puts every row back inside its
+   box with >=10px to spare. */
+figure.diagram svg[aria-roledescription="er"] foreignObject > div {
+  font-size: 12px !important;
+}
 figure.diagram figcaption {
   border-top: 1px solid var(--separator);
   padding: var(--s3) var(--s4);
@@ -1334,9 +1346,10 @@ flowchart LR
         <div class="map__cell">
           <span class="mono">shared/</span>
           <p>
-            The request shapes both sides agree on, as Zod schemas. The
-            frontend validates a form against the same object the backend
-            validates the request against, so the two cannot drift.
+            The request shapes, written once as Zod schemas. The backend
+            parses every request body against them. The frontend imports the
+            types inferred from those same schemas, so a form that builds the
+            wrong shape fails to compile.
           </p>
           <span class="stack-tag">TypeScript · Zod · npm workspace</span>
         </div>
@@ -1409,20 +1422,25 @@ erDiagram
     VISITS ||--o{ RISK_ASSESSMENTS : "is judged by"
 
     AUTH_USERS {
-        uuid id "the clinician"
+        uuid id PK "the clinician, Supabase Auth owns this table"
     }
     PATIENTS {
-        uuid clinician_id "the only ownership column"
+        uuid id PK "gen_random_uuid(), no natural key"
+        uuid clinician_id FK "the only ownership column"
         text reference "chart label, not a name"
         text sex "the one attribute the model uses"
     }
     VISITS {
+        uuid id PK "gen_random_uuid()"
+        uuid patient_id FK "owned only through the patient"
         date visit_date "FACTS - what was measured"
         numeric hba1c "required"
         numeric bmi "required"
         numeric ldl "nullable - not always drawn"
     }
     RISK_ASSESSMENTS {
+        uuid id PK "gen_random_uuid()"
+        uuid visit_id FK "unique with model_version"
         text model_version "JUDGEMENTS - what a model concluded"
         numeric risk_score "0-100 ranking number"
         enum risk_category "low, medium, high"
@@ -1758,19 +1776,19 @@ erDiagram
 <pre class="mermaid">
 %%{init: {'theme':'base','themeVariables':{'primaryColor':'#eaf5ee','primaryTextColor':'#16261e','primaryBorderColor':'#16382b','secondaryColor':'#f4f1e9','secondaryTextColor':'#16261e','secondaryBorderColor':'#c9d6cb','tertiaryColor':'#ffffff','tertiaryTextColor':'#16261e','tertiaryBorderColor':'#c9d6cb','lineColor':'#435146','textColor':'#16261e','attributeBackgroundColorOdd':'#ffffff','attributeBackgroundColorEven':'#f4f1e9','nodeBorder':'#16382b','mainBkg':'#eaf5ee','edgeLabelBackground':'#ffffff','fontFamily':'Inter, system-ui, sans-serif','fontSize':'13px'}}}%%
 flowchart TD
-    W["Clinician A inserts a visit&lt;br/&gt;patient_id points at Clinician B's patient"]
-    W --> D["Denormalized&lt;br/&gt;clinician_id column"]
-    W --> J["Join-based policy&lt;br/&gt;what Diacify does"]
+    W["Clinician A saves a visit&lt;br/&gt;pointing at Clinician B's patient"]
+    W --> D["Give visits its own clinician_id&lt;br/&gt;the obvious design, rejected"]
+    W --> J["Diacify: no such column&lt;br/&gt;look the patient up instead"]
 
-    D --> D1["WITH CHECK: clinician_id = A ✓&lt;br/&gt;A did set their own id"]
-    D1 --> D2["Foreign key: does that patient row exist? ✓&lt;br/&gt;it does, it is just not A's"]
-    D2 --> D3["Visit written onto B's patient"]:::bad
+    D --> D1["Did A sign the visit as A?&lt;br/&gt;YES - A wrote their own id"]
+    D1 --> D2["Does that patient row exist?&lt;br/&gt;YES - it exists, it is just B's"]
+    D2 --> D3["Neither question asked who owns the patient&lt;br/&gt;the visit lands on B's patient"]:::bad
 
-    J --> J1["WITH CHECK: does this patient belong to A?"]
-    J1 --> J2["Rejected"]:::good
+    J --> J1["Does that patient belong to A?&lt;br/&gt;NO - it belongs to B"]
+    J1 --> J2["Write refused"]:::blocked
 
     classDef bad fill:#fbeae7,stroke:#a32d21,color:#a32d21
-    classDef good fill:#eaf5ee,stroke:#1c7a33,color:#1c7a33
+    classDef blocked fill:#f4f1e9,stroke:#5f6d63,color:#435146
 </pre>
         <figcaption>
           A foreign key confirms the referenced row <em>exists</em>. It never
