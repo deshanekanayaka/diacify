@@ -404,6 +404,28 @@ figure.diagram foreignObject > div {
   width: max-content !important;
   max-width: none !important;
 }
+/* Mermaid scopes its own diagram styles by generated id (`#mermaid-123 .actor`),
+   so an id-level selector outranks anything reachable from here - these need
+   !important to land. Only the participants that should differ are listed: the
+   init directive's actorBkg already gives Frontend and Backend the shared green,
+   which is the point, since both are Diacify's own code. */
+figure.diagram svg[aria-roledescription="sequence"] rect.actor[name="C"] {
+  fill: #f4f1e9 !important;
+  stroke: #5f6d63 !important;
+}
+figure.diagram svg[aria-roledescription="sequence"] rect.actor[name="S"] {
+  fill: #f7ecd9 !important;
+  stroke: #a8834a !important;
+}
+figure.diagram svg[aria-roledescription="sequence"] rect.actor[name="P"] {
+  fill: #cfe3e8 !important;
+  stroke: #1f5a6b !important;
+}
+/* The step badge is drawn as an SVG marker, which mermaid's theme does not
+   reach, so its fill has no theme variable to set. */
+figure.diagram svg[aria-roledescription="sequence"] marker[id$="sequencenumber"] circle {
+  fill: #1f5a6b;
+}
 /* The max-content rule above fixes clipped labels everywhere, but it can't
    help the ER diagram: a flowchart node grows to fit its label, whereas an
    entity's column grid is baked from mermaid's own (too-narrow) estimate
@@ -1039,21 +1061,23 @@ footer {
         <span class="rail__term">Local environment, JWTs</span></span></a></li>
       <li><a href="#api"><span class="num">7</span><span>The API surface
         <span class="rail__term">REST design, HTTP semantics, CORS</span></span></a></li>
-      <li><a href="#stopped"><span class="num">8</span><span>Watch a request get stopped
+      <li><a href="#auth"><span class="num">8</span><span>From password to row
+        <span class="rail__term">Authentication, token issuance, JWKS</span></span></a></li>
+      <li><a href="#stopped"><span class="num">9</span><span>Watch a request get stopped
         <span class="rail__term">API authentication, rate limiting, validation</span></span></a></li>
-      <li><a href="#isolation"><span class="num">9</span><span>Prove the data is separated
+      <li><a href="#isolation"><span class="num">10</span><span>Prove the data is separated
         <span class="rail__term">Row-level security, multi-tenancy</span></span></a></li>
-      <li><a href="#database"><span class="num">10</span><span>The database underneath
+      <li><a href="#database"><span class="num">11</span><span>The database underneath
         <span class="rail__term">Schema, indexes, constraints, migrations</span></span></a></li>
-      <li><a href="#scoring"><span class="num">11</span><span>Watch the model decide
+      <li><a href="#scoring"><span class="num">12</span><span>Watch the model decide
         <span class="rail__term">ML inference &amp; model serving</span></span></a></li>
-      <li><a href="#training"><span class="num">12</span><span>How the model learned
+      <li><a href="#training"><span class="num">13</span><span>How the model learned
         <span class="rail__term">ML training pipeline</span></span></a></li>
-      <li><a href="#testing"><span class="num">13</span><span>How it's tested
+      <li><a href="#testing"><span class="num">14</span><span>How it's tested
         <span class="rail__term">Integration testing &amp; CI</span></span></a></li>
-      <li><a href="#improve"><span class="num">14</span><span>What you'd improve
+      <li><a href="#improve"><span class="num">15</span><span>What you'd improve
         <span class="rail__term">Known limitations</span></span></a></li>
-      <li><a href="#checks"><span class="num">15</span><span>Check yourself
+      <li><a href="#checks"><span class="num">16</span><span>Check yourself
         <span class="rail__term">Recall practice</span></span></a></li>
     </ol>
   </nav>
@@ -2362,9 +2386,165 @@ curl -s -o /dev/null -w "real request -> %{http_code}\n" http://localhost:3000/a
       </div>
     </section>
 
-    <section id="stopped">
+    <section id="auth">
       <div class="section-head">
         <span class="num">08</span>
+        <h2>From password to row</h2>
+      </div>
+
+      <div class="covers">
+        <span class="covers__label">Concepts</span>
+        <span class="concept">Authentication vs. authorization</span>
+        <span class="concept">Token issuance</span>
+        <span class="concept">Asymmetric signing</span>
+        <span class="concept">JWKS</span>
+        <span class="concept">Token forwarding</span>
+      </div>
+
+      <p class="prose">
+        A clinician types a password once. Two things are worth noticing
+        before the diagram: the Diacify backend never sees that password,
+        and it never issues a token either. Both jobs belong to Supabase
+        Auth, which leaves the backend one job, checking the token it is
+        handed.
+      </p>
+
+      <figure class="diagram">
+<pre class="mermaid">
+%%{init: {'theme':'base','themeVariables':{'primaryColor':'#eaf5ee','primaryTextColor':'#16261e','primaryBorderColor':'#16382b','lineColor':'#435146','textColor':'#16261e','signalColor':'#435146','signalTextColor':'#16261e','actorBkg':'#eaf5ee','actorBorder':'#16382b','actorTextColor':'#16261e','noteBkgColor':'#f4f1e9','noteBorderColor':'#5f6d63','noteTextColor':'#435146','sequenceNumberColor':'#ffffff','edgeLabelBackground':'#ffffff','fontFamily':'Inter, system-ui, sans-serif','fontSize':'13px'}}}%%
+sequenceDiagram
+    autonumber
+    participant C as Clinician
+    participant F as Frontend
+    participant S as Supabase Auth
+    participant B as Backend
+    participant P as Postgres
+
+    rect rgb(248, 246, 240)
+    C-&gt;&gt;F: email and password
+    F-&gt;&gt;S: the same email and password
+    Note over C,S: the Diacify backend is not in this exchange
+    S--&gt;&gt;F: a signed token
+    end
+
+    rect rgb(240, 247, 242)
+    F-&gt;&gt;B: GET /api/patients&lt;br/&gt;signed token in the Authorization header
+    B-&gt;&gt;B: verify the signature&lt;br/&gt;locally
+    B-&gt;&gt;P: the same token, forwarded
+    Note over B,P: auth.uid() is this clinician&lt;br/&gt;so Postgres returns their rows only
+    P--&gt;&gt;B: their rows only
+    B--&gt;&gt;F: 200 OK, the patient list
+    end
+</pre>
+        <figcaption>
+          Steps 1 to 3 run once, when they sign in. Steps 4 to 8 run again
+          on every request after that. The backend holds no session of its
+          own, so there is nothing for it to look up.
+        </figcaption>
+      </figure>
+
+      <p class="prose">
+        Step 6 is the one that matters most. The backend does not read the
+        clinician id out of the token and add a
+        <span class="mono">WHERE clinician_id = ...</span> to each query. It
+        hands Postgres the token and lets the database decide, which is what
+        section 5 was describing
+        <a class="adr" href="#" data-adr="013">ADR-013</a>.
+      </p>
+
+      <div class="drill">
+        <p class="drill__ask"><span class="tag">Drill</span>Open your own token and read what the backend reads.</p>
+        <div class="cmd">
+          <div class="cmd__bar"><span>bash</span><button class="cmd__copy" type="button">Copy</button></div>
+          <pre><code>python3 -c "
+import base64, json, os
+payload = os.environ['TOKEN'].split('.')[1]
+payload += '=' * (-len(payload) % 4)
+claims = json.loads(base64.urlsafe_b64decode(payload))
+print(json.dumps({k: claims[k] for k in ('sub','role','iss','exp') if k in claims}, indent=2))
+"</code></pre>
+        </div>
+        <details class="drill__reveal">
+          <summary>What you should see, and why it is readable</summary>
+          <div class="drill__body">
+            <p>
+              Four claims: <span class="mono">sub</span> (the clinician's
+              id), <span class="mono">role</span>
+              (<span class="mono">authenticated</span>),
+              <span class="mono">iss</span> (who issued it), and
+              <span class="mono">exp</span> (when it stops working).
+            </p>
+            <p>
+              You just decoded it without a key, and so can anyone. A JWT is
+              signed, not encrypted, so it hides nothing. What the signature
+              buys is that nobody can <em>change</em>
+              <span class="mono">sub</span> to another clinician's id
+              without the private key, which only Supabase holds.
+            </p>
+            <p>
+              That <span class="mono">sub</span> is the exact value
+              <span class="mono">auth.uid()</span> returns inside every
+              policy in section 5.
+            </p>
+            <p class="say">
+              <strong>Say it like this</strong>
+              "The token is signed, not secret. Anyone can read the claims;
+              nobody can forge them. The backend trusts the signature, not
+              the contents."
+            </p>
+          </div>
+        </details>
+      </div>
+
+      <details class="why">
+        <summary>Why the backend forwards the token instead of using an admin key</summary>
+        <div class="why__body">
+          <p>
+            Supabase also issues a service key that bypasses row-level
+            security entirely. Using it would work, and it is the shorter
+            path: the backend connects once, queries anything, and filters
+            by clinician in the handler.
+          </p>
+          <p>
+            The threat that rules it out is a forgotten filter. Under the
+            service key, a query missing its ownership check returns every
+            clinic's rows and raises no error, because nothing downstream is
+            checking. Forwarding the caller's token inverts that: the
+            database refuses, so the mistake produces an empty result rather
+            than a leak
+            <a class="adr" href="#" data-adr="013">ADR-013</a>. Diacify also
+            pins the service role's table grants to zero, so the key cannot
+            read those tables even if something reached for it
+            <a class="adr" href="#" data-adr="035">ADR-035</a>.
+          </p>
+        </div>
+      </details>
+
+      <details class="why">
+        <summary>Why the signature is checked locally, and what that costs</summary>
+        <div class="why__body">
+          <p>
+            Supabase publishes its public keys at a well-known URL. The
+            backend fetches them once, caches them, and verifies every later
+            token by maths. The alternative, asking Supabase to validate
+            each token, would put a network call and Supabase's uptime on
+            every single request
+            <a class="adr" href="#" data-adr="009">ADR-009</a>.
+          </p>
+          <p>
+            The cost is honest and worth being able to state: because
+            nothing is looked up, a token stays valid until it expires. If a
+            clinician is removed, their token keeps working for the rest of
+            its lifetime, roughly an hour. Buying instant revocation means
+            buying back the per-request lookup.
+          </p>
+        </div>
+      </details>
+    </section>
+
+    <section id="stopped">
+      <div class="section-head">
+        <span class="num">09</span>
         <h2>Watch a request get stopped</h2>
       </div>
 
@@ -2391,9 +2571,9 @@ curl -s -o /dev/null -w "real request -> %{http_code}\n" http://localhost:3000/a
 flowchart TD
     R["A write request arrives"] --> A{"Is the token real?"}
     A -- no --> A1["401: who are you?"]:::stop
-    A -- yes --> B{"Under 20 writes&lt;br/&gt;this minute?"}
+    A -- yes --> B{"Under 20 of these&lt;br/&gt;in the last 60 seconds?"}
     B -- no --> B1["429: slow down"]:::stop
-    B -- yes --> C{"Do the numbers&lt;br/&gt;make sense?"}
+    B -- yes --> C{"Is every value&lt;br/&gt;inside its allowed range?"}
     C -- no --> C1["400: bad data"]:::stop
     C -- yes --> D{"Is this patient yours?"}
     D -- no --> D1["404: not found"]:::stop
@@ -2404,7 +2584,9 @@ flowchart TD
 </pre>
         <figcaption>
           The order matters: the rate limiter counts per clinician, so it
-          cannot run until the token has told it who is asking.
+          cannot run until the token has told it who is asking. Each write
+          endpoint keeps its own count, and the window rolls continuously
+          rather than resetting on the minute.
         </figcaption>
       </figure>
 
@@ -2598,7 +2780,7 @@ done; echo</code></pre>
 
     <section id="isolation">
       <div class="section-head">
-        <span class="num">09</span>
+        <span class="num">10</span>
         <h2>Prove one clinician can't see another's data</h2>
       </div>
 
@@ -2621,16 +2803,27 @@ done; echo</code></pre>
 <pre class="mermaid">
 %%{init: {'theme':'base','themeVariables':{'primaryColor':'#eaf5ee','primaryTextColor':'#16261e','primaryBorderColor':'#16382b','lineColor':'#435146','textColor':'#16261e','edgeLabelBackground':'#ffffff','fontFamily':'Inter, system-ui, sans-serif','fontSize':'13px'}}}%%
 flowchart LR
-    A["Clinician A asks for&lt;br/&gt;all patients"] --> P{"The database checks&lt;br/&gt;who is asking"}
-    B["Clinician B asks for&lt;br/&gt;the exact same thing"] --> P
-    P --> R1["A gets A's patients"]:::ok
-    P --> R2["B gets B's patients"]:::ok
+    subgraph STORED["the patients table, every row together"]
+      direction TB
+      r1["Patient 1, added by clinician A"]:::owna
+      r2["Patient 2, added by clinician A"]:::owna
+      r3["Patient 3, added by clinician B"]:::ownb
+    end
 
-    classDef ok fill:#eaf5ee,stroke:#1c7a33,color:#1c7a33
+    STORED --> GATE{"For every row the database asks:&lt;br/&gt;did the clinician asking add this one?"}
+
+    GATE -->|"clinician A is asking"| OUTA["Clinician A gets back&lt;br/&gt;patients 1 and 2"]:::owna
+    GATE -->|"clinician B is asking"| OUTB["Clinician B gets back&lt;br/&gt;patient 3"]:::ownb
+
+    classDef owna fill:#eaf5ee,stroke:#1c7a33,color:#16261e
+    classDef ownb fill:#e6eef7,stroke:#2f5d8a,color:#16261e
 </pre>
         <figcaption>
-          One query, written once, with no mention of any clinician in it.
-          The database narrows it, per caller.
+          Both clinicians send the identical query,
+          <span class="mono">select * from patients</span>, which names no
+          clinician at all. The database puts that question to every row
+          and hands back only the rows that pass, so one query gives each
+          caller a different answer.
         </figcaption>
       </figure>
 
@@ -2650,7 +2843,7 @@ export TOKEN_B=$(curl -s "http://127.0.0.1:54321/auth/v1/token?grant_type=passwo
       </div>
 
       <div class="drill">
-        <p class="drill__ask"><span class="tag">Drill 7</span>Ask for the patient list as clinician B. You created patients a moment ago: how many come back?</p>
+        <p class="drill__ask"><span class="tag">Drill 7</span>Ask for the patient list as clinician B. Every patient so far was created by clinician A: how many come back for B?</p>
         <div class="cmd">
           <div class="cmd__bar"><span>bash</span><button class="cmd__copy" type="button">Copy</button></div>
           <pre><code>curl -s http://localhost:3000/api/patients \
@@ -2662,8 +2855,8 @@ export TOKEN_B=$(curl -s "http://127.0.0.1:54321/auth/v1/token?grant_type=passwo
             <p><span class="mono">{"data":[],"page":1,"limit":20,"total":0}</span></p>
             <p>
               Zero, and note it is an ordinary empty list, not an error.
-              B's rows genuinely do not include A's. The backend ran the
-              same query for both of them.
+              B owns no rows at all, so B's list is genuinely empty. The
+              backend ran the same query for both of them.
             </p>
           </div>
         </details>
@@ -2733,7 +2926,7 @@ export TOKEN_B=$(curl -s "http://127.0.0.1:54321/auth/v1/token?grant_type=passwo
 
     <section id="database">
       <div class="section-head">
-        <span class="num">10</span>
+        <span class="num">11</span>
         <h2>The database underneath</h2>
       </div>
 
@@ -2962,7 +3155,7 @@ docker exec supabase_db_diacify psql -U postgres -tAX -c "$COUNT"</code></pre>
 
     <section id="scoring">
       <div class="section-head">
-        <span class="num">11</span>
+        <span class="num">12</span>
         <h2>Watch the model decide</h2>
       </div>
 
@@ -3126,7 +3319,7 @@ flowchart LR
 
     <section id="training">
       <div class="section-head">
-        <span class="num">12</span>
+        <span class="num">13</span>
         <h2>How the model learned</h2>
       </div>
 
@@ -3219,7 +3412,7 @@ flowchart TD
 
     <section id="testing">
       <div class="section-head">
-        <span class="num">13</span>
+        <span class="num">14</span>
         <h2>How it's tested</h2>
       </div>
 
@@ -3323,7 +3516,7 @@ flowchart TD
 
     <section id="improve">
       <div class="section-head">
-        <span class="num">14</span>
+        <span class="num">15</span>
         <h2>What you'd improve</h2>
       </div>
 
@@ -3359,7 +3552,7 @@ flowchart TD
 
     <section id="checks">
       <div class="section-head">
-        <span class="num">15</span>
+        <span class="num">16</span>
         <h2>Check yourself</h2>
       </div>
 
@@ -3697,12 +3890,14 @@ flowchart TD
     "001": "adr-001--one-application-nodejs-with-ml-training-staying-offline-python",
     "006": "adr-006--deployment-topology-render-backend--vercel-frontend",
     "008": "adr-008--backend-api-design-supabase-jwt--rls-no-api-key-system",
+    "009": "adr-009--jwt-verification-local-jwks-not-a-live-supabase-auth-api-call",
     "013": "adr-013--request-scoped-supabasesupabase-js-client-not-raw-pg-with-role-impersonation",
     "014": "adr-014--patientssex-is-the-only-patient-level-clinical-attribute-ported-from-legacy",
     "017": "adr-017--visits-ownership-join-based-rls-policy-not-a-denormalized-clinician_id",
     "018": "adr-018--visits-holds-clinical-facts-only-no-ml-output-columns",
     "025": "adr-025--ml-inference-transport-exported-json-forest-traversed-in-the-backend",
     "028": "adr-028--risk-assessments-are-append-only-one-row-per-visit-model-version",
+    "035": "adr-035--service_role-table-grants-pinned-to-zero-matching-local",
     "038": "adr-038--patient-identification-clinician-assigned-reference-not-a-legal-name",
     "041": "adr-041--sharing-zod-schemas-npm-workspaces-not-path-aliases-or-duplication",
     "043": "adr-043--scope-no-appointments-no-analytics"
