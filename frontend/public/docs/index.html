@@ -2825,7 +2825,7 @@ export TOKEN_B=$(curl -s "http://127.0.0.1:54321/auth/v1/token?grant_type=passwo
       </div>
 
       <div class="drill">
-        <p class="drill__ask"><span class="tag">Drill 7</span>Ask for the patient list as clinician B. You created patients a moment ago: how many come back?</p>
+        <p class="drill__ask"><span class="tag">Drill 7</span>Ask for the patient list as clinician B. Every patient so far was created by clinician A: how many come back for B?</p>
         <div class="cmd">
           <div class="cmd__bar"><span>bash</span><button class="cmd__copy" type="button">Copy</button></div>
           <pre><code>curl -s http://localhost:3000/api/patients \
@@ -2837,8 +2837,8 @@ export TOKEN_B=$(curl -s "http://127.0.0.1:54321/auth/v1/token?grant_type=passwo
             <p><span class="mono">{"data":[],"page":1,"limit":20,"total":0}</span></p>
             <p>
               Zero, and note it is an ordinary empty list, not an error.
-              B's rows genuinely do not include A's. The backend ran the
-              same query for both of them.
+              B owns no rows at all, so B's list is genuinely empty. The
+              backend ran the same query for both of them.
             </p>
           </div>
         </details>
