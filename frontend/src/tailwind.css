@@ -1,10 +1,11 @@
-/* Tailwind 4, for the Watermelon-derived landing page only.
+/* Tailwind 4, for the landing page only.
    Preflight is deliberately left out: theme.css styles the rest of the app in
    plain CSS, and Tailwind's reset would strip those styles. */
+
 /* theme.css is pulled in here, inside a layer, so that Tailwind's utilities
    can win against its bare element rules. Unlayered CSS beats every layer, so
    left on its own theme.css's `a { color: var(--accent) }` overrode every
-   Tailwind text-* utility on a link and made them unreadable. */
+   Tailwind text-* utility on a link. */
 @layer app, theme, base, components, utilities;
 @import "./theme.css" layer(app);
 @import "tailwindcss/theme.css" layer(theme);
@@ -14,33 +15,47 @@
    @import "tailwindcss" sets up, so name the sources here. */
 @source "./";
 
-/* The shadcn token names the Watermelon components expect. They are scoped to
-   .landing-shell rather than :root because theme.css already owns --accent and
-   --radius-* at :root, and a global redefinition here would repaint the
-   signed-in app. */
+/* The landing page's own tokens. They are scoped to .landing-shell rather
+   than :root because theme.css owns --accent and --radius-* at :root, and a
+   global redefinition here would repaint the signed-in app.
+
+   The colours come straight from theme.css so the landing page and the app
+   read as one product. The corners do not: the app is square by design, and
+   the landing page is soft and pill-shaped. That is a deliberate split
+   between a marketing page and a working tool. */
 .landing-shell {
-  --radius: 0;
-  --background: #101010;
-  --foreground: #f3f7ee;
-  --card: #161616;
-  --card-foreground: #f3f7ee;
-  --popover: #161616;
-  --popover-foreground: #f3f7ee;
-  /* Diacify's mint, not Watermelon's lime: the mark and the signed-in app are
-     green, and the landing page is the same product. */
-  --primary: #b7dcc5;
-  --primary-foreground: #101010;
-  --secondary: #1e1e1e;
-  --secondary-foreground: #f3f7ee;
-  --muted: #1e1e1e;
-  --muted-foreground: #8a938c;
-  --accent: #1e1e1e;
-  --accent-foreground: #f3f7ee;
-  --destructive: #c0392b;
+  --radius: 1rem;
+
+  --background: #fbf9f3;
+  --foreground: #16261e;
+  --card: #ffffff;
+  --card-foreground: #16261e;
+  --popover: #ffffff;
+  --popover-foreground: #16261e;
+  --primary: #16382b;
+  --primary-foreground: #f3f7ee;
+  --secondary: #eaf5ee;
+  --secondary-foreground: #16382b;
+  --muted: #f4f1e9;
+  --muted-foreground: #435146;
+  --accent: #d3ead9;
+  --accent-foreground: #16382b;
+  --destructive: #a32d21;
   --destructive-foreground: #f3f7ee;
-  --border: rgba(255, 255, 255, 0.1);
-  --input: rgba(255, 255, 255, 0.1);
-  --ring: #b7dcc5;
+  --border: rgba(22, 40, 31, 0.12);
+  --input: rgba(22, 40, 31, 0.12);
+  --ring: #16382b;
+
+  /* The hero's painted sky, bottom to top. */
+  --sky-high: #fbf9f3;
+  --sky-low: #eaf5ee;
+  --field: #b7dcc5;
+
+  /* The footer, the one dark surface on the page. */
+  --night: #12201a;
+  --night-foreground: #f3f7ee;
+  --night-muted: rgba(243, 247, 238, 0.6);
+  --night-border: rgba(243, 247, 238, 0.14);
 }
 
 @theme inline {
@@ -63,11 +78,45 @@
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
+
+  --color-sky-high: var(--sky-high);
+  --color-sky-low: var(--sky-low);
+  --color-field: var(--field);
+  --color-night: var(--night);
+  --color-night-foreground: var(--night-foreground);
+  --color-night-muted: var(--night-muted);
+  --color-night-border: var(--night-border);
+
+  /* Reuse the faces theme.css already loads. Fraunces carries the headlines,
+     Inter the body. The landing page sets no monospace. */
+  --font-display: var(--font-display, "Fraunces", Georgia, serif);
+  --font-sans: var(--font-text, "Inter", system-ui, sans-serif);
+
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.5);
+  --radius-2xl: calc(var(--radius) * 2);
 }
 
-@theme inline {
-  /* Reuse the fonts theme.css already loads, so the landing page and the
-     signed-in app are set in the same faces. */
-  --font-sans: var(--font-display, "Fraunces", Georgia, serif);
-  --font-mono: var(--font-numeric, ui-monospace, Menlo, monospace);
+/* One entrance, used by every section. Replaces the motion library: the
+   references fade and lift their content once on arrival, and CSS does that
+   in eight lines with nothing to ship. */
+@keyframes landing-rise {
+  from {
+    opacity: 0;
+    transform: translateY(1.25rem);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.landing-shell [data-rise] {
+  animation: landing-rise 0.9s cubic-bezier(0.16, 1, 0.3, 1) backwards;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .landing-shell [data-rise] {
+    animation: none;
+  }
 }
