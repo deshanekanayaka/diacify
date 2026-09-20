@@ -20,9 +20,16 @@
  */
 
 :root {
-  --ground: #fbf9f3;
+  /* A cool green-grey, not the warm cream the landing page uses. The old
+     ground was hsl(45, 43%, 97%): nearly half its saturation was yellow,
+     which reads as aged paper under a dense table. This shares a hue with
+     the accent instead, so the signed-in app is one colour family.
+
+     The landing page deliberately keeps the cream. Its painted field makes
+     the warmth intentional, and the auth screens join the two registers. */
+  --ground: #f6f8f6;
   --surface: #ffffff;
-  --surface-sunken: #f4f1e9;
+  --surface-sunken: #eef1ee;
   --separator: rgba(22, 40, 31, 0.1);
   --separator-strong: rgba(22, 40, 31, 0.2);
 
@@ -35,7 +42,7 @@
   --accent-ink: #f3f7ee;
   --accent-wash: #e6efe3;
 
-  --mint-100: #eaf5ee;
+  --mint-100: #e8f2ec;
   --mint-200: #d3ead9;
   --mint-300: #b7dcc5;
   --blue-100: #eef4f6;
@@ -677,7 +684,7 @@ table.data th:last-child {
   align-items: center;
   gap: var(--space-4);
   padding: var(--space-3) var(--space-5);
-  background: rgba(251, 249, 243, 0.86);
+  background: rgba(246, 248, 246, 0.86);
   backdrop-filter: saturate(180%) blur(20px);
   border-bottom: 1px solid var(--separator);
 }
