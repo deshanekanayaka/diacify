@@ -59,7 +59,7 @@ export function Hero() {
       <Container className="relative z-10">
         <div className="mx-auto flex max-w-4xl flex-col items-center text-center">
           <div data-rise style={{ animationDelay: "0ms" }}>
-            <Eyebrow>Diabetes risk screening</Eyebrow>
+            <Eyebrow>At the point of care</Eyebrow>
           </div>
 
           <h1
@@ -67,7 +67,8 @@ export function Hero() {
             style={{ animationDelay: "90ms" }}
             className="font-display mt-8 text-[2.75rem] leading-[1.02] tracking-tight text-balance text-foreground sm:text-6xl lg:text-7xl"
           >
-            A verdict before the patient leaves the room.
+            Diabetes risk classification, before the patient leaves the
+            room.
           </h1>
 
           <p
@@ -75,8 +76,8 @@ export function Hero() {
             style={{ animationDelay: "180ms" }}
             className="mt-8 max-w-xl text-lg leading-relaxed text-pretty text-muted-foreground"
           >
-            Type the five values a consult already measures. A model trained on
-            real patient records answers, and every visit stays on file.
+            Trained on real patient records. Scored in seconds. Every visit
+            kept.
           </p>
 
           <div data-rise style={{ animationDelay: "270ms" }} className="mt-10">
