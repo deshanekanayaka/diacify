@@ -2,6 +2,7 @@ import { Navigate, Route, Routes } from "react-router-dom";
 
 import { useAuth } from "./lib/AuthContext";
 import { AppShell } from "./components/AppShell";
+import { ErrorState } from "./components/ErrorState";
 import { LandingPage } from "./pages/LandingPage";
 import { SignInPage } from "./pages/SignInPage";
 import { SignUpPage } from "./pages/SignUpPage";
@@ -42,7 +43,18 @@ export function App() {
         <Route path="/patients/:id" element={<PatientDetailPage />} />
         <Route path="/patients/:id/edit" element={<EditPatientPage />} />
         <Route path="/patients/:id/visits/new" element={<RecordVisitPage />} />
-        <Route path="*" element={<Navigate to="/" replace />} />
+        <Route
+          path="*"
+          element={
+            <div className="page">
+              <ErrorState
+                code="404"
+                title="There is nothing at this address."
+                description="The page you asked for does not exist. It may have been a patient you deleted, or a mistyped link."
+              />
+            </div>
+          }
+        />
       </Routes>
     </AppShell>
   );

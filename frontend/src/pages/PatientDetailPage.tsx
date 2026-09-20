@@ -1,6 +1,7 @@
 import { Link, useNavigate, useParams } from "react-router-dom";
 
 import { usePatient } from "../api/patients";
+import { ErrorState } from "../components/ErrorState";
 import { useVisits, type RiskAssessment, type Visit } from "../api/visits";
 import { DeletePatientButton } from "../components/DeletePatientButton";
 import { RiskBadge } from "../components/RiskBadge";
@@ -25,9 +26,11 @@ export function PatientDetailPage() {
   if (patient.isError) {
     return (
       <div className="page">
-        <p className="banner banner--error" role="alert">
-          {patient.error.message}
-        </p>
+        <ErrorState
+          code="Not found"
+          title="That patient could not be loaded."
+          description={patient.error.message}
+        />
       </div>
     );
   }

@@ -1,4 +1,7 @@
+import { useState } from "react";
+
 import { useDeletePatient } from "../api/patients";
+import { ConfirmDialog } from "./ConfirmDialog";
 import { IconTrash } from "./icons";
 
 interface DeletePatientButtonProps {
@@ -16,9 +19,7 @@ interface DeletePatientButtonProps {
  * A confirm-then-delete control shared by the patient list row and the
  * patient profile screen. Deleting a patient is irreversible — the backend
  * cascades away every visit and risk assessment with it — so both call
- * sites go through the same native confirmation rather than each rolling
- * their own, and there is deliberately no custom "are you sure" dialog
- * component for one rare, destructive action.
+ * sites go through the same confirmation rather than each rolling their own.
  */
 export function DeletePatientButton({
   patientId,
@@ -28,14 +29,16 @@ export function DeletePatientButton({
   variant = "label",
 }: DeletePatientButtonProps) {
   const deletePatient = useDeletePatient();
+  const [isConfirming, setIsConfirming] = useState(false);
 
-  function handleClick() {
-    const confirmed = window.confirm(
-      `Delete ${reference}? This permanently erases every visit and risk assessment on their chart. This cannot be undone.`,
-    );
-    if (!confirmed) return;
-
-    deletePatient.mutate(patientId, { onSuccess: onDeleted });
+  function handleConfirm() {
+    deletePatient.mutate(patientId, {
+      onSuccess: () => {
+        setIsConfirming(false);
+        onDeleted?.();
+      },
+      onError: () => setIsConfirming(false),
+    });
   }
 
   return (
@@ -43,7 +46,7 @@ export function DeletePatientButton({
       <button
         type="button"
         className={className}
-        onClick={handleClick}
+        onClick={() => setIsConfirming(true)}
         disabled={deletePatient.isPending}
         aria-label={variant === "icon" ? `Delete ${reference}` : undefined}
         title={variant === "icon" ? "Delete" : undefined}
@@ -57,6 +60,16 @@ export function DeletePatientButton({
           {deletePatient.error.message}
         </span>
       ) : null}
+
+      <ConfirmDialog
+        isOpen={isConfirming}
+        title={`Delete ${reference}?`}
+        body="This permanently erases every visit and risk assessment on their chart. It cannot be undone."
+        confirmLabel="Delete patient"
+        isConfirming={deletePatient.isPending}
+        onConfirm={handleConfirm}
+        onCancel={() => setIsConfirming(false)}
+      />
     </>
   );
 }

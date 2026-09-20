@@ -684,13 +684,28 @@ table.data th:last-child {
   display: flex;
   align-items: center;
   gap: var(--space-2);
-  border: 1px solid var(--separator-strong);
+  border: 1px solid var(--separator);
   border-radius: var(--radius-pill);
   background: var(--surface);
   padding: 3px 0.625rem 3px 3px;
   font: inherit;
   font-size: 0.875rem;
   cursor: pointer;
+  transition: border-color 200ms var(--ease), box-shadow 200ms var(--ease);
+}
+.avatar-menu > button:hover,
+.avatar-menu > button[aria-expanded="true"] {
+  border-color: var(--separator-strong);
+  box-shadow: 0 1px 2px rgba(22, 40, 31, 0.06);
+}
+.avatar-menu > button svg {
+  width: 0.875rem;
+  height: 0.875rem;
+  color: var(--ink-tertiary);
+  transition: transform 200ms var(--ease);
+}
+.avatar-menu > button[aria-expanded="true"] svg {
+  transform: rotate(180deg);
 }
 .avatar {
   width: 26px;
@@ -706,22 +721,48 @@ table.data th:last-child {
 }
 .menu-drop {
   position: absolute;
-  top: calc(100% + 8px);
+  top: calc(100% + 10px);
   right: 0;
-  min-width: 220px;
+  min-width: 260px;
   background: var(--surface);
-  border-radius: var(--radius-md);
-  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.16);
+  border: 1px solid var(--separator);
+  border-radius: var(--radius-lg);
+  box-shadow: 0 24px 48px -24px rgba(22, 40, 31, 0.45);
   overflow: hidden;
-  padding: var(--space-1);
+  padding: var(--space-2);
+  animation: menu-drop-in 200ms var(--ease);
 }
+@keyframes menu-drop-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+}
+/* The signed-in identity, shown once at the top of the menu rather than
+   squeezed into the topbar. */
 .menu-drop .menu-head {
-  padding: var(--space-2) var(--space-3);
-  font-size: 0.8125rem;
-  color: var(--ink-tertiary);
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3);
   border-bottom: 1px solid var(--separator);
-  margin-bottom: var(--space-1);
+  margin-bottom: var(--space-2);
+}
+.menu-drop .menu-head .avatar {
+  width: 34px;
+  height: 34px;
+  font-size: 0.875rem;
+  flex-shrink: 0;
+}
+.menu-drop .menu-head__email {
+  font-size: 0.875rem;
+  color: var(--ink);
   overflow-wrap: anywhere;
+  line-height: 1.3;
+}
+.menu-drop .menu-head__role {
+  font-size: 0.75rem;
+  color: var(--ink-tertiary);
 }
 .menu-drop button {
   display: block;
@@ -736,6 +777,10 @@ table.data th:last-child {
   cursor: pointer;
   color: var(--ink);
 }
+.menu-drop button {
+  border-radius: var(--radius-sm);
+  transition: background 200ms var(--ease);
+}
 .menu-drop button:hover {
   background: var(--surface-sunken);
 }
@@ -744,6 +789,179 @@ table.data th:last-child {
   font-size: 0.9375rem;
   display: inline-block;
   margin-bottom: var(--space-4);
+}
+
+/* ---------- toolbar ---------- */
+
+/* The patient list's controls on one line: search, risk filter, sort. They
+   used to be three stacked rows, which put more chrome above the table than
+   the table itself had. */
+.toolbar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+  margin-bottom: var(--space-4);
+}
+.toolbar__search {
+  flex: 1 1 200px;
+  min-width: 160px;
+}
+.toolbar input,
+.toolbar select {
+  font: inherit;
+  font-size: 0.875rem;
+  color: var(--ink);
+  background: var(--surface);
+  border: 1px solid var(--separator);
+  border-radius: var(--radius-pill);
+  padding: 0.4375rem 0.875rem;
+  width: 100%;
+  transition: box-shadow 200ms var(--ease), border-color 200ms var(--ease);
+}
+.toolbar select {
+  width: auto;
+  padding-right: var(--space-4);
+  cursor: pointer;
+}
+.toolbar .segmented {
+  flex-shrink: 0;
+  border-radius: var(--radius-pill);
+}
+.toolbar .segmented button {
+  border-radius: var(--radius-pill);
+  padding-inline: 0.875rem;
+  font-size: 0.875rem;
+  /* "Not scored" wrapped to two lines and made the whole control taller
+     than the input beside it. */
+  white-space: nowrap;
+}
+.toolbar input:focus,
+.toolbar select:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-wash);
+}
+
+/* ---------- dialog ---------- */
+
+/* Built on <dialog>, so the browser owns the focus trap, the Escape key and
+   the top layer. A hand-rolled modal gets all three wrong. */
+.modal::backdrop {
+  background: rgba(22, 38, 30, 0.35);
+  backdrop-filter: blur(2px);
+}
+.modal {
+  border: none;
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  color: var(--ink);
+  padding: var(--space-6);
+  max-width: 26rem;
+  width: calc(100% - 2rem);
+  box-shadow: 0 32px 64px -32px rgba(22, 40, 31, 0.5);
+}
+.modal__icon {
+  display: grid;
+  place-items: center;
+  width: 2.75rem;
+  height: 2.75rem;
+  border-radius: 50%;
+  background: #fbeae7;
+  color: var(--danger);
+  margin-bottom: var(--space-4);
+}
+.modal__icon svg {
+  width: 1.25rem;
+  height: 1.25rem;
+}
+.modal__actions {
+  display: flex;
+  gap: var(--space-2);
+  margin-top: var(--space-5);
+}
+.modal__actions .btn {
+  flex: 1;
+  justify-content: center;
+}
+
+/* ---------- split form ---------- */
+
+/* A long form beside the thing it belongs to: context and the submit button
+   stay put on the left while the fields fill the right. It keeps every field
+   on one screen, so nobody scrolls to the bottom to find the button. */
+.form-split {
+  display: grid;
+  gap: var(--space-6);
+  align-items: start;
+}
+@media (min-width: 900px) {
+  .form-split {
+    grid-template-columns: minmax(0, 18rem) minmax(0, 1fr);
+    gap: var(--space-7);
+  }
+  .form-split__aside {
+    position: sticky;
+    top: 5.5rem;
+  }
+}
+.form-split__fields.stack {
+  gap: var(--space-3);
+}
+.form-split__fields .field-grid {
+  /* Narrower than the app default, so twelve fields land in four rows rather
+     than seven and the whole form fits one screen. */
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: var(--space-3);
+}
+
+/* A hairline between groups inside one card. */
+.rule {
+  border: none;
+  border-top: 1px solid var(--separator);
+  margin: 0;
+}
+
+/* ---------- error state ---------- */
+
+.error-state {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  min-height: 60vh;
+  padding: var(--space-7) var(--space-5);
+  overflow: hidden;
+}
+/* A faint graph-paper grid, faded out towards the edges so it reads as
+   texture rather than as a second thing on the page. */
+.error-state__grid {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  background-image:
+    repeating-linear-gradient(0deg, transparent, transparent 23px, var(--separator-strong) 23px, var(--separator-strong) 24px),
+    repeating-linear-gradient(90deg, transparent, transparent 23px, var(--separator-strong) 23px, var(--separator-strong) 24px);
+  background-size: 24px 24px;
+  -webkit-mask-image: radial-gradient(ellipse at center, black 0%, transparent 70%);
+  mask-image: radial-gradient(ellipse at center, black 0%, transparent 70%);
+}
+.error-state > * {
+  position: relative;
+  z-index: 1;
+}
+.error-state__code {
+  font-family: var(--font-display);
+  font-size: clamp(6rem, 22vw, 11rem);
+  line-height: 1;
+  font-weight: 600;
+  letter-spacing: -0.04em;
+  color: transparent;
+  -webkit-text-stroke: 2px var(--accent);
+  opacity: 0.35;
+  margin: 0 0 var(--space-4);
 }
 
 /* ---------- empty / loading ---------- */

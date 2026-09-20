@@ -158,3 +158,23 @@ export function IconClose({ className }: IconProps) {
     </svg>
   );
 }
+
+/** A triangle with an exclamation — a destructive action, about to happen. */
+export function IconWarning({ className }: IconProps) {
+  return (
+    <svg viewBox="0 0 24 24" className={className} {...SMALL_ICON_STROKE}>
+      <path d="M10.3 3.9 2.4 17.5a2 2 0 0 0 1.7 3h15.8a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z" />
+      <path d="M12 9v4" />
+      <path d="M12 17h.01" />
+    </svg>
+  );
+}
+
+/** A downward chevron — this control opens a menu. */
+export function IconChevronDown({ className }: IconProps) {
+  return (
+    <svg viewBox="0 0 24 24" className={className} {...SMALL_ICON_STROKE}>
+      <path d="m6 9 6 6 6-6" />
+    </svg>
+  );
+}
