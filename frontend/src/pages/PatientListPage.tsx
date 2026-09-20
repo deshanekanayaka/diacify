@@ -189,7 +189,7 @@ function PatientRow({ patient }: { patient: PatientListItem }) {
       </td>
       <td>
         <div className="row" style={{ justifyContent: "flex-end", gap: "0.75rem" }}>
-          <Link to={`/patients/${patient.id}/visits/new`} className="list-row__action">
+          <Link to={`/patients/${patient.id}/visits/new`} className="row-button">
             + Visit
           </Link>
           <Link

@@ -398,22 +398,31 @@ a:hover {
 
 /* ---------- lists and tables ---------- */
 
-/* A row action rendered as text (the patient table's "+ Visit"), and one
-   rendered as a small icon-only button (Edit's pencil, Delete's trash) —
-   the icon variant needs its own hit target and hover state, since it
-   carries no visible label. */
-.list-row__action {
+/* The three row actions. "+ Visit" carries a label and reads as a small
+   button; the other two are icon-only and need their own hit target and
+   hover state, since nothing else says they are controls. */
+.row-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
   font: inherit;
   font-size: 0.8125rem;
   font-weight: 600;
   white-space: nowrap;
-  background: none;
-  border: none;
+  border: 1px solid var(--separator-strong);
+  border-radius: var(--radius-pill);
+  background: var(--surface);
   color: var(--accent);
   cursor: pointer;
-  padding: 0;
+  padding: 0.3125rem 0.75rem;
+  transition: background 200ms var(--ease), border-color 200ms var(--ease);
 }
-.list-row__action:disabled {
+.row-button:hover:not(:disabled) {
+  background: var(--accent-wash);
+  border-color: var(--accent);
+  text-decoration: none;
+}
+.row-button:disabled {
   opacity: 0.5;
   cursor: default;
 }
@@ -421,23 +430,24 @@ a:hover {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 1.75rem;
-  height: 1.75rem;
-  border-radius: var(--radius-sm);
-  border: none;
+  width: 2.25rem;
+  height: 2.25rem;
+  border-radius: var(--radius-pill);
+  border: 1px solid transparent;
   background: none;
   color: var(--ink-secondary);
   cursor: pointer;
   padding: 0;
 }
 .icon-action svg {
-  width: 1rem;
-  height: 1rem;
+  width: 1.25rem;
+  height: 1.25rem;
 }
 .icon-action {
   transition: background 200ms var(--ease), color 200ms var(--ease);
 }
 .icon-action:hover:not(:disabled) {
+  border-color: var(--separator-strong);
   background: var(--surface-sunken);
   color: var(--ink);
 }
@@ -532,6 +542,13 @@ table.data th:last-child {
 }
 
 /* ---------- risk ---------- */
+
+.risk-score {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}
 
 .pill {
   display: inline-flex;
@@ -821,8 +838,13 @@ table.data th:last-child {
 }
 .toolbar select {
   width: auto;
-  padding-right: var(--space-4);
   cursor: pointer;
+  appearance: none;
+  padding-right: 2.25rem;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2316382b' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 0.875rem center;
+  background-size: 1rem;
 }
 .toolbar .segmented {
   flex-shrink: 0;

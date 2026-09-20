@@ -43,6 +43,12 @@ export function App() {
         <Route path="/patients/:id" element={<PatientDetailPage />} />
         <Route path="/patients/:id/edit" element={<EditPatientPage />} />
         <Route path="/patients/:id/visits/new" element={<RecordVisitPage />} />
+        {/* The two public routes still exist for a signed-in clinician: the
+            sign-in form redirects here on success, and the browser may have
+            either address in history. Without these they would fall through
+            to the 404 below. */}
+        <Route path="/signin" element={<Navigate to="/" replace />} />
+        <Route path="/signup" element={<Navigate to="/" replace />} />
         <Route
           path="*"
           element={
