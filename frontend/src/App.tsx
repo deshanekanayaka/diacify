@@ -2,7 +2,7 @@ import { Navigate, Route, Routes } from "react-router-dom";
 
 import { useAuth } from "./lib/AuthContext";
 import { AppShell } from "./components/AppShell";
-import { LandingPage } from "./pages/LandingPage";
+import { WatermelonLandingPage } from "./pages/WatermelonLandingPage";
 import { SignInPage } from "./pages/SignInPage";
 import { SignUpPage } from "./pages/SignUpPage";
 import { PatientListPage } from "./pages/PatientListPage";
@@ -26,7 +26,7 @@ export function App() {
   if (!session) {
     return (
       <Routes>
-        <Route path="/" element={<LandingPage />} />
+        <Route path="/" element={<WatermelonLandingPage />} />
         <Route path="/signin" element={<SignInPage />} />
         <Route path="/signup" element={<SignUpPage />} />
         <Route path="*" element={<Navigate to="/" replace />} />
