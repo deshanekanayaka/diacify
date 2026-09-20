@@ -1,4 +1,5 @@
-/* Tailwind 4, for the landing page only.
+/* Tailwind 4, for the public pages only: the landing page and the two
+   auth screens. The signed-in app stays on theme.css.
    Preflight is deliberately left out: theme.css styles the rest of the app in
    plain CSS, and Tailwind's reset would strip those styles. */
 
@@ -15,7 +16,8 @@
    @import "tailwindcss" sets up, so name the sources here. */
 @source "./";
 
-/* The landing page's own tokens. They are scoped to .landing-shell rather
+/* The public pages' tokens: the landing page and the two auth screens.
+   They are scoped to .public-shell rather
    than :root because theme.css owns --accent and --radius-* at :root, and a
    global redefinition here would repaint the signed-in app.
 
@@ -23,9 +25,7 @@
    read as one product. The corners do not: the app is square by design, and
    the landing page is soft and pill-shaped. That is a deliberate split
    between a marketing page and a working tool. */
-.landing-shell {
-  --radius: 1rem;
-
+.public-shell {
   --background: #fbf9f3;
   --foreground: #16261e;
   --card: #ffffff;
@@ -99,9 +99,11 @@
   --font-serif: var(--font-display, "Fraunces", Georgia, serif);
   --font-sans: var(--font-text, "Inter", system-ui, sans-serif);
 
-  --radius-lg: var(--radius);
-  --radius-xl: calc(var(--radius) * 1.5);
-  --radius-2xl: calc(var(--radius) * 2);
+  /* No --radius-* aliases here. Tailwind declares every @theme token on
+     :root, and theme.css owns --radius-lg for the signed-in app, so an alias
+     of var(--radius) left that property undefined outside .public-shell and
+     squared off every card in the app. The public pages use Tailwind's own
+     radius scale instead. */
 }
 
 /* One entrance, used by every section. Replaces the motion library: the
@@ -121,24 +123,24 @@
   }
 }
 
-.landing-shell [data-rise] {
+.public-shell [data-rise] {
   opacity: 0;
 }
 
-.landing-shell [data-rise][data-visible] {
+.public-shell [data-rise][data-visible] {
   animation: landing-rise 0.85s cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
 /* Reduced motion still needs the content, just not the movement. The reveal
    is decoration; the text is the page. */
 @media (prefers-reduced-motion: reduce) {
-  .landing-shell [data-rise],
-  .landing-shell [data-rise][data-visible] {
+  .public-shell [data-rise],
+  .public-shell [data-rise][data-visible] {
     opacity: 1;
     animation: none;
   }
 
-  .landing-shell * {
+  .public-shell * {
     transition-duration: 0.01ms !important;
   }
 }

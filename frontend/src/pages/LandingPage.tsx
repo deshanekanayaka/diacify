@@ -9,7 +9,7 @@ import { useRevealOnScroll } from "../components/landing/useRevealOnScroll";
 /**
  * The public front door.
  *
- * .landing-shell scopes the page's design tokens so they cannot leak into the
+ * .public-shell scopes the page's design tokens so they cannot leak into the
  * plain-CSS signed-in app. The landing page is soft and pill-shaped where the
  * app is square: see src/tailwind.css for why that split is deliberate.
  */
@@ -20,7 +20,7 @@ export function LandingPage() {
   return (
     <div
       ref={shell}
-      className="landing-shell min-h-screen overflow-x-hidden bg-background font-sans text-foreground antialiased"
+      className="public-shell min-h-screen overflow-x-hidden bg-background font-sans text-foreground antialiased"
     >
       <Navbar />
       <main>

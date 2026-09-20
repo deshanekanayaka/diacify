@@ -1,9 +1,9 @@
 import { useState, type FormEvent } from "react";
 import { Link } from "react-router-dom";
 
+import { AuthField, AuthLayout, AuthSubmit } from "../components/AuthLayout";
 import { useAuth } from "../lib/AuthContext";
 import type { SignInResult } from "../lib/AuthContext";
-import { Field } from "../components/Field";
 
 const SERVICE_UNAVAILABLE_MESSAGE =
   "Sign-in is unavailable right now. This is on our side, not yours. Try again in a moment.";
@@ -27,14 +27,13 @@ export function SignInPage() {
   }
 
   return (
-    <main className="page page--narrow">
-      <form className="card stack" onSubmit={handleSubmit}>
-        <div>
-          <h1 className="t-title">Diacify</h1>
-          <p className="t-body">Sign in to your patients.</p>
-        </div>
-
-        <Field label="Email">
+    <AuthLayout
+      title="Welcome back."
+      subtitle="Sign in to your patients."
+      panelLine="Diabetes risk classification, before the patient leaves the room."
+    >
+      <form className="flex flex-col gap-5" onSubmit={handleSubmit}>
+        <AuthField label="Email">
           <input
             type="email"
             autoComplete="email"
@@ -42,8 +41,8 @@ export function SignInPage() {
             value={email}
             onChange={(event) => setEmail(event.target.value)}
           />
-        </Field>
-        <Field label="Password">
+        </AuthField>
+        <AuthField label="Password">
           <input
             type="password"
             autoComplete="current-password"
@@ -51,7 +50,7 @@ export function SignInPage() {
             value={password}
             onChange={(event) => setPassword(event.target.value)}
           />
-        </Field>
+        </AuthField>
 
         {/* Two distinct states, not one error string: a rejected sign-in
             (wrong email or password — Supabase deliberately returns one
@@ -59,23 +58,36 @@ export function SignInPage() {
             accounts) reads as the clinician's problem, while a down auth
             service must never be confused with that. */}
         {result?.outcome === "rejected" ? (
-          <p className="banner banner--error" role="alert">
+          <p
+            className="rounded-xl bg-[#fbeae7] px-4 py-3 text-[0.95rem] text-destructive"
+            role="alert"
+          >
             {result.message}
           </p>
         ) : null}
         {result?.outcome === "service-unavailable" ? (
-          <p className="banner banner--neutral" role="alert">
+          <p
+            className="rounded-xl bg-muted px-4 py-3 text-[0.95rem] text-muted-foreground"
+            role="alert"
+          >
             {SERVICE_UNAVAILABLE_MESSAGE}
           </p>
         ) : null}
 
-        <button type="submit" className="btn btn--block" disabled={isSubmitting}>
+        <AuthSubmit disabled={isSubmitting}>
           {isSubmitting ? "Signing in…" : "Sign in"}
-        </button>
-        <p className="t-caption" style={{ textAlign: "center" }}>
-          No account yet? <Link to="/signup">Create one</Link>
+        </AuthSubmit>
+
+        <p className="text-center text-sm text-muted-foreground">
+          No account yet?{" "}
+          <Link
+            to="/signup"
+            className="font-medium text-foreground transition-colors hover:text-primary"
+          >
+            Create one
+          </Link>
         </p>
       </form>
-    </main>
+    </AuthLayout>
   );
 }
