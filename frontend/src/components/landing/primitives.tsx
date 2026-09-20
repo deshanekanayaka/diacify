@@ -57,15 +57,18 @@ export function CallToAction({
   children,
   tone = "solid",
   className = "",
+  tabIndex,
 }: {
   to: string;
   children: ReactNode;
   tone?: CallToActionTone;
   className?: string;
+  tabIndex?: number;
 }) {
   return (
     <Link
       to={to}
+      tabIndex={tabIndex}
       className={`group inline-flex items-center gap-3 rounded-full py-2 pr-2 pl-6 text-[0.95rem] font-medium transition-colors active:scale-[0.98] ${TONE_CLASSES[tone]} ${className}`}
     >
       {children}
@@ -75,23 +78,6 @@ export function CallToAction({
         <ArrowGlyph />
       </span>
     </Link>
-  );
-}
-
-/** The small capsule that sits above a headline and names the section. */
-export function Eyebrow({
-  children,
-  className = "",
-}: {
-  children: ReactNode;
-  className?: string;
-}) {
-  return (
-    <span
-      className={`inline-flex items-center rounded-full bg-card/70 px-4 py-1.5 text-xs font-medium tracking-wide text-muted-foreground ring-1 ring-border backdrop-blur-sm ${className}`}
-    >
-      {children}
-    </span>
   );
 }
 

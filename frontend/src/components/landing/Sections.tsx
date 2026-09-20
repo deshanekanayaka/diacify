@@ -8,7 +8,7 @@ import {
   ArtTrainedModel,
   ArtVisitHistory,
 } from "./illustrations";
-import { Container, Eyebrow, Headline } from "./primitives";
+import { Container, Headline } from "./primitives";
 
 interface PanelContent {
   label: string;
@@ -74,9 +74,13 @@ function Panel({
     <article
       data-rise
       style={{ animationDelay: `${delayMs}ms` }}
-      className="flex flex-col overflow-hidden rounded-3xl bg-card ring-1 ring-border"
+      className="group flex flex-col overflow-hidden rounded-3xl bg-card ring-1 ring-border transition-[transform,box-shadow] duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] hover:-translate-y-1.5 hover:shadow-[0_24px_48px_-28px_rgba(22,40,31,0.5)]"
     >
-      <div className={`h-44 ${tint}`}>{art}</div>
+      <div className={`h-44 overflow-hidden ${tint}`}>
+        <div className="h-full w-full transition-transform duration-700 ease-[cubic-bezier(0.16,1,0.3,1)] group-hover:scale-[1.06]">
+          {art}
+        </div>
+      </div>
       <div className="flex flex-col p-8">
         <span className="text-xs font-medium tracking-wide text-muted-foreground">
           {label}
@@ -99,10 +103,7 @@ export function HowItWorks() {
       <Container>
         <div className="max-w-3xl">
           <div data-rise>
-            <Eyebrow>How it works</Eyebrow>
-          </div>
-          <div data-rise style={{ animationDelay: "90ms" }}>
-            <Headline className="mt-6">Three steps, inside one consult.</Headline>
+            <Headline>How it works.</Headline>
           </div>
         </div>
 
@@ -128,10 +129,7 @@ export function WhyTrust() {
       <Container>
         <div className="max-w-3xl">
           <div data-rise>
-            <Eyebrow>The evidence</Eyebrow>
-          </div>
-          <div data-rise style={{ animationDelay: "90ms" }}>
-            <Headline className="mt-6">Why you can trust the number.</Headline>
+            <Headline>Why you can trust the number.</Headline>
           </div>
         </div>
 

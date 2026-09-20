@@ -32,7 +32,7 @@ export function ClosingCallToAction() {
           </CallToAction>
           <Link
             to="/signin"
-            className="rounded-full px-6 py-3.5 text-[0.95rem] font-medium text-primary-foreground/70 transition-colors hover:text-primary-foreground"
+            className="link-underline rounded-full px-6 py-3.5 text-[0.95rem] font-medium text-primary-foreground/70 transition-colors hover:text-primary-foreground"
           >
             Sign in
           </Link>
@@ -79,7 +79,7 @@ export function Footer() {
                 <li key={link.label}>
                   <Link
                     to={link.to}
-                    className="text-[0.975rem] text-night-foreground/80 transition-colors hover:text-night-foreground"
+                    className="link-underline text-[0.975rem] text-night-foreground/80 transition-colors hover:text-night-foreground"
                   >
                     {link.label}
                   </Link>
@@ -97,7 +97,7 @@ export function Footer() {
                 <li key={link.label}>
                   <a
                     href={link.href}
-                    className="text-[0.975rem] text-night-foreground/80 transition-colors hover:text-night-foreground"
+                    className="link-underline text-[0.975rem] text-night-foreground/80 transition-colors hover:text-night-foreground"
                   >
                     {link.label}
                   </a>

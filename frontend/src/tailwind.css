@@ -99,7 +99,10 @@
 
 /* One entrance, used by every section. Replaces the motion library: the
    references fade and lift their content once on arrival, and CSS does that
-   in eight lines with nothing to ship. */
+   with nothing to ship.
+
+   An element marked data-rise starts hidden and only animates once
+   useRevealOnScroll has set data-visible on it. */
 @keyframes landing-rise {
   from {
     opacity: 0;
@@ -112,11 +115,46 @@
 }
 
 .landing-shell [data-rise] {
-  animation: landing-rise 0.9s cubic-bezier(0.16, 1, 0.3, 1) backwards;
+  opacity: 0;
 }
 
+.landing-shell [data-rise][data-visible] {
+  animation: landing-rise 0.85s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+/* Reduced motion still needs the content, just not the movement. The reveal
+   is decoration; the text is the page. */
 @media (prefers-reduced-motion: reduce) {
-  .landing-shell [data-rise] {
+  .landing-shell [data-rise],
+  .landing-shell [data-rise][data-visible] {
+    opacity: 1;
     animation: none;
   }
+
+  .landing-shell * {
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* The growing underline under a quiet text link. Drawn as a pseudo-element so
+   it can animate from the left rather than snapping on. */
+.landing-shell .link-underline {
+  position: relative;
+}
+
+.landing-shell .link-underline::after {
+  content: "";
+  position: absolute;
+  inset-inline: 0;
+  bottom: 0.35rem;
+  height: 1px;
+  background: currentColor;
+  transform: scaleX(0);
+  transform-origin: left;
+  transition: transform 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.landing-shell .link-underline:hover::after,
+.landing-shell .link-underline:focus-visible::after {
+  transform: scaleX(1);
 }

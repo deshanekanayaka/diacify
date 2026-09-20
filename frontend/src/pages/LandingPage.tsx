@@ -1,7 +1,10 @@
+import { useRef } from "react";
+
 import { ClosingCallToAction, Footer } from "../components/landing/Closing";
 import { Hero } from "../components/landing/Hero";
 import { Navbar } from "../components/landing/Navbar";
 import { HowItWorks, WhyTrust } from "../components/landing/Sections";
+import { useRevealOnScroll } from "../components/landing/useRevealOnScroll";
 
 /**
  * The public front door.
@@ -11,8 +14,14 @@ import { HowItWorks, WhyTrust } from "../components/landing/Sections";
  * app is square: see src/tailwind.css for why that split is deliberate.
  */
 export function LandingPage() {
+  const shell = useRef<HTMLDivElement>(null);
+  useRevealOnScroll(shell);
+
   return (
-    <div className="landing-shell min-h-screen overflow-x-hidden bg-background font-sans text-foreground antialiased">
+    <div
+      ref={shell}
+      className="landing-shell min-h-screen overflow-x-hidden bg-background font-sans text-foreground antialiased"
+    >
       <Navbar />
       <main>
         <Hero />
