@@ -3,15 +3,20 @@
  * component: the system is small, and per-component CSS made "what does a
  * card look like" a question you had to answer by reading nine files.
  *
- * Register: warm off-white ground, blocky sage/mint colour panels, a
- * serif display face for headlines, dark-green square-cornered buttons,
- * bordered boxes rather than soft shadow cards. Deliberately loud in its
- * two hero colours and quiet everywhere else — the same restraint as
- * before, spent on fewer, bigger gestures instead of many small ones.
+ * Register: warm off-white ground, sage and mint colour panels, a serif
+ * display face for headlines, deep-green pill buttons, and soft rounded
+ * surfaces that sit on the page rather than being boxed in by a hard rule.
+ * Deliberately loud in its two hero colours and quiet everywhere else.
  *
- * Every corner is square (the four --radius-* tokens are all 0) — the
- * wireframes' flat, boxy register, not a soft-app one. A circle (the
- * avatar, a status dot) has no corner to square and stays round.
+ * Corners are rounded, through the four --radius-* tokens. They used to be
+ * square. The landing page settled the question: a clinician who arrives on
+ * a soft, rounded page and then signs in should not feel they changed
+ * product, so the app follows the front door rather than the other way
+ * round.
+ *
+ * Motion is a single idea, repeated: 200ms, one easing curve, and nothing
+ * moves further than a couple of pixels. It exists to confirm a control
+ * responded, never to decorate.
  */
 
 :root {
@@ -47,10 +52,14 @@
   --risk-high-text: #a32d21;
   --danger: #a32d21;
 
-  --radius-sm: 0;
-  --radius-md: 0;
-  --radius-lg: 0;
-  --radius-pill: 0;
+  --radius-sm: 0.5rem;
+  --radius-md: 0.75rem;
+  --radius-lg: 1.25rem;
+  --radius-pill: 999px;
+
+  /* One curve and one duration for every hover and press in the app. */
+  --ease: cubic-bezier(0.16, 1, 0.3, 1);
+  --lift: 0 18px 36px -26px rgba(22, 40, 31, 0.45);
 
   --font-display: "Fraunces", Georgia, "Times New Roman", serif;
   --font-text: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
@@ -173,14 +182,15 @@ a:hover {
 
 /* ---------- card ---------- */
 
-/* A bordered box, not a floating shadow card - matches the wireframes'
-   flat frame register (a visible edge, no blur) now that every corner is
-   square too. */
+/* A soft surface: a hairline edge to hold its shape on the cream ground,
+   and a shadow low enough to read as weight rather than as a floating
+   dialog. Matches the landing page's cards. */
 .card {
   background: var(--surface);
-  border: 1px solid var(--separator-strong);
+  border: 1px solid var(--separator);
   border-radius: var(--radius-lg);
   padding: var(--space-5);
+  box-shadow: 0 1px 2px rgba(22, 40, 31, 0.04);
 }
 .card--flush {
   padding: 0;
@@ -210,11 +220,15 @@ a:hover {
   cursor: pointer;
   background: var(--accent);
   color: var(--accent-ink);
-  transition: background 120ms ease, transform 120ms ease;
+  transition: background 200ms var(--ease), transform 200ms var(--ease),
+    box-shadow 200ms var(--ease);
   text-decoration: none;
   display: inline-flex;
   align-items: center;
   gap: var(--space-2);
+}
+.btn:active:not(:disabled) {
+  transform: scale(0.98);
 }
 .btn:hover:not(:disabled) {
   background: var(--accent-strong);
@@ -261,6 +275,10 @@ a:hover {
 .btn .arrow {
   width: 1.125rem;
   height: 1.125rem;
+  transition: transform 200ms var(--ease);
+}
+.btn:hover:not(:disabled) .arrow {
+  transform: translateX(2px);
 }
 
 /* A big rectangular block-button, the "Request a Demo" shape: full-width,
@@ -416,6 +434,9 @@ a:hover {
   width: 1rem;
   height: 1rem;
 }
+.icon-action {
+  transition: background 200ms var(--ease), color 200ms var(--ease);
+}
 .icon-action:hover:not(:disabled) {
   background: var(--surface-sunken);
   color: var(--ink);
@@ -472,9 +493,10 @@ table.data {
   border-collapse: collapse;
   font-size: 0.9375rem;
 }
-/* A crisp 2px rule under the header, a thin 1px rule between rows, no rule
-   after the last row (the surrounding .card border already closes the
-   box) - the wireframes' table, not a soft striped one. */
+/* A single rule under the header and a thin rule between rows, with none
+   after the last row: the card's own edge closes the box. The header rule
+   is the separator colour rather than solid ink, which was drawn for the
+   old hard-edged register and reads as a bar on a soft card. */
 table.data th {
   font-size: 0.75rem;
   font-weight: 600;
@@ -484,12 +506,18 @@ table.data th {
   text-align: left;
   padding: 0.625rem var(--space-3);
   white-space: nowrap;
-  border-bottom: 2px solid var(--ink);
+  border-bottom: 1px solid var(--separator-strong);
 }
 table.data td {
   padding: 0.625rem var(--space-3);
   border-bottom: 1px solid var(--separator);
   white-space: nowrap;
+}
+table.data tbody tr {
+  transition: background 200ms var(--ease);
+}
+table.data tbody tr:hover {
+  background: var(--mint-100);
 }
 table.data tbody tr:last-child td {
   border-bottom: none;
@@ -548,6 +576,10 @@ table.data th:last-child {
   background: var(--surface);
   color: var(--ink-secondary);
   cursor: pointer;
+}
+.filter-pill {
+  transition: background 200ms var(--ease), border-color 200ms var(--ease),
+    color 200ms var(--ease);
 }
 .filter-pill:hover {
   background: var(--surface-sunken);
@@ -722,78 +754,12 @@ table.data th:last-child {
   color: var(--ink-tertiary);
 }
 
-/* ---------- landing ---------- */
 
-/* No graphic here by design (see LandingPage's doc comment) — headline,
-   subhead, and CTA carry the hero on their own, centered. */
-.hero {
-  text-align: center;
-  padding: var(--space-7) var(--space-4) var(--space-6);
-}
-.hero .t-display {
-  max-width: 20ch;
-  margin: 0 auto;
-}
-/* The reference's soft mid-headline emphasis: one clause rendered in a
-   lighter ink than the rest of the line, not a colour or weight change. */
-.t-display--muted {
-  color: var(--ink-tertiary);
-}
-.hero__subhead {
-  max-width: 42ch;
-  margin: var(--space-5) auto var(--space-6);
-  font-size: 1.0625rem;
-}
-
-.tiles {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
-  gap: var(--space-4);
-}
-
-/* One tile shape, reused for both feature grids: a thin-bordered card, a
-   monospace numbered label, then the icon floating alone in real
-   whitespace — no background square behind it — before the heading and
-   body. The icon gets its own zone with a fixed min-height so every
-   tile's heading lands on the same baseline regardless of icon shape. */
-.tile {
-  background: var(--surface);
-  border: 1px solid var(--separator);
-  border-radius: var(--radius-lg);
-  padding: var(--space-6) var(--space-5) var(--space-5);
-}
-.tile__label {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  font-family: var(--font-numeric);
-  font-size: 0.75rem;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--ink-tertiary);
-}
-.tile__icon-zone {
-  min-height: 7rem;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  margin: var(--space-4) 0 var(--space-5);
-  color: var(--ink);
-}
-.tile__icon-zone svg {
-  width: 5.5rem;
-  height: 5.5rem;
-}
-.tile--highlight {
-  border-color: var(--accent);
-  border-width: 1.5px;
-}
-.site-footer {
-  border-top: 1px solid var(--separator);
-  margin-top: var(--space-7);
-  padding: var(--space-5) 0;
-  display: flex;
-  justify-content: space-between;
-  gap: var(--space-3);
-  flex-wrap: wrap;
+/* Motion in this file is confirmation, not decoration, so it is safe to
+   remove entirely for a reader who asked for less of it. */
+@media (prefers-reduced-motion: reduce) {
+  * {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+  }
 }

@@ -85,7 +85,7 @@ function Panel({
         <span className="text-xs font-medium tracking-wide text-muted-foreground">
           {label}
         </span>
-        <h3 className="font-display mt-3 text-[1.75rem] leading-[1.15] tracking-tight text-balance text-foreground">
+        <h3 className="font-serif mt-3 text-[1.75rem] leading-[1.15] tracking-tight text-balance text-foreground">
           {title}
         </h3>
         <p className="mt-4 text-[1.0625rem] leading-relaxed text-muted-foreground">

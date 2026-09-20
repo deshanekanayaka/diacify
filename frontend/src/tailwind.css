@@ -87,9 +87,16 @@
   --color-night-muted: var(--night-muted);
   --color-night-border: var(--night-border);
 
-  /* Reuse the faces theme.css already loads. Fraunces carries the headlines,
-     Inter the body. The landing page sets no monospace. */
-  --font-display: var(--font-display, "Fraunces", Georgia, serif);
+  /* Reuse the faces theme.css already loads. Fraunces carries the headlines
+     (the font-serif utility), Inter the body. The landing page sets no
+     monospace.
+
+     The serif token is deliberately NOT called --font-display. Tailwind
+     declares every @theme token on :root, so --font-display here would
+     resolve to var(--font-display, …), a self-reference that makes the
+     property invalid and silently strips Fraunces from every .t-display
+     heading in the signed-in app. */
+  --font-serif: var(--font-display, "Fraunces", Georgia, serif);
   --font-sans: var(--font-text, "Inter", system-ui, sans-serif);
 
   --radius-lg: var(--radius);
@@ -136,25 +143,3 @@
   }
 }
 
-/* The growing underline under a quiet text link. Drawn as a pseudo-element so
-   it can animate from the left rather than snapping on. */
-.landing-shell .link-underline {
-  position: relative;
-}
-
-.landing-shell .link-underline::after {
-  content: "";
-  position: absolute;
-  inset-inline: 0;
-  bottom: 0.35rem;
-  height: 1px;
-  background: currentColor;
-  transform: scaleX(0);
-  transform-origin: left;
-  transition: transform 0.35s cubic-bezier(0.16, 1, 0.3, 1);
-}
-
-.landing-shell .link-underline:hover::after,
-.landing-shell .link-underline:focus-visible::after {
-  transform: scaleX(1);
-}

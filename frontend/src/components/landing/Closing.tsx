@@ -10,7 +10,7 @@ export function ClosingCallToAction() {
       <div className="mx-auto max-w-6xl overflow-hidden rounded-[2rem] bg-primary px-8 py-20 text-center md:px-16 md:py-28">
         <h2
           data-rise
-          className="font-display mx-auto max-w-2xl text-4xl leading-[1.05] tracking-tight text-balance text-primary-foreground md:text-6xl"
+          className="font-serif mx-auto max-w-2xl text-4xl leading-[1.05] tracking-tight text-balance text-primary-foreground md:text-6xl"
         >
           Screen your next patient in under a minute.
         </h2>
@@ -32,7 +32,7 @@ export function ClosingCallToAction() {
           </CallToAction>
           <Link
             to="/signin"
-            className="link-underline rounded-full px-6 py-3.5 text-[0.95rem] font-medium text-primary-foreground/70 transition-colors hover:text-primary-foreground"
+            className="rounded-full px-6 py-3.5 text-[0.95rem] font-medium text-primary-foreground/70 transition-colors hover:text-primary-foreground"
           >
             Sign in
           </Link>
@@ -61,7 +61,7 @@ export function Footer() {
       <Container className="py-20">
         <div className="grid gap-12 md:grid-cols-[1.4fr_1fr_1fr]">
           <div className="max-w-sm">
-            <span className="font-display text-2xl tracking-tight">
+            <span className="font-serif text-2xl tracking-tight">
               Diacify
             </span>
             <p className="mt-4 text-[0.975rem] leading-relaxed text-night-muted">
@@ -79,7 +79,7 @@ export function Footer() {
                 <li key={link.label}>
                   <Link
                     to={link.to}
-                    className="link-underline text-[0.975rem] text-night-foreground/80 transition-colors hover:text-night-foreground"
+                    className="text-[0.975rem] text-night-foreground/80 transition-colors hover:text-night-foreground"
                   >
                     {link.label}
                   </Link>
@@ -97,7 +97,7 @@ export function Footer() {
                 <li key={link.label}>
                   <a
                     href={link.href}
-                    className="link-underline text-[0.975rem] text-night-foreground/80 transition-colors hover:text-night-foreground"
+                    className="text-[0.975rem] text-night-foreground/80 transition-colors hover:text-night-foreground"
                   >
                     {link.label}
                   </a>

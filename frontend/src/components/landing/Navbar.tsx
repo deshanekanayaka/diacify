@@ -46,7 +46,7 @@ export function Navbar() {
       <Container className="flex items-center justify-between">
         <Link
           to="/"
-          className="font-display text-xl tracking-tight text-foreground"
+          className="font-serif text-xl tracking-tight text-foreground"
         >
           Diacify
         </Link>
@@ -54,7 +54,7 @@ export function Navbar() {
         <div className="flex items-center gap-2">
           <Link
             to="/signin"
-            className="link-underline rounded-full px-5 py-2.5 text-[0.95rem] font-medium text-muted-foreground transition-colors hover:text-foreground"
+            className="rounded-full px-5 py-2.5 text-[0.95rem] font-medium text-muted-foreground transition-colors hover:text-foreground"
           >
             Sign in
           </Link>

@@ -92,7 +92,7 @@ export function Headline({
 }) {
   return (
     <h2
-      className={`font-display text-4xl leading-[1.05] tracking-tight text-balance text-foreground md:text-5xl lg:text-6xl ${className}`}
+      className={`font-serif text-4xl leading-[1.05] tracking-tight text-balance text-foreground md:text-5xl lg:text-6xl ${className}`}
     >
       {children}
     </h2>

@@ -60,7 +60,7 @@ export function Hero() {
         <div className="mx-auto flex max-w-4xl flex-col items-center text-center">
           <h1
             data-rise
-            className="font-display text-[2.75rem] leading-[1.02] tracking-tight text-balance text-foreground sm:text-6xl lg:text-7xl"
+            className="font-serif text-[2.75rem] leading-[1.02] tracking-tight text-balance text-foreground sm:text-6xl lg:text-7xl"
           >
             Diabetes risk classification, before the patient leaves the
             room.
