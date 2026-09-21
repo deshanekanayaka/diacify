@@ -1,0 +1,147 @@
+/* Tailwind 4, for the public pages only: the landing page and the two
+   auth screens. The signed-in app stays on theme.css.
+   Preflight is deliberately left out: theme.css styles the rest of the app in
+   plain CSS, and Tailwind's reset would strip those styles. */
+
+/* theme.css is pulled in here, inside a layer, so that Tailwind's utilities
+   can win against its bare element rules. Unlayered CSS beats every layer, so
+   left on its own theme.css's `a { color: var(--accent) }` overrode every
+   Tailwind text-* utility on a link. */
+@layer app, theme, base, components, utilities;
+@import "./theme.css" layer(app);
+@import "tailwindcss/theme.css" layer(theme);
+@import "tailwindcss/utilities.css" layer(utilities);
+
+/* Importing the layers piecemeal skips the source scanning that a plain
+   @import "tailwindcss" sets up, so name the sources here. */
+@source "./";
+
+/* The public pages' tokens: the landing page and the two auth screens.
+   They are scoped to .public-shell rather
+   than :root because theme.css owns --accent and --radius-* at :root, and a
+   global redefinition here would repaint the signed-in app.
+
+   The colours come straight from theme.css so the landing page and the app
+   read as one product. The corners do not: the app is square by design, and
+   the landing page is soft and pill-shaped. That is a deliberate split
+   between a marketing page and a working tool. */
+.public-shell {
+  --background: #fbf9f3;
+  --foreground: #16261e;
+  --card: #ffffff;
+  --card-foreground: #16261e;
+  --popover: #ffffff;
+  --popover-foreground: #16261e;
+  --primary: #16382b;
+  --primary-foreground: #f3f7ee;
+  --secondary: #eaf5ee;
+  --secondary-foreground: #16382b;
+  --muted: #f4f1e9;
+  --muted-foreground: #435146;
+  --accent: #d3ead9;
+  --accent-foreground: #16382b;
+  --destructive: #a32d21;
+  --destructive-foreground: #f3f7ee;
+  --border: rgba(22, 40, 31, 0.12);
+  --input: rgba(22, 40, 31, 0.12);
+  --ring: #16382b;
+
+  /* The hero's painted sky, bottom to top. */
+  --sky-high: #fbf9f3;
+  --sky-low: #eaf5ee;
+  --field: #b7dcc5;
+
+  /* The footer, the one dark surface on the page. */
+  --night: #12201a;
+  --night-foreground: #f3f7ee;
+  --night-muted: rgba(243, 247, 238, 0.6);
+  --night-border: rgba(243, 247, 238, 0.14);
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+
+  --color-sky-high: var(--sky-high);
+  --color-sky-low: var(--sky-low);
+  --color-field: var(--field);
+  --color-night: var(--night);
+  --color-night-foreground: var(--night-foreground);
+  --color-night-muted: var(--night-muted);
+  --color-night-border: var(--night-border);
+
+  /* Reuse the faces theme.css already loads. Fraunces carries the headlines
+     (the font-serif utility), Inter the body. The landing page sets no
+     monospace.
+
+     The serif token is deliberately NOT called --font-display. Tailwind
+     declares every @theme token on :root, so --font-display here would
+     resolve to var(--font-display, …), a self-reference that makes the
+     property invalid and silently strips Fraunces from every .t-display
+     heading in the signed-in app. */
+  --font-serif: var(--font-display, "Fraunces", Georgia, serif);
+  --font-sans: var(--font-text, "Inter", system-ui, sans-serif);
+
+  /* No --radius-* aliases here. Tailwind declares every @theme token on
+     :root, and theme.css owns --radius-lg for the signed-in app, so an alias
+     of var(--radius) left that property undefined outside .public-shell and
+     squared off every card in the app. The public pages use Tailwind's own
+     radius scale instead. */
+}
+
+/* One entrance, used by every section. Replaces the motion library: the
+   references fade and lift their content once on arrival, and CSS does that
+   with nothing to ship.
+
+   An element marked data-rise starts hidden and only animates once
+   useRevealOnScroll has set data-visible on it. */
+@keyframes landing-rise {
+  from {
+    opacity: 0;
+    transform: translateY(1.25rem);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.public-shell [data-rise] {
+  opacity: 0;
+}
+
+.public-shell [data-rise][data-visible] {
+  animation: landing-rise 0.85s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+/* Reduced motion still needs the content, just not the movement. The reveal
+   is decoration; the text is the page. */
+@media (prefers-reduced-motion: reduce) {
+  .public-shell [data-rise],
+  .public-shell [data-rise][data-visible] {
+    opacity: 1;
+    animation: none;
+  }
+
+  .public-shell * {
+    transition-duration: 0.01ms !important;
+  }
+}
+

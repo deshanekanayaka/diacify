@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 
 import { usePatients, type PatientListItem, type PatientRiskFilter, type PatientSort } from "../api/patients";
 import { DeletePatientButton } from "../components/DeletePatientButton";
+import { ErrorState } from "../components/ErrorState";
 import { RiskBadge } from "../components/RiskBadge";
 import { IconPencil } from "../components/icons";
 import { formatDate } from "../lib/format";
@@ -34,7 +35,7 @@ export function PatientListPage() {
   const [sort, setSort] = useState<PatientSort>("newest");
   const [page, setPage] = useState(1);
 
-  const { data, isPending, isError, error } = usePatients({
+  const { data, isPending, isError, error, refetch } = usePatients({
     risk: riskFilter === "all" ? undefined : riskFilter,
     sort: sort === "risk" ? "risk" : undefined,
   });
@@ -64,9 +65,16 @@ export function PatientListPage() {
       {isPending ? <p className="placeholder">Loading patients…</p> : null}
 
       {isError ? (
-        <p className="banner banner--error" role="alert">
-          {error.message}
-        </p>
+        <ErrorState
+          code="Error"
+          title="The patient list could not be loaded."
+          description={error.message}
+          action={
+            <button type="button" className="btn" onClick={() => refetch()}>
+              Try again
+            </button>
+          }
+        />
       ) : null}
 
       {data && data.data.length === 0 ? (
@@ -80,23 +88,34 @@ export function PatientListPage() {
 
       {data && data.data.length > 0 ? (
         <>
-          <div className="row" style={{ marginBottom: "0.5rem" }}>
-            <input
-              placeholder="Filter by ref…"
-              value={referenceQuery}
-              onChange={(event) => {
-                setReferenceQuery(event.target.value);
-                setPage(1);
-              }}
-              style={{
-                maxWidth: "220px",
-                padding: "0.5rem 0.75rem",
-                borderRadius: "var(--radius-md)",
-                border: "1px solid var(--separator-strong)",
-                font: "inherit",
-                fontSize: "0.875rem",
-              }}
-            />
+          {/* One line, not three: search, risk filter, sort. The old layout
+              stacked a row of inputs above a row of pills above the table, so
+              the chrome was taller than the data. */}
+          <div className="toolbar">
+            <div className="toolbar__search">
+              <input
+                placeholder="Filter by reference…"
+                value={referenceQuery}
+                onChange={(event) => {
+                  setReferenceQuery(event.target.value);
+                  setPage(1);
+                }}
+              />
+            </div>
+
+            <div className="segmented" role="group" aria-label="Filter by risk">
+              {RISK_FILTERS.map((option) => (
+                <button
+                  key={option.value}
+                  type="button"
+                  aria-pressed={riskFilter === option.value}
+                  onClick={() => updateFilter(option.value)}
+                >
+                  {option.label}
+                </button>
+              ))}
+            </div>
+
             <select
               aria-label="Sort"
               value={sort}
@@ -104,33 +123,10 @@ export function PatientListPage() {
                 setSort(event.target.value as PatientSort);
                 setPage(1);
               }}
-              style={{
-                padding: "0.5rem 0.75rem",
-                borderRadius: "var(--radius-md)",
-                border: "1px solid var(--separator-strong)",
-                font: "inherit",
-                fontSize: "0.875rem",
-                background: "var(--surface)",
-              }}
             >
-              <option value="newest">Sort: newest first</option>
-              <option value="risk">Sort: highest risk first</option>
+              <option value="newest">Newest first</option>
+              <option value="risk">Highest risk first</option>
             </select>
-          </div>
-
-          <div className="row" style={{ marginBottom: "0.75rem" }}>
-            {RISK_FILTERS.map((option) => (
-              <button
-                key={option.value}
-                type="button"
-                className="filter-pill"
-                aria-pressed={riskFilter === option.value}
-                onClick={() => updateFilter(option.value)}
-              >
-                {option.label}
-                {riskFilter === option.value ? ` ${visible.length}` : ""}
-              </button>
-            ))}
           </div>
 
           {visible.length === 0 ? (
@@ -193,7 +189,7 @@ function PatientRow({ patient }: { patient: PatientListItem }) {
       </td>
       <td>
         <div className="row" style={{ justifyContent: "flex-end", gap: "0.75rem" }}>
-          <Link to={`/patients/${patient.id}/visits/new`} className="list-row__action">
+          <Link to={`/patients/${patient.id}/visits/new`} className="row-button">
             + Visit
           </Link>
           <Link

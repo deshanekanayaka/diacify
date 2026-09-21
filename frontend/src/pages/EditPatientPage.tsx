@@ -1,6 +1,7 @@
 import { Link, useNavigate, useParams } from "react-router-dom";
 
 import { usePatient, useUpdatePatient } from "../api/patients";
+import { ErrorState } from "../components/ErrorState";
 import { PatientForm } from "../components/PatientForm";
 
 /** Edits a patient's reference and sex — no wireframe exists for this
@@ -19,9 +20,11 @@ export function EditPatientPage() {
   if (patient.isError) {
     return (
       <div className="page">
-        <p className="banner banner--error" role="alert">
-          {patient.error.message}
-        </p>
+        <ErrorState
+          code="Not found"
+          title="That patient could not be loaded."
+          description={patient.error.message}
+        />
       </div>
     );
   }

@@ -10,9 +10,17 @@ import {
   toCreateVisitInput,
   type MeasurementName,
 } from "../lib/visitForm";
+import { ErrorState } from "../components/ErrorState";
 import { Field } from "../components/Field";
 
-/** Records one visit's measurements. The backend scores it on the same call. */
+/**
+ * Records one visit's measurements. The backend scores it on the same call.
+ *
+ * Every field is on screen at once, in two columns beside a sticky aside that
+ * holds the context and the submit button. The labs used to sit behind an
+ * "add lipid panel" toggle at the bottom of a single column, which meant
+ * scrolling past everything to find either them or the button.
+ */
 export function RecordVisitPage() {
   const { id } = useParams();
   const patientId = id!;
@@ -22,7 +30,6 @@ export function RecordVisitPage() {
 
   const [visitDate, setVisitDate] = useState(today());
   const [values, setValues] = useState<Partial<Record<MeasurementName, string>>>({});
-  const [showLabs, setShowLabs] = useState(false);
 
   function setValue(name: MeasurementName, value: string) {
     setValues((current) => ({ ...current, [name]: value }));
@@ -45,56 +52,85 @@ export function RecordVisitPage() {
   if (patient.isError) {
     return (
       <div className="page">
-        <p className="banner banner--error" role="alert">
-          {patient.error.message}
-        </p>
+        <ErrorState
+          code="Not found"
+          title="That patient could not be loaded."
+          description={patient.error.message}
+        />
       </div>
     );
   }
 
   return (
-    <div className="page page--narrow">
-      <Link to={`/patients/${patientId}`} className="back-link">
-        ‹ {patient.data.data.reference}
-      </Link>
-      <h1 className="t-title">Record visit</h1>
-      <p className="t-body" style={{ marginBottom: "1.5rem" }}>
-        The visit is saved first, then scored — a scoring failure never loses the measurements.
-      </p>
+    <div className="page">
+      <form className="form-split" onSubmit={handleSubmit}>
+        <aside className="form-split__aside stack">
+          <Link to={`/patients/${patientId}`} className="back-link">
+            ‹ {patient.data.data.reference}
+          </Link>
+          <h1 className="t-title">Record visit</h1>
+          <p className="t-body">
+            The visit is saved first, then scored — a scoring failure never loses the
+            measurements.
+          </p>
 
-      <form className="card stack" onSubmit={handleSubmit}>
-        <Field label="Visit date">
-          <input
-            type="date"
-            required
-            value={visitDate}
-            max={today()}
-            onChange={(event) => setVisitDate(event.target.value)}
-          />
-        </Field>
+          {createVisit.isError ? (
+            <p className="banner banner--error" role="alert">
+              {createVisit.error.message}
+            </p>
+          ) : null}
 
-        <div className="field-grid">
-          {REQUIRED_MEASUREMENTS.map((measurement) => (
-            <Field key={measurement.name} label={`${measurement.label} (${measurement.unit})`}>
-              <input
-                type="number"
-                required
-                step={measurement.step}
-                value={values[measurement.name] ?? ""}
-                onChange={(event) => setValue(measurement.name, event.target.value)}
-              />
-            </Field>
-          ))}
-        </div>
+          <button
+            type="submit"
+            className="btn btn--block btn--large"
+            disabled={createVisit.isPending}
+          >
+            {createVisit.isPending ? "Recording…" : "Record visit"}
+          </button>
+        </aside>
 
-        <hr style={{ border: "none", borderTop: "1px solid var(--separator)", margin: 0 }} />
+        {/* One card, three labelled groups. Three separate cards stacked
+            their own padding three times over and pushed the last group off
+            the screen, which is the scrolling this layout exists to remove. */}
+        <div className="card stack form-split__fields">
+          <section className="stack">
+            {/* The date sits in the same grid as the measurements rather than
+                on a full-width row of its own, which saved a row of height. */}
+            <div className="field-grid">
+              <Field label="Visit date">
+                <input
+                  type="date"
+                  required
+                  value={visitDate}
+                  max={today()}
+                  onChange={(event) => setVisitDate(event.target.value)}
+                />
+              </Field>
+              {REQUIRED_MEASUREMENTS.map((measurement) => (
+                <Field
+                  key={measurement.name}
+                  label={`${measurement.label} (${measurement.unit})`}
+                >
+                  <input
+                    type="number"
+                    required
+                    step={measurement.step}
+                    value={values[measurement.name] ?? ""}
+                    onChange={(event) => setValue(measurement.name, event.target.value)}
+                  />
+                </Field>
+              ))}
+            </div>
+          </section>
 
-        {showLabs ? (
-          <>
+          <hr className="rule" />
+
+          <section className="stack">
             <div>
               <p className="t-label">Labs used by the model</p>
               <p className="t-caption">
-                Optional. A blank one falls back to the median the model learned at training time.
+                Optional. A blank one falls back to the median the model learned at
+                training time.
               </p>
             </div>
             <div className="field-grid">
@@ -107,6 +143,11 @@ export function RecordVisitPage() {
                 />
               ))}
             </div>
+          </section>
+
+          <hr className="rule" />
+
+          <section className="stack">
             <div>
               <p className="t-label">Recorded only</p>
               <p className="t-caption">Kept on the visit; not inputs to the risk model.</p>
@@ -121,22 +162,8 @@ export function RecordVisitPage() {
                 />
               ))}
             </div>
-          </>
-        ) : (
-          <button type="button" className="btn btn--quiet" onClick={() => setShowLabs(true)}>
-            Add lipid panel and blood sugar
-          </button>
-        )}
-
-        {createVisit.isError ? (
-          <p className="banner banner--error" role="alert">
-            {createVisit.error.message}
-          </p>
-        ) : null}
-
-        <button type="submit" className="btn btn--large" disabled={createVisit.isPending}>
-          {createVisit.isPending ? "Recording…" : "Record visit"}
-        </button>
+          </section>
+        </div>
       </form>
     </div>
   );

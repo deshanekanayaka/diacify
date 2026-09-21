@@ -5,7 +5,7 @@ import { BrowserRouter } from "react-router-dom";
 
 import { App } from "./App";
 import { AuthProvider } from "./lib/AuthProvider";
-import "./theme.css";
+import "./tailwind.css";
 
 const queryClient = new QueryClient();
 

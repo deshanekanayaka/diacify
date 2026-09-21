@@ -13,7 +13,7 @@ export function RiskBadge({ assessment }: { assessment: RiskAssessment | null })
         <span className="dot" aria-hidden="true" />
         {assessment.risk_category}
       </span>
-      <span className="t-num t-caption">{formatScore(assessment.risk_score)}</span>
+      <span className="t-num risk-score">{formatScore(assessment.risk_score)}</span>
     </span>
   );
 }

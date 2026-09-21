@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
 
 import { useAuth } from "../lib/AuthContext";
+import { IconChevronDown } from "./icons";
 import { Wordmark } from "./Wordmark";
 
 /** The signed-in chrome: wordmark, account menu, and the page beneath. */
@@ -44,11 +45,19 @@ function AccountMenu({ email, onSignOut }: { email: string; onSignOut: () => Pro
     <div className="avatar-menu" ref={container}>
       <button type="button" aria-label="Account" aria-expanded={isOpen} onClick={() => setIsOpen(!isOpen)}>
         <span className="avatar">{email.slice(0, 1) || "?"}</span>
-        <span aria-hidden="true">⌄</span>
+        <IconChevronDown />
       </button>
       {isOpen ? (
         <div className="menu-drop">
-          <div className="menu-head">{email}</div>
+          <div className="menu-head">
+            <span className="avatar">{email.slice(0, 1) || "?"}</span>
+            <span>
+              <span className="menu-head__email">{email}</span>
+              <span className="menu-head__role" style={{ display: "block" }}>
+                Signed in
+              </span>
+            </span>
+          </div>
           {/* Sign-out must go through the SDK: the session is persisted, so
               clearing UI state alone would leave the clinician signed in. */}
           <button type="button" onClick={() => void onSignOut()}>
