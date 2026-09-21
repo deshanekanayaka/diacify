@@ -5,6 +5,69 @@ prevent the same class of bug going forward. Newest first.
 
 ---
 
+## CORS preflight allowed only GET and POST, so edit and delete silently failed in the browser
+
+**Found:** 2026-09-21. The team ran the app end to end in a real browser,
+on branch `experiment/watermelon-ui`, before a merge to `main`.
+
+**What happened:**
+
+`backend/src/middleware/cors.ts` answers the browser CORS preflight
+(`OPTIONS`) request with a fixed list of methods:
+
+```ts
+if (req.method === "OPTIONS") {
+  res.setHeader("Access-Control-Allow-Methods", "GET, POST");
+  ...
+}
+```
+
+`backend/src/routes/patients.ts` also defines `router.patch("/:id", ...)`
+to edit a patient and `router.delete("/:id", ...)` to delete a patient.
+A browser sends a preflight request before most cross-origin requests.
+If the preflight response does not list the real method, the browser
+blocks the real request. The request never leaves the browser.
+
+In the UI, this showed up only as the message "Failed to fetch" on the
+edit and delete screens. The backend itself worked. Curl and Supertest
+calls to the same routes returned correct results, because those tools
+skip the browser CORS check. The backend process log stayed empty,
+because the request never arrived. A direct check in the browser console
+confirmed the cause: a fetch call with method PATCH raised `TypeError:
+Failed to fetch`. No response ever existed to read.
+
+**Root cause:** the team wrote the CORS method list once, for the routes
+that existed then (GET, POST). The team never updated the list when it
+added the PATCH and DELETE routes later. Nothing links the two lists
+together, so Express can serve a PATCH route that a browser can never
+reach.
+
+**Fix:** `backend/src/middleware/cors.ts` now lists all four methods:
+
+```ts
+res.setHeader("Access-Control-Allow-Methods", "GET, POST, PATCH, DELETE");
+```
+
+**Verification:** the team wrote a failing test first, in
+`backend/src/middleware/cors.test.ts`, checking the full method list. The
+test failed against the old header, then passed after the fix. The full
+backend suite still passes, all 175 tests. A live check in Chrome
+confirmed the result: editing a patient reference and deleting a patient
+both complete now, instead of showing "Failed to fetch".
+
+**Prevention:**
+
+- The CORS method list and the router's real methods are two separate
+  lists. They can drift apart with no warning. When you add a new HTTP
+  method to a router, check the CORS middleware in the same change.
+- Supertest cannot catch this class of bug, because it calls Express
+  handlers directly and skips the browser CORS check. Only a real
+  browser, or a test that checks the preflight headers, can catch it. A
+  passing test suite does not prove a route works in a browser, for
+  anything that touches CORS.
+
+---
+
 ## `authenticated` held TRUNCATE on every table, which RLS does not filter
 
 **Found:** 2026-09-04, while verifying the append-only fix below on the

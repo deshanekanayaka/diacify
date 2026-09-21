@@ -21,7 +21,7 @@ describe("createCors", () => {
   it("answers an OPTIONS preflight with 204 and the allowed methods/headers", async () => {
     const response = await request(buildApp()).options("/thing");
     expect(response.status).toBe(204);
-    expect(response.headers["access-control-allow-methods"]).toBe("GET, POST");
+    expect(response.headers["access-control-allow-methods"]).toBe("GET, POST, PATCH, DELETE");
     expect(response.headers["access-control-allow-headers"]).toBe("Content-Type, Authorization");
   });
 

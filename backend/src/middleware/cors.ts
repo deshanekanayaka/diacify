@@ -17,7 +17,7 @@ export function createCors(allowedOrigin: string): RequestHandler {
     res.setHeader("Vary", "Origin");
 
     if (req.method === "OPTIONS") {
-      res.setHeader("Access-Control-Allow-Methods", "GET, POST");
+      res.setHeader("Access-Control-Allow-Methods", "GET, POST, PATCH, DELETE");
       res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
       res.status(204).end();
       return;
