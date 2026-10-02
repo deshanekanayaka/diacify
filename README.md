@@ -49,6 +49,19 @@ Each of `backend/` and `frontend/` needs its own `.env`. Copy the
 `.env.example` in that directory and fill in the values `supabase
 start` prints (API URL, publishable key).
 
+## Local sign-in
+
+The local database contains one seeded clinician account. The seed is in
+`supabase/seed.sql`, and it runs only on the local stack.
+
+| Email | Password |
+|---|---|
+| `clinician@diacify.test` | `diacify-dev-password` |
+
+If you cannot sign in with this account, run `supabase db reset`. This
+command deletes all local data, applies the migrations again, and adds
+the seed user.
+
 ## Running it
 
 ```bash
